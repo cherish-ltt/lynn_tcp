@@ -57,7 +57,7 @@ impl LynnThreadPool {
                 Arc<Box<dyn IService>>,
                 InputBufVO,
                 Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
-            )>(server_single_processs_permit); // 可根据需要调整通道容量
+            )>(server_single_processs_permit);
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
@@ -96,7 +96,7 @@ impl LynnThreadPool {
         *idx += 1;
         if let Some((tx, _)) = self.threads.get_mut(thread_index) {
             tx.send(task_body).await.unwrap_or_else(|e| {
-                error!("发送任务到线程-{}时出错: {}", thread_index, e);
+                error!("send task to thread-{} err: {}", thread_index, e);
             });
         }
         if *idx >= self.threads.len() {

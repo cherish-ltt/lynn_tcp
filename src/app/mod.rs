@@ -45,6 +45,22 @@ pub(crate) mod lynn_thread_pool_api {
 ///
 /// The `LynnServer` struct holds information about the server, including its configuration,
 /// client list, router map, and thread pool.
+/// 
+/// # Example
+///
+/// ```rust
+/// use lynn_tcp::app::LynnServer;
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let _ = LynnServer::new().await.add_router(1, my_service).start().await;
+///     Ok(())
+/// }
+/// pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
+///     println!("service read from :{}", input_buf_vo.get_input_addr());
+///     HandlerResult::new_without_send()
+/// }
+/// ```
 pub struct LynnServer {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
@@ -209,7 +225,7 @@ impl LynnServer {
                                     }
                                 }
                                 Err(e) => {
-                                    warn!("无法比较时间,{}", e)
+                                    warn!("unable to compare time,{}", e)
                                 }
                             }
                         }
@@ -370,6 +386,6 @@ impl LynnServer {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::DEBUG)
             .finish();
-        tracing::subscriber::set_global_default(subscriber).expect("设置全局订阅者失败");
+        tracing::subscriber::set_global_default(subscriber).expect("failed to set global subscribers");
     }
 }
