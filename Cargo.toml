@@ -1,7 +1,8 @@
 [package]
 name = "lynn_tcp"
-version = "0.1.0"
-edition = "2021"
+version = "1.0.0"
+edition = "1.83.0"
+license = "MIT"
 
 [dependencies]
 tokio = { version = "1.42.0", features = ["full"] }
