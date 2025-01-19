@@ -34,8 +34,8 @@ pub(crate) mod lynn_user_api {
 }
 
 pub mod lynn_config_api {
-    pub use super::lynn_config::LynnConfigBuilder;
     pub use super::lynn_config::LynnConfig;
+    pub use super::lynn_config::LynnConfigBuilder;
 }
 
 pub(crate) mod lynn_thread_pool_api {
