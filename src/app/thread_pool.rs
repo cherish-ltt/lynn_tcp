@@ -45,19 +45,19 @@ impl LynnThreadPool {
     /// # Returns
     ///
     /// A new instance of `LynnThreadPool`.
-    pub(crate) async fn new(num_threads: usize, server_single_processs_permit: usize) -> Self {
-        let mut threads = Vec::with_capacity(num_threads);
+    pub(crate) async fn new(num_threads: &usize, server_single_processs_permit: &usize) -> Self {
+        let mut threads = Vec::with_capacity(*num_threads);
         let (tx_result, rx_result) = mpsc::channel::<(
             HandlerResult,
             Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
-        )>(num_threads);
-        for i in 1..=num_threads {
+        )>(*num_threads);
+        for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
             let (tx, mut rx) = mpsc::channel::<(
                 Arc<Box<dyn IService>>,
                 InputBufVO,
                 Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
-            )>(server_single_processs_permit);
+            )>(*server_single_processs_permit);
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {

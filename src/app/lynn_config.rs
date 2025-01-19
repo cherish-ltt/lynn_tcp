@@ -8,30 +8,30 @@ use crate::const_config::{
 ///
 /// This struct contains various configuration parameters for the server,
 /// such as the IP address, channel size, maximum connections, thread pool size, etc.
-#[derive(Clone)]
-pub(crate) struct LynnConfig {
+//#[derive(Clone)]
+pub(crate) struct LynnConfig<'a> {
     // The IPv4 address of the server.
-    server_ipv4: String,
+    server_ipv4: &'a str,
     // The size of a single channel.
-    server_single_channel_size: usize,
+    server_single_channel_size: &'a usize,
     // The maximum number of connections for the server.
-    server_max_connections: Option<usize>,
+    server_max_connections: Option<&'a usize>,
     // The maximum number of threads for the server.
-    server_max_threadpool_size: usize,
+    server_max_threadpool_size: &'a usize,
     // The maximum number of bytes the server can receive.
-    server_max_receive_bytes_size: usize,
+    server_max_receive_bytes_size: &'a usize,
     // The permit size for a single process.
-    server_single_processs_permit: usize,
+    server_single_processs_permit: &'a usize,
     // The interval for checking heartbeats.
-    server_check_heart_interval: u64,
+    server_check_heart_interval: &'a u64,
     // The timeout time for checking heartbeats.
-    server_check_heart_timeout_time: u64,
+    server_check_heart_timeout_time: &'a u64,
 }
 
 /// Implementation for LynnConfig, providing methods to create and get the configuration.
 ///
 /// This implementation includes a constructor for the default configuration and methods to get the configuration parameters.
-impl LynnConfig {
+impl<'a> LynnConfig<'a> {
     /// Creates a new LynnConfig instance with the given parameters.
     ///
     /// # Parameters
@@ -49,14 +49,14 @@ impl LynnConfig {
     ///
     /// A new LynnConfig instance.
     fn new(
-        server_ipv4: String,
-        server_single_channel_size: usize,
-        server_max_connections: Option<usize>,
-        server_max_threadpool_size: usize,
-        server_max_receive_bytes_size: usize,
-        server_single_processs_permit: usize,
-        server_check_heart_interval: u64,
-        server_check_heart_timeout_time: u64,
+        server_ipv4: &'a str,
+        server_single_channel_size: &'a usize,
+        server_max_connections: Option<&'a usize>,
+        server_max_threadpool_size: &'a usize,
+        server_max_receive_bytes_size: &'a usize,
+        server_single_processs_permit: &'a usize,
+        server_check_heart_interval: &'a u64,
+        server_check_heart_timeout_time: &'a u64,
     ) -> Self {
         Self {
             server_ipv4,
@@ -77,14 +77,14 @@ impl LynnConfig {
     /// A default LynnConfig instance.
     pub(crate) fn default() -> Self {
         Self {
-            server_ipv4: DEFAULT_IPV4.to_string(),
-            server_max_connections: Some(DEFAULT_MAX_CONNECTIONS),
-            server_max_threadpool_size: DEFAULT_MAX_THREADPOOL_SIZE,
-            server_max_receive_bytes_size: DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-            server_single_channel_size: DEFAULT_CHANNEL_SIZE,
-            server_single_processs_permit: DEFAULT_PROCESS_PERMIT_SIZE,
-            server_check_heart_interval: DEFAULT_CHECK_HEART_INTERVAL,
-            server_check_heart_timeout_time: DEFAULT_CHECK_HEART_TIMEOUT_TIME,
+            server_ipv4: DEFAULT_IPV4,
+            server_max_connections: Some(&DEFAULT_MAX_CONNECTIONS),
+            server_max_threadpool_size: &DEFAULT_MAX_THREADPOOL_SIZE,
+            server_max_receive_bytes_size: &DEFAULT_MAX_RECEIVE_BYTES_SIZE,
+            server_single_channel_size: &DEFAULT_CHANNEL_SIZE,
+            server_single_processs_permit: &DEFAULT_PROCESS_PERMIT_SIZE,
+            server_check_heart_interval: &DEFAULT_CHECK_HEART_INTERVAL,
+            server_check_heart_timeout_time: &DEFAULT_CHECK_HEART_TIMEOUT_TIME,
         }
     }
 
@@ -93,8 +93,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The IPv4 address of the server.
-    pub(crate) fn get_server_ipv4(&self) -> String {
-        self.server_ipv4.clone()
+    pub(crate) fn get_server_ipv4(&self) -> &str {
+        &self.server_ipv4
     }
 
     /// Gets the size of a single channel.
@@ -102,8 +102,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The size of a single channel.
-    pub(crate) fn get_server_single_channel_size(&self) -> usize {
-        self.server_single_channel_size.clone()
+    pub(crate) fn get_server_single_channel_size(&self) -> &usize {
+        &self.server_single_channel_size
     }
 
     /// Gets the permit size for a single process.
@@ -111,8 +111,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The permit size for a single process.
-    pub(crate) fn get_server_single_processs_permit(&self) -> usize {
-        self.server_single_processs_permit.clone()
+    pub(crate) fn get_server_single_processs_permit(&self) -> &usize {
+        self.server_single_processs_permit
     }
 
     /// Gets the interval for checking heartbeats.
@@ -120,8 +120,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The interval for checking heartbeats.
-    pub(crate) fn get_server_check_heart_interval(&self) -> u64 {
-        self.server_check_heart_interval.clone()
+    pub(crate) fn get_server_check_heart_interval(&self) -> &u64 {
+        self.server_check_heart_interval
     }
 
     /// Gets the timeout time for checking heartbeats.
@@ -129,8 +129,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The timeout time for checking heartbeats.
-    pub(crate) fn get_server_check_heart_timeout_time(&self) -> u64 {
-        self.server_check_heart_timeout_time.clone()
+    pub(crate) fn get_server_check_heart_timeout_time(&self) -> &u64 {
+        self.server_check_heart_timeout_time
     }
 
     /// Gets the maximum number of connections for the server.
@@ -138,8 +138,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The maximum number of connections for the server.
-    pub(crate) fn get_server_max_connections(&self) -> Option<usize> {
-        self.server_max_connections.clone()
+    pub(crate) fn get_server_max_connections(&self) -> Option<&usize> {
+        self.server_max_connections
     }
 
     /// Gets the maximum number of threads for the server.
@@ -147,8 +147,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The maximum number of threads for the server.
-    pub(crate) fn get_server_max_threadpool_size(&self) -> usize {
-        self.server_max_threadpool_size.clone()
+    pub(crate) fn get_server_max_threadpool_size(&self) -> &usize {
+        self.server_max_threadpool_size
     }
 
     /// Gets the maximum number of bytes the server can receive.
@@ -156,8 +156,8 @@ impl LynnConfig {
     /// # Returns
     ///
     /// The maximum number of bytes the server can receive.
-    pub(crate) fn get_server_max_receive_bytes_size(&self) -> usize {
-        self.server_max_receive_bytes_size.clone()
+    pub(crate) fn get_server_max_receive_bytes_size(&self) -> &usize {
+        self.server_max_receive_bytes_size
     }
 }
 
@@ -165,14 +165,14 @@ impl LynnConfig {
 ///
 /// This builder provides a series of methods to set the various parameters of LynnConfig
 /// and finally builds a LynnConfig instance.
-pub struct LynnConfigBuilder {
-    lynn_config: LynnConfig,
+pub struct LynnConfigBuilder<'a> {
+    lynn_config: LynnConfig<'a>,
 }
 
 /// Implementation for LynnConfigBuilder, providing methods to set the configuration parameters.
 ///
 /// This implementation includes a constructor for the default configuration and methods to set the configuration parameters.
-impl LynnConfigBuilder {
+impl<'a> LynnConfigBuilder<'a> {
     /// Creates a new LynnConfigBuilder instance.
     ///
     /// # Returns
@@ -193,7 +193,7 @@ impl LynnConfigBuilder {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_ipv4(mut self, server_ipv4: String) -> Self {
+    pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Self {
         self.lynn_config.server_ipv4 = server_ipv4;
         self
     }
@@ -207,7 +207,7 @@ impl LynnConfigBuilder {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_single_channel_size(mut self, server_single_channel_size: usize) -> Self {
+    pub fn with_server_single_channel_size(mut self, server_single_channel_size: &'a usize) -> Self {
         self.lynn_config.server_single_channel_size = server_single_channel_size;
         self
     }
@@ -223,7 +223,7 @@ impl LynnConfigBuilder {
     /// The modified LynnConfigBuilder instance.
     pub fn with_server_single_processs_permit(
         mut self,
-        server_single_processs_permit: usize,
+        server_single_processs_permit: &'a usize,
     ) -> Self {
         self.lynn_config.server_single_processs_permit = server_single_processs_permit;
         self
@@ -237,7 +237,7 @@ impl LynnConfigBuilder {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_check_heart_interval(mut self, server_check_heart_interval: u64) -> Self {
+    pub fn with_server_check_heart_interval(mut self, server_check_heart_interval: &'a u64) -> Self {
         self.lynn_config.server_check_heart_interval = server_check_heart_interval;
         self
     }
@@ -253,7 +253,7 @@ impl LynnConfigBuilder {
     /// The modified LynnConfigBuilder instance.
     pub fn with_server_check_heart_timeout_time(
         mut self,
-        server_check_heart_timeout_time: u64,
+        server_check_heart_timeout_time: &'a u64,
     ) -> Self {
         self.lynn_config.server_check_heart_timeout_time = server_check_heart_timeout_time;
         self
@@ -268,7 +268,7 @@ impl LynnConfigBuilder {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_max_connections(mut self, server_max_connections: Option<usize>) -> Self {
+    pub fn with_server_max_connections(mut self, server_max_connections: Option<&'a usize>) -> Self {
         self.lynn_config.server_max_connections = server_max_connections;
         self
     }
@@ -282,7 +282,7 @@ impl LynnConfigBuilder {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_max_threadpool_size(mut self, server_max_threadpool_size: usize) -> Self {
+    pub fn with_server_max_threadpool_size(mut self, server_max_threadpool_size: &'a usize) -> Self {
         self.lynn_config.server_max_threadpool_size = server_max_threadpool_size;
         self
     }
@@ -298,7 +298,7 @@ impl LynnConfigBuilder {
     /// The modified LynnConfigBuilder instance.
     pub fn with_server_max_receive_bytes_size(
         mut self,
-        server_max_receive_bytes_size: usize,
+        server_max_receive_bytes_size: &'a usize,
     ) -> Self {
         self.lynn_config.server_max_receive_bytes_size = server_max_receive_bytes_size;
         self
@@ -309,7 +309,7 @@ impl LynnConfigBuilder {
     /// # Returns
     ///
     /// The final LynnConfig instance.
-    pub fn build(self) -> LynnConfig {
+    pub fn build(self) -> LynnConfig<'a> {
         self.lynn_config
     }
 }
