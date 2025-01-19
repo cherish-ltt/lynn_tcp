@@ -82,17 +82,6 @@ impl IHandlerData for MsgSelect {
     fn get_data(&self) -> super::router_handler::HandlerData {
         HandlerData::new_without_data()
     }
-
-    /// Gets the method ID for the message selection.
-    ///
-    /// This function returns the method ID for the message selection.
-    ///
-    /// # Returns
-    ///
-    /// The method ID for the message selection.
-    fn get_method_id(&mut self) -> Option<u16> {
-        self.input_buf_vo.get_method_id()
-    }
 }
 
 impl IHandlerMethod for MsgSelect {

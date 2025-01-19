@@ -30,11 +30,15 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
-    pub fn new_with_send(result_data: (u16, Vec<u8>), addrs: Vec<SocketAddr>) -> Self {
+    pub fn new_with_send(
+        method_id: u16,
+        response_data: Vec<u8>,
+        target_addrs: Vec<SocketAddr>,
+    ) -> Self {
         Self {
             is_send: true,
-            result_data: Some(result_data),
-            addrs: Some(addrs),
+            result_data: Some((method_id, response_data)),
+            addrs: Some(target_addrs),
         }
     }
 
@@ -148,12 +152,6 @@ pub(crate) trait IHandlerData {
     ///
     /// The handler data as a HandlerData instance.
     fn get_data(&self) -> HandlerData;
-    /// Gets the method ID.
-    ///
-    /// # Returns
-    ///
-    /// The method ID as a u64 number.
-    fn get_method_id(&mut self) -> Option<u16>;
 }
 
 /// A trait representing a handler method.
