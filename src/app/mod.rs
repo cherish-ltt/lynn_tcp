@@ -357,9 +357,6 @@ impl<'a> LynnServer<'a> {
                                                     Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)|None => {},
                                                 }
                                             });
-                                            for i in 0..n{
-                                                info!("{}",buf[i]);
-                                            }
 
                                             let mut input_buf_vo = InputBufVO::new(buf[..n].to_vec(),addr);
                                             if let Some(method_id) = input_buf_vo.get_method_id(){

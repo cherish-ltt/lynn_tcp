@@ -14,7 +14,7 @@ pub struct HandlerResult {
     // A boolean indicating whether data should be sent.
     is_send: bool,
     // Optional result data, containing a u64 number and a byte vector.
-    result_data: Option<(u64, Vec<u8>)>,
+    result_data: Option<(u16, Vec<u8>)>,
     // Optional vector of socket addresses.
     addrs: Option<Vec<SocketAddr>>,
 }
@@ -30,7 +30,7 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
-    pub fn new_with_send(result_data: (u64, Vec<u8>), addrs: Vec<SocketAddr>) -> Self {
+    pub fn new_with_send(result_data: (u16, Vec<u8>), addrs: Vec<SocketAddr>) -> Self {
         Self {
             is_send: true,
             result_data: Some(result_data),
@@ -68,11 +68,13 @@ impl HandlerResult {
     pub(crate) fn get_response_data(&self) -> Option<Vec<u8>> {
         match self.result_data.clone() {
             Some((num, mut bytes)) => {
+                let mut vec = Vec::new();
                 // Convert the u64 to a big-endian (network byte order) byte slice.
-                let num_bytes = num.to_be_bytes().to_vec();
+                let num_bytes = num.to_be_bytes();
+                vec.extend_from_slice(&num_bytes);
                 // Insert num_bytes at the beginning of the byte vector.
-                bytes.splice(0..0, num_bytes);
-                Some(bytes)
+                vec.extend_from_slice(&bytes);
+                Some(vec)
             }
             None => None,
         }
