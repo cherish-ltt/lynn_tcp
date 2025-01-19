@@ -17,6 +17,8 @@ mod service;
 pub mod server {
     // Exports the LynnConfigBuilder for configuring the server
     pub use super::app::lynn_config_api::LynnConfigBuilder;
+    // Exports the LynnConfig for configuring the server
+    pub use super::app::lynn_config_api::LynnConfig;
     // Exports the LynnServer for running the server
     pub use super::app::LynnServer;
     // Exports the HandlerResult for handling the results of server operations

@@ -9,7 +9,7 @@ use crate::const_config::{
 /// This struct contains various configuration parameters for the server,
 /// such as the IP address, channel size, maximum connections, thread pool size, etc.
 //#[derive(Clone)]
-pub(crate) struct LynnConfig<'a> {
+pub struct LynnConfig<'a> {
     // The IPv4 address of the server.
     server_ipv4: &'a str,
     // The size of a single channel.
@@ -166,7 +166,7 @@ impl<'a> LynnConfig<'a> {
 /// This builder provides a series of methods to set the various parameters of LynnConfig
 /// and finally builds a LynnConfig instance.
 pub struct LynnConfigBuilder<'a> {
-    lynn_config: LynnConfig<'a>,
+    pub lynn_config: LynnConfig<'a>,
 }
 
 /// Implementation for LynnConfigBuilder, providing methods to set the configuration parameters.
