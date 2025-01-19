@@ -45,7 +45,7 @@ pub(crate) mod lynn_thread_pool_api {
 ///
 /// The `LynnServer` struct holds information about the server, including its configuration,
 /// client list, router map, and thread pool.
-/// 
+///
 /// # Example
 ///
 /// ```rust
@@ -67,7 +67,7 @@ pub struct LynnServer<'a> {
     /// A map of routes, where the key is a method ID and the value is a service handler.
     router_map: Arc<Mutex<HashMap<u64, Arc<Box<dyn IService>>>>>,
     /// The configuration for the server.
-    lynn_config:LynnConfig<'a>,
+    lynn_config: LynnConfig<'a>,
     /// The thread pool for the server.
     lynn_thread_pool: Arc<Mutex<LynnThreadPool>>,
 }
@@ -83,8 +83,8 @@ impl<'a> LynnServer<'a> {
         let lynn_config = LynnConfig::default();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
-        let thread_pool = LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
-        .await;
+        let thread_pool =
+            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
@@ -106,15 +106,13 @@ impl<'a> LynnServer<'a> {
         let lynn_config = LynnConfigBuilder::new().with_server_ipv4(ipv4).build();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
-        let thread_pool = LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
-        .await;
+        let thread_pool =
+            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
             lynn_config,
-            lynn_thread_pool: Arc::new(Mutex::new(
-                thread_pool
-            )),
+            lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
         }
     }
 
@@ -131,15 +129,13 @@ impl<'a> LynnServer<'a> {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
-        let thread_pool = LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
-        .await;
+        let thread_pool =
+            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
             lynn_config,
-            lynn_thread_pool: Arc::new(Mutex::new(
-                thread_pool
-            )),
+            lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
         }
     }
 
@@ -202,9 +198,12 @@ impl<'a> LynnServer<'a> {
     /// Checks the heartbeat of connected clients and removes those that have not sent messages for a long time.
     pub(crate) async fn check_heart(&self) {
         let clients = self.clients.clone();
-        let server_check_heart_interval = self.lynn_config.get_server_check_heart_interval().clone();
-        let server_check_heart_timeout_time =
-        self.lynn_config.get_server_check_heart_timeout_time().clone();
+        let server_check_heart_interval =
+            self.lynn_config.get_server_check_heart_interval().clone();
+        let server_check_heart_timeout_time = self
+            .lynn_config
+            .get_server_check_heart_timeout_time()
+            .clone();
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(server_check_heart_interval));
             info!(
@@ -222,18 +221,16 @@ impl<'a> LynnServer<'a> {
                     let time_old = last_communicate_time.deref().clone();
                     let time_now = SystemTime::now();
                     match time_old.partial_cmp(&time_now) {
-                        Some(std::cmp::Ordering::Less) => {
-                            match time_now.duration_since(time_old) {
-                                Ok(duration) => {
-                                    if duration.as_secs() > server_check_heart_timeout_time {
-                                        remove_list.push(addr.clone());
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!("unable to compare time,{}", e)
+                        Some(std::cmp::Ordering::Less) => match time_now.duration_since(time_old) {
+                            Ok(duration) => {
+                                if duration.as_secs() > server_check_heart_timeout_time {
+                                    remove_list.push(addr.clone());
                                 }
                             }
-                        }
+                            Err(e) => {
+                                warn!("unable to compare time,{}", e)
+                            }
+                        },
                         Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) | None => {}
                     }
                 }
@@ -251,7 +248,7 @@ impl<'a> LynnServer<'a> {
         });
     }
 
-    pub async fn start(self:Self) {
+    pub async fn start(self: Self) {
         let server_arc = Arc::new(self);
         server_arc.run().await;
     }
@@ -261,7 +258,7 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// Returns `Ok(())` if the server starts successfully, otherwise returns an error.
-    async fn run(self:Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
         /// Binds a TCP listener to the local address.
         let listener = TcpListener::bind(self.lynn_config.get_server_ipv4()).await?;
         info!(
@@ -292,8 +289,9 @@ impl<'a> LynnServer<'a> {
                     info!("Accepted connection from: {}", addr);
 
                     /// Creates a channel for sending data to the client.
-                    let (tx, mut rx) =
-                        mpsc::channel::<Vec<u8>>(*self.lynn_config.get_server_single_channel_size());
+                    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(
+                        *self.lynn_config.get_server_single_channel_size(),
+                    );
                     let process_permit = Arc::new(Semaphore::new(
                         *self.lynn_config.get_server_single_processs_permit(),
                     ));
@@ -317,7 +315,7 @@ impl<'a> LynnServer<'a> {
                                     match result {
                                         Ok(n) if n == 0 => {
                                             continue
-                                        }, 
+                                        },
                                         Ok(n) => {
                                             let last_communicate_time = last_communicate_time.clone();
                                             tokio::spawn(async move {
@@ -386,10 +384,11 @@ impl<'a> LynnServer<'a> {
     }
 
     /// Logs server information.
-    pub(crate) async fn log_server(&self){
+    pub(crate) async fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::DEBUG)
             .finish();
-        tracing::subscriber::set_global_default(subscriber).expect("failed to set global subscribers");
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("failed to set global subscribers");
     }
 }

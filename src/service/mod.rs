@@ -18,7 +18,7 @@ pub(crate) trait IService: Send + Sync {
 /// It simply calls the function with the given `InputBufVO` and returns the result.
 impl<T> IService for T
 where
-    T: Fn(&mut InputBufVO) -> HandlerResult + Send + Sync + 'static + Sized, 
+    T: Fn(&mut InputBufVO) -> HandlerResult + Send + Sync + 'static + Sized,
 {
     /// Processes the given `InputBufVO` by calling the function and returns the result.
     ///

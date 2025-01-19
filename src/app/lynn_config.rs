@@ -207,7 +207,10 @@ impl<'a> LynnConfigBuilder<'a> {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_single_channel_size(mut self, server_single_channel_size: &'a usize) -> Self {
+    pub fn with_server_single_channel_size(
+        mut self,
+        server_single_channel_size: &'a usize,
+    ) -> Self {
         self.lynn_config.server_single_channel_size = server_single_channel_size;
         self
     }
@@ -237,7 +240,10 @@ impl<'a> LynnConfigBuilder<'a> {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_check_heart_interval(mut self, server_check_heart_interval: &'a u64) -> Self {
+    pub fn with_server_check_heart_interval(
+        mut self,
+        server_check_heart_interval: &'a u64,
+    ) -> Self {
         self.lynn_config.server_check_heart_interval = server_check_heart_interval;
         self
     }
@@ -268,7 +274,10 @@ impl<'a> LynnConfigBuilder<'a> {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_max_connections(mut self, server_max_connections: Option<&'a usize>) -> Self {
+    pub fn with_server_max_connections(
+        mut self,
+        server_max_connections: Option<&'a usize>,
+    ) -> Self {
         self.lynn_config.server_max_connections = server_max_connections;
         self
     }
@@ -282,7 +291,10 @@ impl<'a> LynnConfigBuilder<'a> {
     /// # Returns
     ///
     /// The modified LynnConfigBuilder instance.
-    pub fn with_server_max_threadpool_size(mut self, server_max_threadpool_size: &'a usize) -> Self {
+    pub fn with_server_max_threadpool_size(
+        mut self,
+        server_max_threadpool_size: &'a usize,
+    ) -> Self {
         self.lynn_config.server_max_threadpool_size = server_max_threadpool_size;
         self
     }
