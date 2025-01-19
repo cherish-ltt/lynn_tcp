@@ -25,8 +25,9 @@ use tracing_subscriber::fmt;
 
 use crate::{
     const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-    dto_factory::{input_dto_build, input_vo::InputBufVO},
+    dto_factory::input_dto_build,
     service::IService,
+    vo_factory::{input_vo::InputBufVO, InputBufVOTrait},
 };
 
 pub(crate) mod lynn_user_api {
@@ -91,7 +92,7 @@ pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     /// A map of routes, where the key is a method ID and the value is a service handler.
-    router_map: Arc<Mutex<HashMap<u64, Arc<Box<dyn IService>>>>>,
+    router_map: Arc<Mutex<HashMap<u16, Arc<Box<dyn IService>>>>>,
     /// The configuration for the server.
     lynn_config: LynnConfig<'a>,
     /// The thread pool for the server.
@@ -175,7 +176,7 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// The modified `LynnServer` instance.
-    pub fn add_router(self, method_id: u64, handler: impl IService + 'static) -> Self {
+    pub fn add_router(self, method_id: u16, handler: impl IService + 'static) -> Self {
         let router_map = self.router_map.clone();
         tokio::spawn(async move {
             let mut router_map_mutex = router_map.lock().await;
@@ -275,6 +276,7 @@ impl<'a> LynnServer<'a> {
     }
 
     pub async fn start(self: Self) {
+        self.log_server().await;
         let server_arc = Arc::new(self);
         server_arc.run().await;
     }
@@ -293,7 +295,6 @@ impl<'a> LynnServer<'a> {
         );
 
         self.check_heart().await;
-        self.log_server().await;
 
         loop {
             /// Waits for a client to connect.
@@ -356,14 +357,22 @@ impl<'a> LynnServer<'a> {
                                                     Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)|None => {},
                                                 }
                                             });
-                                            let input_buf_vo = InputBufVO::new(buf[..n].to_vec(),addr);
-                                            let mut mutex = router_map.lock().await;
-                                            let guard = mutex.deref_mut();
-                                            if guard.contains_key(&1){
-                                                let a = guard.get(&1).unwrap();
-                                                input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
+                                            for i in 0..n{
+                                                info!("{}",buf[i]);
+                                            }
+
+                                            let mut input_buf_vo = InputBufVO::new(buf[..n].to_vec(),addr);
+                                            if let Some(method_id) = input_buf_vo.get_method_id(){
+                                                let mut mutex = router_map.lock().await;
+                                                let guard = mutex.deref_mut();
+                                                if guard.contains_key(&method_id) {
+                                                    let a = guard.get(&method_id).unwrap();
+                                                    input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
+                                                }else{
+                                                    warn!("router_map no method match");
+                                                }
                                             }else{
-                                                warn!("no method match");
+                                                warn!("input_buf_vo no method_id");
                                             }
                                         },
                                         Err(e) => {

@@ -10,6 +10,7 @@ mod const_config;
 mod dto_factory;
 // Module containing service interfaces and implementations
 mod service;
+mod vo_factory;
 
 /// The main library module for the Lynn TCP Server.
 ///
@@ -24,5 +25,6 @@ pub mod server {
     // Exports the HandlerResult for handling the results of server operations
     pub use super::dto_factory::input_dto::HandlerResult;
     // Exports the InputBufVO for handling input data
-    pub use super::dto_factory::input_vo::InputBufVO;
+    pub use super::vo_factory::input_vo::InputBufVO;
+    pub use super::vo_factory::InputBufVOTrait;
 }

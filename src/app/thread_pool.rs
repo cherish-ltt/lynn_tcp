@@ -10,11 +10,9 @@ use tokio::{
 use tracing::{error, info};
 
 use crate::{
-    dto_factory::{
-        input_dto::{check_handler_result, HandlerResult},
-        input_vo::InputBufVO,
-    },
+    dto_factory::input_dto::{check_handler_result, HandlerResult},
     service::IService,
+    vo_factory::input_vo::InputBufVO,
 };
 
 use super::lynn_user::LynnUser;

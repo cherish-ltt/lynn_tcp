@@ -5,11 +5,11 @@ use tokio::sync::Mutex;
 use crate::{
     app::{lynn_thread_pool_api::LynnThreadPool, lynn_user_api::LynnUser},
     service::IService,
+    vo_factory::{input_vo::InputBufVO, InputBufVOTrait},
 };
 
 use super::{
     input_dto::IHandlerCombinedTrait,
-    input_vo::InputBufVO,
     router_handler::{HandlerData, IHandlerData, IHandlerMethod},
 };
 
@@ -90,7 +90,7 @@ impl IHandlerData for MsgSelect {
     /// # Returns
     ///
     /// The method ID for the message selection.
-    fn get_method_id(&self) -> u64 {
+    fn get_method_id(&mut self) -> Option<u16> {
         self.input_buf_vo.get_method_id()
     }
 }

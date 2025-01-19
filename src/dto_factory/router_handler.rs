@@ -151,7 +151,7 @@ pub(crate) trait IHandlerData {
     /// # Returns
     ///
     /// The method ID as a u64 number.
-    fn get_method_id(&self) -> u64;
+    fn get_method_id(&mut self) -> Option<u16>;
 }
 
 /// A trait representing a handler method.
