@@ -48,7 +48,7 @@ pub(crate) mod lynn_thread_pool_api {
 /// client list, router map, and thread pool.
 ///
 /// # Example
-///
+/// Use default config
 /// ```rust
 /// use lynn_tcp::app::LynnServer;
 ///
@@ -56,6 +56,31 @@ pub(crate) mod lynn_thread_pool_api {
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let _ = LynnServer::new().await.add_router(1, my_service).start().await;
 ///     Ok(())
+/// }
+/// pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
+///     println!("service read from :{}", input_buf_vo.get_input_addr());
+///     HandlerResult::new_without_send()
+/// }
+/// ```
+/// # Example
+/// Use customized config
+/// ```rust
+/// use lynn_tcp::app::LynnServer;
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let _ = LynnServer::new_with_config(
+///     LynnConfigBuilder::new()
+///         .with_server_ipv4("0.0.0.0:9177")
+///         .with_server_max_connections(Some(&200))
+///         .with_server_max_threadpool_size(&10)
+///         .build(),
+/// )
+/// .await
+/// .add_router(1, my_service)
+/// .start()
+/// .await;
+/// Ok(())
 /// }
 /// pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 ///     println!("service read from :{}", input_buf_vo.get_input_addr());
