@@ -340,7 +340,7 @@ impl<'a> LynnServer<'a> {
                             tokio::select! {
                                 result = stream.read(&mut buf) => {
                                     match result {
-                                        Ok(n) if n == 0 => {
+                                        Ok(n) if n < 3 => {
                                             continue
                                         },
                                         Ok(n) => {
@@ -366,7 +366,7 @@ impl<'a> LynnServer<'a> {
                                                     let a = guard.get(&method_id).unwrap();
                                                     input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
                                                 }else{
-                                                    warn!("router_map no method match");
+                                                    warn!("router_map no method match,{}",method_id);
                                                 }
                                             }else{
                                                 warn!("input_buf_vo no method_id");

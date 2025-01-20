@@ -72,7 +72,7 @@ pub(crate) async fn input_dto_build(
                         match result_permit {
                             Ok(permit) => {
                                 // If the permit is acquired successfully, log a warning indicating that the constructor ID does not match.
-                                warn!("input_buf.get_constructor_id is not match");
+                                warn!("input_buf.get_constructor_id is not match,{}", value);
                                 // Release the permit after logging the warning.
                                 drop(permit);
                             }
