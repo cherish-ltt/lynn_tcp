@@ -1,7 +1,10 @@
+mod big_buf_reader;
 mod input_buf_vo;
 
-#[cfg(any(feature="server",feature="client"))]
+#[cfg(any(feature = "server", feature = "client"))]
 pub trait InputBufVOTrait {
+    fn is_structure_complete(&mut self) -> bool;
+    fn is_standard_header(&mut self) -> bool;
     fn get_constructor_id(&mut self) -> Option<u8>;
     fn get_method_id(&mut self) -> Option<u16>;
     fn next_u64(&mut self) -> Option<u64>;
@@ -11,4 +14,8 @@ pub trait InputBufVOTrait {
 
 pub mod input_vo {
     pub use super::input_buf_vo::InputBufVO;
+}
+
+pub(crate) mod big_buf {
+    pub(crate) use super::big_buf_reader::*;
 }

@@ -8,7 +8,7 @@ use super::InputBufVOTrait;
 /// It includes the raw data as a byte vector, an index to track the current
 /// position in the data, and the address from which the data was received.
 #[derive(Clone)]
-#[cfg(any(feature="server",feature="client"))]
+#[cfg(any(feature = "server", feature = "client"))]
 pub struct InputBufVO {
     /// The raw data received from the network as a byte vector.
     data: Vec<u8>,
@@ -59,6 +59,12 @@ impl InputBufVO {
 }
 
 impl InputBufVOTrait for InputBufVO {
+    fn is_structure_complete(&mut self) -> bool {
+        true
+    }
+    fn is_standard_header(&mut self) -> bool {
+        true
+    }
     /// Retrieves the constructor ID from the input buffer.
     ///
     /// This method extracts a `u64` value from the first 8 bytes of the input

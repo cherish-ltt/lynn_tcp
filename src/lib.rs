@@ -9,9 +9,9 @@ mod const_config;
 // Module containing data transfer objects and factory functions
 mod dto_factory;
 // Module containing service interfaces and implementations
+mod client;
 mod service;
 mod vo_factory;
-mod client;
 
 /// The main library module for the Lynn TCP Server.
 ///
