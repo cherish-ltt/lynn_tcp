@@ -3,18 +3,19 @@ use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
-    app::{lynn_thread_pool_api::LynnThreadPool, lynn_user_api::LynnUser},
+    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
     service::IService,
 };
 
 /// A struct representing the result of a handler.
 ///
 /// This struct contains a boolean indicating whether data should be sent, optional result data, and optional addresses.
+#[cfg(any(feature = "server", feature = "client"))]
 pub struct HandlerResult {
     // A boolean indicating whether data should be sent.
     is_send: bool,
     // Optional result data, containing a u64 number and a byte vector.
-    result_data: Option<(u64, Vec<u8>)>,
+    result_data: Option<(u16, Vec<u8>)>,
     // Optional vector of socket addresses.
     addrs: Option<Vec<SocketAddr>>,
 }
@@ -30,11 +31,15 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
-    pub fn new_with_send(result_data: (u64, Vec<u8>), addrs: Vec<SocketAddr>) -> Self {
+    pub fn new_with_send(
+        method_id: u16,
+        response_data: Vec<u8>,
+        target_addrs: Vec<SocketAddr>,
+    ) -> Self {
         Self {
             is_send: true,
-            result_data: Some(result_data),
-            addrs: Some(addrs),
+            result_data: Some((method_id, response_data)),
+            addrs: Some(target_addrs),
         }
     }
 
@@ -68,11 +73,13 @@ impl HandlerResult {
     pub(crate) fn get_response_data(&self) -> Option<Vec<u8>> {
         match self.result_data.clone() {
             Some((num, mut bytes)) => {
+                let mut vec = Vec::new();
                 // Convert the u64 to a big-endian (network byte order) byte slice.
-                let num_bytes = num.to_be_bytes().to_vec();
+                let num_bytes = num.to_be_bytes();
+                vec.extend_from_slice(&num_bytes);
                 // Insert num_bytes at the beginning of the byte vector.
-                bytes.splice(0..0, num_bytes);
-                Some(bytes)
+                vec.extend_from_slice(&bytes);
+                Some(vec)
             }
             None => None,
         }
@@ -127,7 +134,7 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
         &mut self,
         clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
         handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnThreadPool>>,
+        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -146,12 +153,6 @@ pub(crate) trait IHandlerData {
     ///
     /// The handler data as a HandlerData instance.
     fn get_data(&self) -> HandlerData;
-    /// Gets the method ID.
-    ///
-    /// # Returns
-    ///
-    /// The method ID as a u64 number.
-    fn get_method_id(&self) -> u64;
 }
 
 /// A trait representing a handler method.
@@ -168,7 +169,7 @@ pub(crate) trait IHandlerMethod {
     async fn handler(
         &mut self,
         handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnThreadPool>>,
+        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,

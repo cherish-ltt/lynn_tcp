@@ -1,4 +1,4 @@
-use crate::dto_factory::{input_dto::HandlerResult, input_vo::InputBufVO};
+use crate::{dto_factory::input_dto::HandlerResult, vo_factory::input_vo::InputBufVO};
 
 /// A trait for services that can process `InputBufVO` and return a `HandlerResult`.
 ///

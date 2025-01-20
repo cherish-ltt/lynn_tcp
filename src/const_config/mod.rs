@@ -5,7 +5,7 @@ pub(crate) const DEFAULT_MAX_CONNECTIONS: usize = 1000;
 /// The maximum number of threads allowed by the server.
 pub(crate) const DEFAULT_MAX_THREADPOOL_SIZE: usize = 10;
 /// The default maximum receive data size for a single client in bytes.
-pub(crate) const DEFAULT_MAX_RECEIVE_BYTES_SIZE: usize = 1024;
+pub(crate) const DEFAULT_MAX_RECEIVE_BYTES_SIZE: usize = 1024 * 8;
 /// The default maximum communication channel size for a single client.
 /// To avoid memory overflow in case of network delay, it is set to 3.
 pub(crate) const DEFAULT_CHANNEL_SIZE: usize = 3;
@@ -16,3 +16,5 @@ pub(crate) const DEFAULT_PROCESS_PERMIT_SIZE: usize = 7;
 pub(crate) const DEFAULT_CHECK_HEART_INTERVAL: u64 = 5;
 /// The timeout time for heartbeat detection in seconds.
 pub(crate) const DEFAULT_CHECK_HEART_TIMEOUT_TIME: u64 = 30;
+pub(crate) const DEFAULT_MESSAGE_HEADER_MARK: u16 = 9177;
+pub(crate) const DEFAULT_MESSAGE_TAIL_MARK: u16 = 7719;

@@ -1,6 +1,6 @@
-mod lynn_config;
-mod lynn_user;
-mod thread_pool;
+mod lynn_server_config;
+mod lynn_server_user;
+mod server_thread_pool;
 
 use std::{
     collections::HashMap,
@@ -10,9 +10,10 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use lynn_config::{LynnConfig, LynnConfigBuilder};
-use lynn_user::LynnUser;
-use thread_pool::LynnThreadPool;
+use bytes::{BufMut, BytesMut};
+use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
+use lynn_server_user::LynnUser;
+use server_thread_pool::LynnServerThreadPool;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -25,21 +26,22 @@ use tracing_subscriber::fmt;
 
 use crate::{
     const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-    dto_factory::{input_dto_build, input_vo::InputBufVO},
+    dto_factory::input_dto_build,
     service::IService,
+    vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
 };
 
 pub(crate) mod lynn_user_api {
-    pub(crate) use super::lynn_user::LynnUser;
+    pub(crate) use super::lynn_server_user::LynnUser;
 }
 
 pub mod lynn_config_api {
-    pub use super::lynn_config::LynnConfig;
-    pub use super::lynn_config::LynnConfigBuilder;
+    pub use super::lynn_server_config::LynnServerConfig;
+    pub use super::lynn_server_config::LynnServerConfigBuilder;
 }
 
 pub(crate) mod lynn_thread_pool_api {
-    pub(crate) use super::thread_pool::LynnThreadPool;
+    pub(crate) use super::server_thread_pool::LynnServerThreadPool;
 }
 
 /// Represents a server for the Lynn application.
@@ -70,7 +72,7 @@ pub(crate) mod lynn_thread_pool_api {
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let _ = LynnServer::new_with_config(
-///     LynnConfigBuilder::new()
+///     LynnServerConfigBuilder::new()
 ///         .with_server_ipv4("0.0.0.0:9177")
 ///         .with_server_max_connections(Some(&200))
 ///         .with_server_max_threadpool_size(&10)
@@ -87,15 +89,16 @@ pub(crate) mod lynn_thread_pool_api {
 ///     HandlerResult::new_without_send()
 /// }
 /// ```
+#[cfg(feature = "server")]
 pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     /// A map of routes, where the key is a method ID and the value is a service handler.
-    router_map: Arc<Mutex<HashMap<u64, Arc<Box<dyn IService>>>>>,
+    router_map: Arc<Mutex<HashMap<u16, Arc<Box<dyn IService>>>>>,
     /// The configuration for the server.
-    lynn_config: LynnConfig<'a>,
+    lynn_config: LynnServerConfig<'a>,
     /// The thread pool for the server.
-    lynn_thread_pool: Arc<Mutex<LynnThreadPool>>,
+    lynn_thread_pool: Arc<Mutex<LynnServerThreadPool>>,
 }
 
 /// Implementation of methods for the LynnServer struct.
@@ -106,11 +109,12 @@ impl<'a> LynnServer<'a> {
     ///
     /// A new instance of `LynnServer`.
     pub async fn new() -> Self {
-        let lynn_config = LynnConfig::default();
+        let lynn_config = LynnServerConfig::default();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
         let thread_pool =
-            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
+            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
+                .await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
@@ -129,11 +133,14 @@ impl<'a> LynnServer<'a> {
     ///
     /// A new instance of `LynnServer`.
     pub async fn new_with_ipv4(ipv4: &'a str) -> Self {
-        let lynn_config = LynnConfigBuilder::new().with_server_ipv4(ipv4).build();
+        let lynn_config = LynnServerConfigBuilder::new()
+            .with_server_ipv4(ipv4)
+            .build();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
         let thread_pool =
-            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
+            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
+                .await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
@@ -151,12 +158,13 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// A new instance of `LynnServer`.
-    pub async fn new_with_config(lynn_config: LynnConfig<'a>) -> Self {
+    pub async fn new_with_config(lynn_config: LynnServerConfig<'a>) -> Self {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
         let thread_pool =
-            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
+            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
+                .await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
@@ -175,7 +183,7 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// The modified `LynnServer` instance.
-    pub fn add_router(self, method_id: u64, handler: impl IService + 'static) -> Self {
+    pub fn add_router(self, method_id: u16, handler: impl IService + 'static) -> Self {
         let router_map = self.router_map.clone();
         tokio::spawn(async move {
             let mut router_map_mutex = router_map.lock().await;
@@ -275,6 +283,7 @@ impl<'a> LynnServer<'a> {
     }
 
     pub async fn start(self: Self) {
+        self.log_server().await;
         let server_arc = Arc::new(self);
         server_arc.run().await;
     }
@@ -293,7 +302,6 @@ impl<'a> LynnServer<'a> {
         );
 
         self.check_heart().await;
-        self.log_server().await;
 
         loop {
             /// Waits for a client to connect.
@@ -329,41 +337,57 @@ impl<'a> LynnServer<'a> {
                     let process_permit_clone = process_permit.clone();
                     let last_communicate_time_clone = last_communicate_time.clone();
                     let thread_pool_clone = self.lynn_thread_pool.clone();
+                    let message_header_mark = self.lynn_config.get_message_header_mark().clone();
+                    let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
                     /// Spawns a new asynchronous task to handle each client connection.
                     let join_handle = tokio::spawn(async move {
                         let mut stream = socket; // 获取TcpStream
                         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
-                        let client_uuid = addr;
+                        let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
+                        let addr = addr;
                         /// Reads data sent by the client in a loop.
                         loop {
                             tokio::select! {
                                 result = stream.read(&mut buf) => {
                                     match result {
-                                        Ok(n) if n == 0 => {
+                                        Ok(n) if n <= 0 => {
                                             continue
                                         },
                                         Ok(n) => {
-                                            let last_communicate_time = last_communicate_time.clone();
-                                            tokio::spawn(async move {
-                                                let time_now = SystemTime::now();
-                                                let mut mutex = last_communicate_time.lock().await;
-                                                let guard = mutex.deref_mut();
-                                                let time_old = guard.clone();
-                                                match time_old.partial_cmp(&time_now) {
-                                                    Some(std::cmp::Ordering::Less) => {
-                                                        *guard=time_now;
-                                                    },
-                                                    Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)|None => {},
+                                            // for i in &buf[..n]{
+                                            //     info!("re:{}",i);
+                                            // }
+
+                                            big_buf.extend_from_slice(&buf[..n]);
+                                            while big_buf.is_complete(){
+                                                let mut input_buf_vo = InputBufVO::new(big_buf.get_data(),addr);
+                                                let last_communicate_time = last_communicate_time.clone();
+                                                tokio::spawn(async move {
+                                                    let time_now = SystemTime::now();
+                                                    let mut mutex = last_communicate_time.lock().await;
+                                                    let guard = mutex.deref_mut();
+                                                    let time_old = guard.clone();
+                                                    match time_old.partial_cmp(&time_now) {
+                                                        Some(std::cmp::Ordering::Less) => {
+                                                            *guard=time_now;
+                                                        },
+                                                        Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)|None => {},
+                                                    }
+                                                });
+
+                                                if let Some(method_id) = input_buf_vo.get_method_id(){
+                                                    let mut mutex = router_map.lock().await;
+                                                    let guard = mutex.deref_mut();
+                                                    if guard.contains_key(&method_id) {
+                                                        let a = guard.get(&method_id).unwrap();
+                                                        input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
+                                                    }else{
+                                                        warn!("router_map no method match,{}",method_id);
+                                                    }
+                                                }else{
+                                                    warn!("input_buf_vo no method_id");
                                                 }
-                                            });
-                                            let input_buf_vo = InputBufVO::new(buf[..n].to_vec(),addr);
-                                            let mut mutex = router_map.lock().await;
-                                            let guard = mutex.deref_mut();
-                                            if guard.contains_key(&1){
-                                                let a = guard.get(&1).unwrap();
-                                                input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
-                                            }else{
-                                                warn!("no method match");
+
                                             }
                                         },
                                         Err(e) => {
@@ -385,8 +409,8 @@ impl<'a> LynnServer<'a> {
                         {
                             let mut clients = clients_clone.lock().await;
                             let guard = clients.deref_mut();
-                            if guard.contains_key(&client_uuid) {
-                                guard.remove(&client_uuid);
+                            if guard.contains_key(&addr) {
+                                guard.remove(&addr);
                             }
                         }
                     });
