@@ -88,6 +88,7 @@ pub(crate) mod lynn_thread_pool_api {
 ///     HandlerResult::new_without_send()
 /// }
 /// ```
+#[cfg(feature="server")]
 pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
@@ -333,6 +334,7 @@ impl<'a> LynnServer<'a> {
                     /// Spawns a new asynchronous task to handle each client connection.
                     let join_handle = tokio::spawn(async move {
                         let mut stream = socket; // 获取TcpStream
+                        let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
                         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
                         let client_uuid = addr;
                         /// Reads data sent by the client in a loop.

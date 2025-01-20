@@ -10,6 +10,7 @@ use crate::{
 /// A struct representing the result of a handler.
 ///
 /// This struct contains a boolean indicating whether data should be sent, optional result data, and optional addresses.
+#[cfg(any(feature="server",feature="client"))]
 pub struct HandlerResult {
     // A boolean indicating whether data should be sent.
     is_send: bool,

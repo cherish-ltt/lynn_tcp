@@ -1,5 +1,6 @@
 mod input_buf_vo;
 
+#[cfg(any(feature="server",feature="client"))]
 pub trait InputBufVOTrait {
     fn get_constructor_id(&mut self) -> Option<u8>;
     fn get_method_id(&mut self) -> Option<u16>;

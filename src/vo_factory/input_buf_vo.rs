@@ -8,6 +8,7 @@ use super::InputBufVOTrait;
 /// It includes the raw data as a byte vector, an index to track the current
 /// position in the data, and the address from which the data was received.
 #[derive(Clone)]
+#[cfg(any(feature="server",feature="client"))]
 pub struct InputBufVO {
     /// The raw data received from the network as a byte vector.
     data: Vec<u8>,
