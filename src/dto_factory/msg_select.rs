@@ -3,7 +3,7 @@ use std::{net::SocketAddr, ops::DerefMut, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
-    app::{lynn_thread_pool_api::LynnThreadPool, lynn_user_api::LynnUser},
+    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
     service::IService,
     vo_factory::{input_vo::InputBufVO, InputBufVOTrait},
 };
@@ -62,7 +62,7 @@ impl IHandlerCombinedTrait for MsgSelect {
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
         handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnThreadPool>>,
+        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -102,7 +102,7 @@ impl IHandlerMethod for MsgSelect {
     async fn handler(
         &mut self,
         handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnThreadPool>>,
+        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,

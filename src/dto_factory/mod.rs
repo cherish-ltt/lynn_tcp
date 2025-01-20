@@ -4,7 +4,7 @@ use tokio::sync::{Mutex, Semaphore};
 use tracing::warn;
 
 use crate::{
-    app::{lynn_thread_pool_api::LynnThreadPool, lynn_user_api::LynnUser},
+    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
     service::IService,
     vo_factory::{input_vo::InputBufVO, InputBufVOTrait},
 };
@@ -41,7 +41,7 @@ pub(crate) async fn input_dto_build(
     process_permit: Arc<Semaphore>,
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     handler_method: Arc<Box<dyn IService>>,
-    thread_pool: Arc<Mutex<LynnThreadPool>>,
+    thread_pool: Arc<Mutex<LynnServerThreadPool>>,
 ) {
     match input_buf.get_constructor_id() {
         Some(value) => {
@@ -106,7 +106,7 @@ async fn spawn_handler(
     mut result: MsgSelect,
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     handler_method: Arc<Box<dyn IService>>,
-    thread_pool: Arc<Mutex<LynnThreadPool>>,
+    thread_pool: Arc<Mutex<LynnServerThreadPool>>,
 ) {
     result.execute(clients, handler_method, thread_pool).await;
 }

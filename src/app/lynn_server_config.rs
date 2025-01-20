@@ -9,7 +9,7 @@ use crate::const_config::{
 /// This struct contains various configuration parameters for the server,
 /// such as the IP address, channel size, maximum connections, thread pool size, etc.
 //#[derive(Clone)]
-pub struct LynnConfig<'a> {
+pub struct LynnServerConfig<'a> {
     // The IPv4 address of the server.
     server_ipv4: &'a str,
     // The size of a single channel.
@@ -28,11 +28,11 @@ pub struct LynnConfig<'a> {
     server_check_heart_timeout_time: &'a u64,
 }
 
-/// Implementation for LynnConfig, providing methods to create and get the configuration.
+/// Implementation for LynnServerConfig, providing methods to create and get the configuration.
 ///
 /// This implementation includes a constructor for the default configuration and methods to get the configuration parameters.
-impl<'a> LynnConfig<'a> {
-    /// Creates a new LynnConfig instance with the given parameters.
+impl<'a> LynnServerConfig<'a> {
+    /// Creates a new LynnServerConfig instance with the given parameters.
     ///
     /// # Parameters
     ///
@@ -47,7 +47,7 @@ impl<'a> LynnConfig<'a> {
     ///
     /// # Returns
     ///
-    /// A new LynnConfig instance.
+    /// A new LynnServerConfig instance.
     fn new(
         server_ipv4: &'a str,
         server_single_channel_size: &'a usize,
@@ -70,11 +70,11 @@ impl<'a> LynnConfig<'a> {
         }
     }
 
-    /// Creates a default LynnConfig instance.
+    /// Creates a default LynnServerConfig instance.
     ///
     /// # Returns
     ///
-    /// A default LynnConfig instance.
+    /// A default LynnServerConfig instance.
     pub(crate) fn default() -> Self {
         Self {
             server_ipv4: DEFAULT_IPV4,
@@ -161,26 +161,26 @@ impl<'a> LynnConfig<'a> {
     }
 }
 
-/// Builder for constructing a LynnConfig instance.
+/// Builder for constructing a LynnServerConfig instance.
 ///
-/// This builder provides a series of methods to set the various parameters of LynnConfig
-/// and finally builds a LynnConfig instance.
-pub struct LynnConfigBuilder<'a> {
-    pub lynn_config: LynnConfig<'a>,
+/// This builder provides a series of methods to set the various parameters of LynnServerConfig
+/// and finally builds a LynnServerConfig instance.
+pub struct LynnServerConfigBuilder<'a> {
+    pub lynn_config: LynnServerConfig<'a>,
 }
 
-/// Implementation for LynnConfigBuilder, providing methods to set the configuration parameters.
+/// Implementation for LynnServerConfigBuilder, providing methods to set the configuration parameters.
 ///
 /// This implementation includes a constructor for the default configuration and methods to set the configuration parameters.
-impl<'a> LynnConfigBuilder<'a> {
-    /// Creates a new LynnConfigBuilder instance.
+impl<'a> LynnServerConfigBuilder<'a> {
+    /// Creates a new LynnServerConfigBuilder instance.
     ///
     /// # Returns
     ///
-    /// A new LynnConfigBuilder instance.
+    /// A new LynnServerConfigBuilder instance.
     pub fn new() -> Self {
         Self {
-            lynn_config: LynnConfig::default(),
+            lynn_config: LynnServerConfig::default(),
         }
     }
 
@@ -192,7 +192,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Self {
         self.lynn_config.server_ipv4 = server_ipv4;
         self
@@ -206,7 +206,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_single_channel_size(
         mut self,
         server_single_channel_size: &'a usize,
@@ -223,7 +223,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_single_processs_permit(
         mut self,
         server_single_processs_permit: &'a usize,
@@ -239,7 +239,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_check_heart_interval(
         mut self,
         server_check_heart_interval: &'a u64,
@@ -256,7 +256,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_check_heart_timeout_time(
         mut self,
         server_check_heart_timeout_time: &'a u64,
@@ -273,7 +273,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_max_connections(
         mut self,
         server_max_connections: Option<&'a usize>,
@@ -290,7 +290,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_max_threadpool_size(
         mut self,
         server_max_threadpool_size: &'a usize,
@@ -307,7 +307,7 @@ impl<'a> LynnConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnConfigBuilder instance.
+    /// The modified LynnServerConfigBuilder instance.
     pub fn with_server_max_receive_bytes_size(
         mut self,
         server_max_receive_bytes_size: &'a usize,
@@ -316,12 +316,12 @@ impl<'a> LynnConfigBuilder<'a> {
         self
     }
 
-    /// Builds and returns the final LynnConfig instance.
+    /// Builds and returns the final LynnServerConfig instance.
     ///
     /// # Returns
     ///
-    /// The final LynnConfig instance.
-    pub fn build(self) -> LynnConfig<'a> {
+    /// The final LynnServerConfig instance.
+    pub fn build(self) -> LynnServerConfig<'a> {
         self.lynn_config
     }
 }

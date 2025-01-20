@@ -15,10 +15,10 @@ use crate::{
     vo_factory::input_vo::InputBufVO,
 };
 
-use super::lynn_user::LynnUser;
+use super::lynn_server_user::LynnUser;
 
 /// A thread pool for handling tasks concurrently.
-pub(crate) struct LynnThreadPool {
+pub(crate) struct LynnServerThreadPool {
     /// A vector of tuples containing the task sender and the join handle for each thread.
     threads: Vec<(
         mpsc::Sender<(
@@ -32,8 +32,8 @@ pub(crate) struct LynnThreadPool {
     index: Arc<Mutex<usize>>,
 }
 
-impl LynnThreadPool {
-    /// Creates a new instance of `LynnThreadPool`.
+impl LynnServerThreadPool {
+    /// Creates a new instance of `LynnServerThreadPool`.
     ///
     /// # Parameters
     ///
@@ -42,7 +42,7 @@ impl LynnThreadPool {
     ///
     /// # Returns
     ///
-    /// A new instance of `LynnThreadPool`.
+    /// A new instance of `LynnServerThreadPool`.
     pub(crate) async fn new(num_threads: &usize, server_single_processs_permit: &usize) -> Self {
         let mut threads = Vec::with_capacity(*num_threads);
         let (tx_result, rx_result) = mpsc::channel::<(
@@ -67,7 +67,7 @@ impl LynnThreadPool {
             });
             threads.push((tx, handle));
         }
-        let lynn_thread_pool = LynnThreadPool {
+        let lynn_thread_pool = LynnServerThreadPool {
             threads,
             index: Arc::new(Mutex::new(0)),
         }
@@ -106,12 +106,12 @@ impl LynnThreadPool {
     ///
     /// # Parameters
     ///
-    /// * `self` - The current instance of `LynnThreadPool`.
+    /// * `self` - The current instance of `LynnServerThreadPool`.
     /// * `rx` - A receiver for the results of completed tasks.
     ///
     /// # Returns
     ///
-    /// The modified `LynnThreadPool` instance.
+    /// The modified `LynnServerThreadPool` instance.
     pub(crate) async fn spawn_handler_result(
         self,
         mut rx: Receiver<(HandlerResult, Arc<Mutex<HashMap<SocketAddr, LynnUser>>>)>,

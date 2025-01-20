@@ -16,7 +16,7 @@ lynn_tcp = { git = "https://github.com/cherish-ltt/lynn_tcp.git", branch = "main
 #### Server|服务
 
 ```rust
-use lynn_tcp::server::{HandlerResult, InputBufVO, LynnConfigBuilder, LynnServer};
+use lynn_tcp::server::{HandlerResult, InputBufVO, LynnServerConfigBuilder, LynnServer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -33,12 +33,12 @@ pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 #### Server with config|带自定义配置的服务
 
 ```rust
-use lynn_tcp::server::{HandlerResult, InputBufVO, LynnConfigBuilder, LynnServer};
+use lynn_tcp::server::{HandlerResult, InputBufVO, LynnServerConfigBuilder, LynnServer};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = LynnServer::new_with_config(
-        LynnConfigBuilder::new()
+        LynnServerConfigBuilder::new()
             .with_server_ipv4("0.0.0.0:9177")
             .with_server_max_connections(Some(&200))
             .with_server_max_threadpool_size(&10)

@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::{
-    app::{lynn_thread_pool_api::LynnThreadPool, lynn_user_api::LynnUser},
+    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
     service::IService,
 };
 
@@ -133,7 +133,7 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
         &mut self,
         clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
         handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnThreadPool>>,
+        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -168,7 +168,7 @@ pub(crate) trait IHandlerMethod {
     async fn handler(
         &mut self,
         handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnThreadPool>>,
+        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,

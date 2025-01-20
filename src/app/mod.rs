@@ -1,6 +1,6 @@
-mod lynn_config;
-mod lynn_user;
-mod thread_pool;
+mod lynn_server_config;
+mod lynn_server_user;
+mod server_thread_pool;
 
 use std::{
     collections::HashMap,
@@ -10,9 +10,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use lynn_config::{LynnConfig, LynnConfigBuilder};
-use lynn_user::LynnUser;
-use thread_pool::LynnThreadPool;
+use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
+use lynn_server_user::LynnUser;
+use server_thread_pool::LynnServerThreadPool;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -31,16 +31,16 @@ use crate::{
 };
 
 pub(crate) mod lynn_user_api {
-    pub(crate) use super::lynn_user::LynnUser;
+    pub(crate) use super::lynn_server_user::LynnUser;
 }
 
 pub mod lynn_config_api {
-    pub use super::lynn_config::LynnConfig;
-    pub use super::lynn_config::LynnConfigBuilder;
+    pub use super::lynn_server_config::LynnServerConfig;
+    pub use super::lynn_server_config::LynnServerConfigBuilder;
 }
 
 pub(crate) mod lynn_thread_pool_api {
-    pub(crate) use super::thread_pool::LynnThreadPool;
+    pub(crate) use super::server_thread_pool::LynnServerThreadPool;
 }
 
 /// Represents a server for the Lynn application.
@@ -71,7 +71,7 @@ pub(crate) mod lynn_thread_pool_api {
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let _ = LynnServer::new_with_config(
-///     LynnConfigBuilder::new()
+///     LynnServerConfigBuilder::new()
 ///         .with_server_ipv4("0.0.0.0:9177")
 ///         .with_server_max_connections(Some(&200))
 ///         .with_server_max_threadpool_size(&10)
@@ -94,9 +94,9 @@ pub struct LynnServer<'a> {
     /// A map of routes, where the key is a method ID and the value is a service handler.
     router_map: Arc<Mutex<HashMap<u16, Arc<Box<dyn IService>>>>>,
     /// The configuration for the server.
-    lynn_config: LynnConfig<'a>,
+    lynn_config: LynnServerConfig<'a>,
     /// The thread pool for the server.
-    lynn_thread_pool: Arc<Mutex<LynnThreadPool>>,
+    lynn_thread_pool: Arc<Mutex<LynnServerThreadPool>>,
 }
 
 /// Implementation of methods for the LynnServer struct.
@@ -107,11 +107,11 @@ impl<'a> LynnServer<'a> {
     ///
     /// A new instance of `LynnServer`.
     pub async fn new() -> Self {
-        let lynn_config = LynnConfig::default();
+        let lynn_config = LynnServerConfig::default();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
         let thread_pool =
-            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
+            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
@@ -130,11 +130,11 @@ impl<'a> LynnServer<'a> {
     ///
     /// A new instance of `LynnServer`.
     pub async fn new_with_ipv4(ipv4: &'a str) -> Self {
-        let lynn_config = LynnConfigBuilder::new().with_server_ipv4(ipv4).build();
+        let lynn_config = LynnServerConfigBuilder::new().with_server_ipv4(ipv4).build();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
         let thread_pool =
-            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
+            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
@@ -152,12 +152,12 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// A new instance of `LynnServer`.
-    pub async fn new_with_config(lynn_config: LynnConfig<'a>) -> Self {
+    pub async fn new_with_config(lynn_config: LynnServerConfig<'a>) -> Self {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
         let thread_pool =
-            LynnThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
+            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map: Arc::new(Mutex::new(HashMap::new())),
