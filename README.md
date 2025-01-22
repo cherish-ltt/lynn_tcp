@@ -126,7 +126,7 @@ pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 
 ### Flow chart
 
-![image](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png)
+[FlowChart.png](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png)
 
 ### Release note 
 
