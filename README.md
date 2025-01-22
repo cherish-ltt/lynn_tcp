@@ -124,7 +124,11 @@ pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 - [ ] Routing service for asynchronous tasks
 - [ ] Disconnecting reconnection mechanism
 
-### Release note
+### Flow chart
+
+![image](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png)
+
+### Release note 
 
 [version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
 
@@ -134,4 +138,4 @@ This project is licensed under the MIT license.
 
 ### Contribution
 
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Tokio by you, shall be licensed as MIT, without any additional terms or conditions.
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Lynn_tcp by you, shall be licensed as MIT, without any additional terms or conditions.
