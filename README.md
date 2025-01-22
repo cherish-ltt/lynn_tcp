@@ -123,7 +123,6 @@ pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 - [ ] Communication data encryption
 - [ ] Routing service for asynchronous tasks
 - [ ] Disconnecting reconnection mechanism
-
 ### Release note
 
 [version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
