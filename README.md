@@ -1,10 +1,24 @@
 ## Lynn_tcp
 
-`Lynn_tcp` is a TCP service based on [Tokio](https://github.com/tokio-rs/tokio), and this project library is designed for easy use in different projects based on lynn_tcp. It may not be suitable for your own project.Anyway, you can use it for free, provided that you have a clear understanding of some of the customized attributes inside.
-
-`Lynn_tcp`是一个基于[Tokio](https://github.com/tokio-rs/tokio)的tcp服务，这个项目库是为了在基于`Lynn_tcp`的不同项目中易于使用而设计的。它可能不适合你自己的项目。不管怎样，你可以免费使用它，前提是您要清楚地了解其中的一些定制化属性(如一些最大链接数等)。
-
 ![](https://camo.githubusercontent.com/6581c31c16c1b13ddc2efb92e2ad69a93ddc4a92fd871ff15d401c4c6c9155a4/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f6c6963656e73652d4d49542d626c75652e737667)
+
+`Lynn_tcp` is a lightweight TCP server framework
+
+------
+
+### Keywords
+
+- **Lightweight**: concise code that is easier to learn and use
+
+- **Concurrent and Performance**: Based on Tokio's excellent asynchronous performance, it is easy to achieve concurrent processing capabilities for multi-user links
+
+- **Security**: Code written with strong typing and memory safety in Rust
+
+  > **tips**: Lynn_tcp is mainly used for <u>message forwarding</u> and <u>long link TCP game servers</u>
+  >
+  > Quickly develop suitable business scenarios based on frameworks
+  >
+  > Different message parsing, communication data encryption, and other operations can be achieved through custom settings
 
 ### Simple Use
 
@@ -80,9 +94,39 @@ pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 
 ### Features
 
-- `server`:A customized TCP service
+- `server`: Provide customizable TCP services that can easily achieve multi-user long connections and concurrent processing capabilities, with services for different routes
+- `client`: Provide custom TCP clients that can send messages to TCP servers and receive messages from servers, with different routing services
 
-- `client`:A customized TCP client
+### Road maps
+
+#### Basic functions
+
+- [x] Tcp server
+
+- [x] Tcp client
+
+- [x] Custom message parsing
+
+- [x] Automatically clean sockets
+
+- [x] Routing service for synchronous tasks
+
+> Note:
+>
+> All Basic functions support on v1.0.0 and above
+
+#### Extended functions
+
+- [ ] Scheduled tasks
+- [ ] Middleware
+- [ ] Global database handle
+- [ ] Communication data encryption
+- [ ] Routing service for asynchronous tasks
+- [ ] Disconnecting reconnection mechanism
+
+### Release note
+
+[version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
 
 ### License
 
