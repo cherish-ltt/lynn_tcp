@@ -26,7 +26,7 @@ use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 use crate::{
-    const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE,
+    const_config::{DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE},
     dto_factory::input_dto_build,
     server::HandlerResult,
     service::IService,
@@ -138,10 +138,7 @@ impl<'a> LynnServer<'a> {
     pub async fn new() -> Self {
         let lynn_config = LynnServerConfig::default();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
-        let thread_pool =
-            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
-                .await;
+        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map_async: Arc::new(Mutex::new(None)),
@@ -164,10 +161,7 @@ impl<'a> LynnServer<'a> {
             .with_server_ipv4(ipv4)
             .build();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
-        let thread_pool =
-            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
-                .await;
+        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map_async: Arc::new(Mutex::new(None)),
@@ -187,10 +181,7 @@ impl<'a> LynnServer<'a> {
     /// A new instance of `LynnServer`.
     pub async fn new_with_config(lynn_config: LynnServerConfig<'a>) -> Self {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
-        let thread_pool =
-            LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
-                .await;
+        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
             router_map_async: Arc::new(Mutex::new(None)),
@@ -355,9 +346,7 @@ impl<'a> LynnServer<'a> {
                     info!("Accepted connection from: {}", addr);
 
                     // Creates a channel for sending data to the client.
-                    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(
-                        *self.lynn_config.get_server_single_channel_size(),
-                    );
+                    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(DEFAULT_SYSTEM_CHANNEL_SIZE);
                     let process_permit = Arc::new(Semaphore::new(
                         *self.lynn_config.get_server_single_processs_permit(),
                     ));

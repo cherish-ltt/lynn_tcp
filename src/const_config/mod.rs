@@ -9,6 +9,7 @@ pub(crate) const DEFAULT_MAX_RECEIVE_BYTES_SIZE: usize = 1024 * 8;
 /// The default maximum communication channel size for a single client.
 /// To avoid memory overflow in case of network delay, it is set to 3.
 pub(crate) const DEFAULT_CHANNEL_SIZE: usize = 3;
+pub(crate) const DEFAULT_SYSTEM_CHANNEL_SIZE: usize = 1024;
 /// The default maximum processing permit size for a single client.
 /// Assuming the single processing delay is controlled within 100ms, the server allows processing at least 7 requests from a single client within 100ms.
 pub(crate) const DEFAULT_PROCESS_PERMIT_SIZE: usize = 7;

@@ -14,7 +14,7 @@ use crate::{
     vo_factory::input_vo::InputBufVO,
 };
 
-use super::{lynn_server_user::LynnUser, AsyncFunc};
+use super::{lynn_server_user::LynnUser, AsyncFunc, DEFAULT_SYSTEM_CHANNEL_SIZE};
 
 /// A thread pool for handling tasks concurrently.
 pub(crate) struct LynnServerThreadPool {
@@ -42,19 +42,19 @@ impl LynnServerThreadPool {
     /// # Returns
     ///
     /// A new instance of `LynnServerThreadPool`.
-    pub(crate) async fn new(num_threads: &usize, server_single_processs_permit: &usize) -> Self {
+    pub(crate) async fn new(num_threads: &usize) -> Self {
         let mut threads = Vec::with_capacity(*num_threads);
         let (tx_result, rx_result) = mpsc::channel::<(
             HandlerResult,
             Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
-        )>(*num_threads);
+        )>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
         for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
             let (tx, mut rx) = mpsc::channel::<(
                 Arc<AsyncFunc>,
                 InputBufVO,
                 Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
-            )>(*server_single_processs_permit);
+            )>(DEFAULT_SYSTEM_CHANNEL_SIZE);
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
