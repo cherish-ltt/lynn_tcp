@@ -12,7 +12,6 @@ mod dto_factory;
 mod client;
 mod service;
 mod vo_factory;
-
 /// The main library module for the Lynn TCP Server.
 ///
 /// This module exports various components and utilities for building and running a TCP server.

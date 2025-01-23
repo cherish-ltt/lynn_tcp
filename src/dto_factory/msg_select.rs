@@ -1,16 +1,22 @@
-use std::{net::SocketAddr, ops::DerefMut, sync::Arc};
+use std::{
+    net::SocketAddr,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
+use tracing::debug;
+use tracing_subscriber::field::debug;
 
 use crate::{
-    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
-    service::IService,
-    vo_factory::{input_vo::InputBufVO, InputBufVOTrait},
+    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser, TaskBody},
+    vo_factory::input_vo::InputBufVO,
 };
 
 use super::{
     input_dto::IHandlerCombinedTrait,
     router_handler::{HandlerData, IHandlerData, IHandlerMethod},
+    AsyncFunc,
 };
 
 /// A struct representing a message selection.
@@ -59,15 +65,13 @@ impl IHandlerCombinedTrait for MsgSelect {
     async fn execute(
         &mut self,
         clients: std::sync::Arc<
-            tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
+            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
-        handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        handler_method: Arc<AsyncFunc>,
+        thread_pool: mpsc::Sender<TaskBody>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
-        // Post-proxy
-        //check_handler_result(handler_result, clients).await;
     }
 }
 
@@ -101,16 +105,13 @@ impl IHandlerMethod for MsgSelect {
     /// A `Future` that resolves when the message handling is complete.
     async fn handler(
         &mut self,
-        handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        handler_method: Arc<AsyncFunc>,
+        thread_pool: mpsc::Sender<TaskBody>,
         clients: std::sync::Arc<
-            tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
+            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
     ) {
-        let mut thread_pool_mutex = thread_pool.lock().await;
-        let thread_pool_guard = thread_pool_mutex.deref_mut();
         let task_body = (handler_method.clone(), self.input_buf_vo.clone(), clients);
-        thread_pool_guard.submit(task_body).await;
-        //handler_method.deref().service(&mut self.input_buf_vo)
+        thread_pool.send(task_body).await;
     }
 }

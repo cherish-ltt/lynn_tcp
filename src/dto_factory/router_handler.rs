@@ -1,11 +1,11 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex, RwLock};
+use tracing::debug;
 
-use crate::{
-    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
-    service::IService,
-};
+use crate::app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser};
+
+use super::{AsyncFunc, TaskBody};
 
 /// A struct representing the result of a handler.
 ///
@@ -72,7 +72,7 @@ impl HandlerResult {
     /// The response data as an optional byte vector.
     pub(crate) fn get_response_data(&self) -> Option<Vec<u8>> {
         match self.result_data.clone() {
-            Some((num, mut bytes)) => {
+            Some((num, bytes)) => {
                 let mut vec = Vec::new();
                 // Convert the u64 to a big-endian (network byte order) byte slice.
                 let num_bytes = num.to_be_bytes();
@@ -132,14 +132,12 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
     /// * `tx`: The channel for sending the HandlerResult instance.
     async fn execute(
         &mut self,
-        clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
-        handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+        handler_method: Arc<AsyncFunc>,
+        thread_pool: mpsc::Sender<TaskBody>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
-        // Post-proxy
-        //check_handler_result(handler_result, clients).await;
     }
 }
 
@@ -168,10 +166,10 @@ pub(crate) trait IHandlerMethod {
     /// * `clients`: The clients as a mutex-protected HashMap.
     async fn handler(
         &mut self,
-        handler_method: Arc<Box<dyn IService>>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        handler_method: Arc<AsyncFunc>,
+        thread_pool: mpsc::Sender<TaskBody>,
         clients: std::sync::Arc<
-            tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
+            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
     );
 }
@@ -180,32 +178,31 @@ pub(crate) trait IHandlerMethod {
 ///
 /// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
 pub(crate) async fn check_handler_result(
-    //tx: tokio::sync::mpsc::Sender<HandlerResult>,
     handler_result: HandlerResult,
-    clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
+    clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
 ) {
-    // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
-    if handler_result.get_is_send() {
-        let mut socket_vec = vec![];
-        let response = handler_result.get_response_data();
-        {
-            let mutex = clients.lock().await;
-            let guard = mutex.deref();
-            if let Some(addrs) = handler_result.addrs {
-                for i in addrs {
-                    if guard.contains_key(&i) {
-                        socket_vec.push(guard.get(&i).unwrap().sender.clone());
+    tokio::spawn(async move {
+        // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
+        if handler_result.get_is_send() {
+            let mut socket_vec = vec![];
+            let response = handler_result.get_response_data();
+            {
+                let mutex = clients.read().await;
+                let guard = mutex.deref();
+                if let Some(addrs) = handler_result.addrs {
+                    for i in addrs {
+                        if guard.contains_key(&i) {
+                            socket_vec.push(guard.get(&i).unwrap().sender.clone());
+                        }
                     }
                 }
             }
-        }
-        if !socket_vec.is_empty() && response.is_some() {
-            tokio::spawn(async move {
+            if !socket_vec.is_empty() && response.is_some() {
                 for i in socket_vec {
                     let response = response.clone().unwrap();
                     let _ = i.send(response).await;
                 }
-            });
+            }
         }
-    }
+    });
 }

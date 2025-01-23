@@ -1,4 +1,4 @@
-use bytes::{Buf, BytesMut};
+use bytes::BytesMut;
 
 pub(crate) struct BigBufReader {
     data: BytesMut,
@@ -89,7 +89,7 @@ impl BigBufReader {
     }
 
     pub(crate) fn get_data(&mut self) -> Vec<u8> {
-        let mut result = self.data[10..self.target_len.unwrap() - 2].to_vec();
+        let result = self.data[10..self.target_len.unwrap() - 2].to_vec();
         self.check_data();
         result
     }
