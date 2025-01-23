@@ -12,6 +12,8 @@
 
 - **Concurrent and Performance**: Based on Tokio's excellent asynchronous performance, it is easy to achieve concurrent processing capabilities for multi-user links
 
+- **Separate reading and writing**: Design with read and write separation to achieve lower latency
+
 - **Security**: Code written with strong typing and memory safety in Rust
 
   > **tips**: Lynn_tcp is mainly used for <u>message forwarding</u> and <u>long link TCP game servers</u>
