@@ -16,7 +16,7 @@ use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
 use lynn_server_user::LynnUser;
 use server_thread_pool::LynnServerThreadPool;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{split, AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
     sync::{mpsc, Mutex, Semaphore},
     task::JoinHandle,
@@ -374,63 +374,78 @@ impl<'a> LynnServer<'a> {
                     // Spawns a new asynchronous task to handle each client connection.
                     let join_handle = tokio::spawn(async move {
                         let mut stream = socket; // 获取TcpStream
+                        let (mut read_half, mut write_half) = split(stream);
                         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
                         let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
                         let addr = addr;
+                        // Write data to the client in a loop.
+                        let join_handle = tokio::spawn(async move {
+                            while let Some(response_data) = rx.recv().await {
+                                if let Err(e) = write_half.write_all(&response_data).await {
+                                    error!("Failed to write to socket: {}", e);
+                                    continue;
+                                }
+                            }
+                        });
                         // Reads data sent by the client in a loop.
                         loop {
-                            tokio::select! {
-                                result = stream.read(&mut buf) => {
-                                    match result {
-                                        Ok(n) if n <= 0 => {
-                                            continue
-                                        },
-                                        Ok(n) => {
-                                            big_buf.extend_from_slice(&buf[..n]);
-                                            while big_buf.is_complete(){
-                                                let mut input_buf_vo = InputBufVO::new(big_buf.get_data(),addr);
-                                                let last_communicate_time = last_communicate_time.clone();
-                                                tokio::spawn(async move {
-                                                    let time_now = SystemTime::now();
-                                                    let mut mutex = last_communicate_time.lock().await;
-                                                    let guard = mutex.deref_mut();
-                                                    let time_old = guard.clone();
-                                                    match time_old.partial_cmp(&time_now) {
-                                                        Some(std::cmp::Ordering::Less) => {
-                                                            *guard=time_now;
-                                                        },
-                                                        Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)|None => {},
-                                                    }
-                                                });
-                                                if let Some(method_id) = input_buf_vo.get_method_id(){
-                                                    let mut mutex = router_map_async.lock().await;
-                                                    let guard = mutex.deref_mut();
-                                                    if let Some(map) = guard{
-                                                        if map.contains_key(&method_id) {
-                                                            let a = map.get(&method_id).unwrap();
-                                                            input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
-                                                        }else{
-                                                            warn!("router_map_async no method match,{}",method_id);
-                                                        }
-                                                    }else{
-                                                        warn!("server router is none");
-                                                    }
-                                                }else{
-                                                    warn!("router_map_async input_buf_vo no method_id");
+                            let result = read_half.read(&mut buf).await;
+                            match result {
+                                Ok(n) if n <= 0 => continue,
+                                Ok(n) => {
+                                    big_buf.extend_from_slice(&buf[..n]);
+                                    while big_buf.is_complete() {
+                                        let mut input_buf_vo =
+                                            InputBufVO::new(big_buf.get_data(), addr);
+                                        let last_communicate_time = last_communicate_time.clone();
+                                        tokio::spawn(async move {
+                                            let time_now = SystemTime::now();
+                                            let mut mutex = last_communicate_time.lock().await;
+                                            let guard = mutex.deref_mut();
+                                            let time_old = guard.clone();
+                                            match time_old.partial_cmp(&time_now) {
+                                                Some(std::cmp::Ordering::Less) => {
+                                                    *guard = time_now;
                                                 }
+                                                Some(
+                                                    std::cmp::Ordering::Equal
+                                                    | std::cmp::Ordering::Greater,
+                                                )
+                                                | None => {}
                                             }
-                                        },
-                                        Err(e) => {
-                                            error!("Failed to read from socket: {}", e);
-                                            break;
+                                        });
+                                        if let Some(method_id) = input_buf_vo.get_method_id() {
+                                            let mut mutex = router_map_async.lock().await;
+                                            let guard = mutex.deref_mut();
+                                            if let Some(map) = guard {
+                                                if map.contains_key(&method_id) {
+                                                    let a = map.get(&method_id).unwrap();
+                                                    input_dto_build(
+                                                        addr,
+                                                        input_buf_vo,
+                                                        process_permit.clone(),
+                                                        clients_clone.clone(),
+                                                        a.clone(),
+                                                        thread_pool_clone.clone(),
+                                                    )
+                                                    .await;
+                                                } else {
+                                                    warn!(
+                                                        "router_map_async no method match,{}",
+                                                        method_id
+                                                    );
+                                                }
+                                            } else {
+                                                warn!("server router is none");
+                                            }
+                                        } else {
+                                            warn!("router_map_async input_buf_vo no method_id");
                                         }
                                     }
-                                },
-                                Some(response_data) = rx.recv() => {
-                                    if let Err(e) = stream.write_all(&response_data).await {
-                                        error!("Failed to write to socket: {}", e);
-                                        break;
-                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to read from socket: {}", e);
+                                    break;
                                 }
                             }
                         }
@@ -442,6 +457,7 @@ impl<'a> LynnServer<'a> {
                             if guard.contains_key(&addr) {
                                 guard.remove(&addr);
                             }
+                            join_handle.abort();
                         }
                     });
                     // Saves the client's ID and send channel to the HashMap.
