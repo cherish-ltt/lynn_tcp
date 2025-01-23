@@ -12,7 +12,7 @@
 
 - **Concurrent and Performance**: Based on Tokio's excellent asynchronous performance, it is easy to achieve concurrent processing capabilities for multi-user links
 
-- **Separate reading and writing**: Design with read and write separation to achieve lower latency
+- **Lower latency**: Design with read and write separation to achieve lower latency
 
 - **Security**: Code written with strong typing and memory safety in Rust
 
