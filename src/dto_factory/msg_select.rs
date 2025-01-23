@@ -1,4 +1,8 @@
-use std::{net::SocketAddr, ops::{Deref, DerefMut}, sync::Arc};
+use std::{
+    net::SocketAddr,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use tokio::sync::{mpsc, Mutex};
 use tracing::debug;
@@ -61,7 +65,7 @@ impl IHandlerCombinedTrait for MsgSelect {
     async fn execute(
         &mut self,
         clients: std::sync::Arc<
-            tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
+            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
         handler_method: Arc<AsyncFunc>,
         thread_pool: mpsc::Sender<TaskBody>,
@@ -104,7 +108,7 @@ impl IHandlerMethod for MsgSelect {
         handler_method: Arc<AsyncFunc>,
         thread_pool: mpsc::Sender<TaskBody>,
         clients: std::sync::Arc<
-            tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
+            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
     ) {
         let task_body = (handler_method.clone(), self.input_buf_vo.clone(), clients);

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
+use tracing::debug;
 
 use crate::app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser};
 
@@ -131,7 +132,7 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
     /// * `tx`: The channel for sending the HandlerResult instance.
     async fn execute(
         &mut self,
-        clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
+        clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
         handler_method: Arc<AsyncFunc>,
         thread_pool: mpsc::Sender<TaskBody>,
     ) {
@@ -168,7 +169,7 @@ pub(crate) trait IHandlerMethod {
         handler_method: Arc<AsyncFunc>,
         thread_pool: mpsc::Sender<TaskBody>,
         clients: std::sync::Arc<
-            tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
+            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
     );
 }
@@ -177,32 +178,31 @@ pub(crate) trait IHandlerMethod {
 ///
 /// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
 pub(crate) async fn check_handler_result(
-    //tx: tokio::sync::mpsc::Sender<HandlerResult>,
     handler_result: HandlerResult,
-    clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
+    clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
 ) {
-    // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
-    if handler_result.get_is_send() {
-        let mut socket_vec = vec![];
-        let response = handler_result.get_response_data();
-        {
-            let mutex = clients.lock().await;
-            let guard = mutex.deref();
-            if let Some(addrs) = handler_result.addrs {
-                for i in addrs {
-                    if guard.contains_key(&i) {
-                        socket_vec.push(guard.get(&i).unwrap().sender.clone());
+    tokio::spawn(async move {
+        // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
+        if handler_result.get_is_send() {
+            let mut socket_vec = vec![];
+            let response = handler_result.get_response_data();
+            {
+                let mutex = clients.read().await;
+                let guard = mutex.deref();
+                if let Some(addrs) = handler_result.addrs {
+                    for i in addrs {
+                        if guard.contains_key(&i) {
+                            socket_vec.push(guard.get(&i).unwrap().sender.clone());
+                        }
                     }
                 }
             }
-        }
-        if !socket_vec.is_empty() && response.is_some() {
-            tokio::spawn(async move {
+            if !socket_vec.is_empty() && response.is_some() {
                 for i in socket_vec {
                     let response = response.clone().unwrap();
                     let _ = i.send(response).await;
                 }
-            });
+            }
         }
-    }
+    });
 }
