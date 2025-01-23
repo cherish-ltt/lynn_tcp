@@ -10,7 +10,7 @@ use crate::{
 
 use super::{
     input_dto::IHandlerCombinedTrait,
-    router_handler::{HandlerData, IHandlerData, IHandlerMethod},
+    router_handler::{HandlerData, IHandlerData, IHandlerMethod}, AsyncFunc,
 };
 
 /// A struct representing a message selection.
@@ -61,13 +61,11 @@ impl IHandlerCombinedTrait for MsgSelect {
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
-        handler_method: Arc<Box<dyn IService>>,
+        handler_method: Arc<AsyncFunc>,
         thread_pool: Arc<Mutex<LynnServerThreadPool>>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
-        // Post-proxy
-        //check_handler_result(handler_result, clients).await;
     }
 }
 
@@ -101,7 +99,7 @@ impl IHandlerMethod for MsgSelect {
     /// A `Future` that resolves when the message handling is complete.
     async fn handler(
         &mut self,
-        handler_method: Arc<Box<dyn IService>>,
+        handler_method: Arc<AsyncFunc>,
         thread_pool: Arc<Mutex<LynnServerThreadPool>>,
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
@@ -111,6 +109,5 @@ impl IHandlerMethod for MsgSelect {
         let thread_pool_guard = thread_pool_mutex.deref_mut();
         let task_body = (handler_method.clone(), self.input_buf_vo.clone(), clients);
         thread_pool_guard.submit(task_body).await;
-        //handler_method.deref().service(&mut self.input_buf_vo)
     }
 }

@@ -15,14 +15,14 @@ use crate::{
     vo_factory::input_vo::InputBufVO,
 };
 
-use super::lynn_server_user::LynnUser;
+use super::{lynn_server_user::LynnUser, AsyncFunc};
 
 /// A thread pool for handling tasks concurrently.
 pub(crate) struct LynnServerThreadPool {
     /// A vector of tuples containing the task sender and the join handle for each thread.
     threads: Vec<(
         mpsc::Sender<(
-            Arc<Box<dyn IService>>,
+            Arc<AsyncFunc>,
             InputBufVO,
             Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
         )>,
@@ -52,7 +52,7 @@ impl LynnServerThreadPool {
         for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
             let (tx, mut rx) = mpsc::channel::<(
-                Arc<Box<dyn IService>>,
+                Arc<AsyncFunc>,
                 InputBufVO,
                 Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
             )>(*server_single_processs_permit);
@@ -60,7 +60,7 @@ impl LynnServerThreadPool {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
                     if let Some((task, mut input_buf_vo, clients)) = rx.recv().await {
-                        let result = task.service(&mut input_buf_vo);
+                        let result = task(input_buf_vo).await;
                         let _ = tx_result.send((result, clients)).await;
                     }
                 }
@@ -84,7 +84,7 @@ impl LynnServerThreadPool {
     pub(crate) async fn submit(
         &mut self,
         task_body: (
-            Arc<Box<dyn IService>>,
+            Arc<AsyncFunc>,
             InputBufVO,
             Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
         ),

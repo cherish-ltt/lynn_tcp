@@ -7,6 +7,8 @@ use crate::{
     service::IService,
 };
 
+use super::AsyncFunc;
+
 /// A struct representing the result of a handler.
 ///
 /// This struct contains a boolean indicating whether data should be sent, optional result data, and optional addresses.
@@ -133,13 +135,11 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
     async fn execute(
         &mut self,
         clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
-        handler_method: Arc<Box<dyn IService>>,
+        handler_method: Arc<AsyncFunc>,
         thread_pool: Arc<Mutex<LynnServerThreadPool>>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
-        // Post-proxy
-        //check_handler_result(handler_result, clients).await;
     }
 }
 
@@ -168,7 +168,7 @@ pub(crate) trait IHandlerMethod {
     /// * `clients`: The clients as a mutex-protected HashMap.
     async fn handler(
         &mut self,
-        handler_method: Arc<Box<dyn IService>>,
+        handler_method: Arc<AsyncFunc>,
         thread_pool: Arc<Mutex<LynnServerThreadPool>>,
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,

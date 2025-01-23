@@ -54,11 +54,11 @@ use lynn_tcp::server::{HandlerResult, InputBufVO, LynnServerConfigBuilder, LynnS
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = LynnServer::new().await.add_router(1, my_service).start().await;
+    let _ = LynnServer::new().await.add_router(1, async_func_wrapper!(my_service)).await.start().await;
     Ok(())
 }
 
-pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
+pub async fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
     println!("service read from :{}", input_buf_vo.get_input_addr());
     HandlerResult::new_without_send()
 }
@@ -80,13 +80,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build(),
     )
     .await
-    .add_router(1, my_service)
+    .add_router(1, async_func_wrapper!(my_service)).await
     .start()
     .await;
     Ok(())
 }
 
-pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
+pub async fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
     println!("service read from :{}", input_buf_vo.get_input_addr());
     HandlerResult::new_without_send()
 }
@@ -109,7 +109,7 @@ pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 
 - [x] Automatically clean sockets
 
-- [x] Routing service for synchronous tasks
+- [x] Routing service for asynchronous tasks
 
 > Note:
 >
@@ -121,7 +121,6 @@ pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 - [ ] Middleware
 - [ ] Global database handle
 - [ ] Communication data encryption
-- [ ] Routing service for asynchronous tasks
 - [ ] Disconnecting reconnection mechanism
 
 ### Flow chart

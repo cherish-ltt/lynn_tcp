@@ -3,11 +3,7 @@ mod lynn_server_user;
 mod server_thread_pool;
 
 use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    ops::{Deref, DerefMut},
-    sync::Arc,
-    time::{Duration, SystemTime},
+    collections::HashMap, future::Future, net::SocketAddr, ops::{Deref, DerefMut}, pin::Pin, sync::Arc, time::{Duration, SystemTime}
 };
 
 use bytes::{BufMut, BytesMut};
@@ -21,14 +17,11 @@ use tokio::{
     task::JoinHandle,
     time::interval,
 };
-use tracing::{error, info, warn, Level};
+use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 use crate::{
-    const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-    dto_factory::input_dto_build,
-    service::IService,
-    vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
+    const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE, dto_factory::input_dto_build, server::HandlerResult, service::IService, vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait}
 };
 
 pub(crate) mod lynn_user_api {
@@ -56,10 +49,10 @@ pub(crate) mod lynn_thread_pool_api {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let _ = LynnServer::new().await.add_router(1, my_service).start().await;
+///     let _ = LynnServer::new().await.add_router(1, async_func_wrapper!(my_service)).await.start().await;
 ///     Ok(())
 /// }
-/// pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
+/// pub async fn my_service(input_buf_vo: InputBufVO) -> HandlerResult {
 ///     println!("service read from :{}", input_buf_vo.get_input_addr());
 ///     HandlerResult::new_without_send()
 /// }
@@ -79,12 +72,12 @@ pub(crate) mod lynn_thread_pool_api {
 ///         .build(),
 /// )
 /// .await
-/// .add_router(1, my_service)
+/// .add_router(1, async_func_wrapper!(my_service)).await
 /// .start()
 /// .await;
 /// Ok(())
 /// }
-/// pub fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
+/// pub fn async my_service(input_buf_vo: InputBufVO) -> HandlerResult {
 ///     println!("service read from :{}", input_buf_vo.get_input_addr());
 ///     HandlerResult::new_without_send()
 /// }
@@ -94,12 +87,31 @@ pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     /// A map of routes, where the key is a method ID and the value is a service handler.
-    router_map: Arc<Mutex<HashMap<u16, Arc<Box<dyn IService>>>>>,
+    router_map_async: Arc<Mutex<Option<HashMap<u16, Arc<AsyncFunc>>>>>,
     /// The configuration for the server.
     lynn_config: LynnServerConfig<'a>,
     /// The thread pool for the server.
     lynn_thread_pool: Arc<Mutex<LynnServerThreadPool>>,
 }
+
+pub type AsyncFunc = Box<dyn Fn(InputBufVO)->Pin<Box<(dyn Future<Output = HandlerResult> + Send +'static)>> + Send  +Sync>;
+#[deprecated(since = "0.1.0", note = "use AsyncFunc instead")]
+pub type SyncFunc = Arc<Box<dyn IService>>;
+
+#[macro_export]
+macro_rules! async_func_wrapper {
+    ($async_func:ident) => {
+        {
+            type AsyncFunc = Box<dyn Fn(InputBufVO)->Pin<Box<(dyn Future<Output = HandlerResult> + Send +'static)>> + Send  +Sync>;
+            let wrapper = move |input_buf_vo: InputBufVO| {
+                let fut: Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>> = Box::pin($async_func(input_buf_vo));
+                fut
+            };
+            Box::new(wrapper) as AsyncFunc
+        }
+    };
+}
+
 
 /// Implementation of methods for the LynnServer struct.
 impl<'a> LynnServer<'a> {
@@ -117,7 +129,7 @@ impl<'a> LynnServer<'a> {
                 .await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            router_map: Arc::new(Mutex::new(HashMap::new())),
+            router_map_async: Arc::new(Mutex::new(None)),
             lynn_config,
             lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
         }
@@ -143,7 +155,7 @@ impl<'a> LynnServer<'a> {
                 .await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            router_map: Arc::new(Mutex::new(HashMap::new())),
+            router_map_async: Arc::new(Mutex::new(None)),
             lynn_config,
             lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
         }
@@ -167,7 +179,7 @@ impl<'a> LynnServer<'a> {
                 .await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            router_map: Arc::new(Mutex::new(HashMap::new())),
+            router_map_async: Arc::new(Mutex::new(None)),
             lynn_config,
             lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
         }
@@ -183,12 +195,19 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// The modified `LynnServer` instance.
-    pub fn add_router(self, method_id: u16, handler: impl IService + 'static) -> Self {
-        let router_map = self.router_map.clone();
-        tokio::spawn(async move {
+    pub async fn add_router(self, method_id: u16, handler: AsyncFunc) -> Self 
+    {
+        let router_map = self.router_map_async.clone();
+        tokio::spawn(async move{
             let mut router_map_mutex = router_map.lock().await;
             let router_map_guard = router_map_mutex.deref_mut();
-            router_map_guard.insert(method_id, Arc::new(Box::new(handler)));
+            if let Some(map) = router_map_guard {
+                map.insert(method_id, Arc::new(handler));
+            }else {
+                let mut map = HashMap::new();
+                map.insert(method_id, Arc::new(handler));
+                *router_map_guard = Some(map);
+            }
         });
         self
     }
@@ -332,7 +351,7 @@ impl<'a> LynnServer<'a> {
                     let last_communicate_time = Arc::new(Mutex::new(SystemTime::now()));
 
                     let clients_clone = self.clients.clone();
-                    let router_map = self.router_map.clone();
+                    let router_map_async = self.router_map_async.clone();
                     let addr = addr.clone();
                     let process_permit_clone = process_permit.clone();
                     let last_communicate_time_clone = last_communicate_time.clone();
@@ -354,10 +373,6 @@ impl<'a> LynnServer<'a> {
                                             continue
                                         },
                                         Ok(n) => {
-                                            // for i in &buf[..n]{
-                                            //     info!("re:{}",i);
-                                            // }
-
                                             big_buf.extend_from_slice(&buf[..n]);
                                             while big_buf.is_complete(){
                                                 let mut input_buf_vo = InputBufVO::new(big_buf.get_data(),addr);
@@ -374,20 +389,22 @@ impl<'a> LynnServer<'a> {
                                                         Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)|None => {},
                                                     }
                                                 });
-
                                                 if let Some(method_id) = input_buf_vo.get_method_id(){
-                                                    let mut mutex = router_map.lock().await;
+                                                    let mut mutex = router_map_async.lock().await;
                                                     let guard = mutex.deref_mut();
-                                                    if guard.contains_key(&method_id) {
-                                                        let a = guard.get(&method_id).unwrap();
-                                                        input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
+                                                    if let Some(map) = guard{
+                                                        if map.contains_key(&method_id) {
+                                                            let a = map.get(&method_id).unwrap();
+                                                            input_dto_build(addr,input_buf_vo,process_permit.clone(),clients_clone.clone(),a.clone(),thread_pool_clone.clone()).await;
+                                                        }else{
+                                                            warn!("router_map_async no method match,{}",method_id);
+                                                        }
                                                     }else{
-                                                        warn!("router_map no method match,{}",method_id);
+                                                        warn!("server router is none");
                                                     }
                                                 }else{
-                                                    warn!("input_buf_vo no method_id");
+                                                    warn!("router_map_async input_buf_vo no method_id");
                                                 }
-
                                             }
                                         },
                                         Err(e) => {
