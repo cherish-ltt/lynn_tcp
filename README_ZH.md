@@ -2,33 +2,31 @@
 
 ![](https://camo.githubusercontent.com/6581c31c16c1b13ddc2efb92e2ad69a93ddc4a92fd871ff15d401c4c6c9155a4/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f6c6963656e73652d4d49542d626c75652e737667)
 
-English|[简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/README_ZH.md)
-
-`Lynn_tcp` is a lightweight TCP server framework
+`Lynn_tcp` 是一个轻量级的tcp服务器框架
 
 ------
 
-### Keywords
+### 特点
 
-- **Lightweight**: concise code that is easier to learn and use
+- **轻量级**: 简洁的代码，更容易学习和使用
 
-- **Concurrent and Performance**: Based on Tokio's excellent asynchronous performance, it is easy to achieve concurrent processing capabilities for multi-user links
+- **并发和性能**: 基于Tokio出色的异步性能，更便捷的实现多用户链路的高并发处理能力
 
-- **Lower latency**: Design with read and write separation to achieve lower latency
+- **低延迟,高效率**: 采用读写分离设计，实现更低的延迟
 
-- **Security**: Code written with strong typing and memory safety in Rust
+- **安全稳定**: 用Rust编写的具有强类型和内存安全的代码
 
-  > **tips**: Lynn_tcp is mainly used for <u>message forwarding</u> and <u>long link TCP game servers</u>
+  > **注意**: Lynn_tcp主要用于<u>消息转发</u>和<u>tcp游戏服务器</u>
   >
-  > Quickly develop suitable business scenarios based on frameworks
+  > 可以基于框架快速开发合适的业务场景
   >
-  > Different message parsing, communication data encryption, and other operations can be achieved through custom settings
+  > 通过自定义设置，可以实现不同的消息解析、通信数据加密等操作
 
-### Simple Use
+### 如何使用
 
 #### Dependencies
 
-Make sure you activated the features which you need of the lynn_tcp on Cargo.toml:
+在Cargo.toml上激活你所需的lynn_tcp功能：
 
 **full features**
 
@@ -96,49 +94,49 @@ pub async fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 }
 ```
 
-### Features
+### 特性
 
-- `server`: Provide customizable TCP services that can easily achieve multi-user long connections and concurrent processing capabilities, with services for different routes
-- `client`: Provide custom TCP clients that can send messages to TCP servers and receive messages from servers, with different routing services
+- `server`: 可定制的TCP服务，可以轻松实现多用户长连接和高并发处理能力，并为提供路由服务
+- `client`: 可自定义的TCP客户端，可以向TCP服务器发送消息，并从服务器接收消息，并为提供路由服务
 
-### Road maps
+### 规划
 
-#### Basic functions
+#### 核心功能
 
-- [x] Tcp server
+- [x] Tcp server - tcp服务器
 
-- [x] Tcp client
+- [x] Tcp client - tcp客户端
 
-- [x] Custom message parsing
+- [x] Custom message parsing - 自定义报文解析
 
-- [x] Automatically clean sockets
+- [x] Automatically clean sockets - 心跳检测
 
-- [x] Routing service for asynchronous tasks
+- [x] Routing service for asynchronous tasks - 异步任务路由服务
 
 > Note:
 >
-> All Basic functions support on v1.0.0 and above
+> v1.0.0及以上版本支持所有核心功能
 
-#### Extended functions
+#### 扩展功能
 
-- [ ] Scheduled tasks
-- [ ] Middleware
-- [ ] Global database handle
-- [ ] Communication data encryption
-- [ ] Disconnecting reconnection mechanism
+- [ ] Scheduled tasks - 定时任务
+- [ ] Middleware - 中间件
+- [ ] Global database handle - 数据库句柄
+- [ ] Communication data encryption - 加密数据
+- [ ] Disconnecting reconnection mechanism - 客户端断线重连机制
 
-### Flow chart
+### 流程图
 
 [FlowChart.png](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png)
 
-### Release note 
+### 版本介绍
 
 [version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
 
-### License
+### 开源协议
 
-This project is licensed under the MIT license.
+MIT license
 
-### Contribution
+### 关于贡献
 
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Lynn_tcp by you, shall be licensed as MIT, without any additional terms or conditions.
+除非您另有明确说明，否则您有意提交以包含在Lynn_tcp中的任何贡献都应被许可为MIT，无需任何额外的条款或条件
