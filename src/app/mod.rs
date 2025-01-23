@@ -96,11 +96,12 @@ pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     /// A map of routes, where the key is a method ID and the value is a service handler.
-    router_map_async: Arc<Mutex<Option<HashMap<u16, Arc<AsyncFunc>>>>>,
+    router_map_async: Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
+    router_maps: Option<HashMap<u16, Arc<AsyncFunc>>>,
     /// The configuration for the server.
     lynn_config: LynnServerConfig<'a>,
     /// The thread pool for the server.
-    lynn_thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+    lynn_thread_pool: LynnServerThreadPool,
 }
 
 pub type AsyncFunc = Box<
@@ -110,6 +111,11 @@ pub type AsyncFunc = Box<
 >;
 #[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
 pub type SyncFunc = Arc<Box<dyn IService>>;
+pub(crate) type TaskBody = (
+    Arc<AsyncFunc>,
+    InputBufVO,
+    Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
+);
 
 #[macro_export]
 macro_rules! async_func_wrapper {
@@ -141,9 +147,10 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            router_map_async: Arc::new(Mutex::new(None)),
+            router_map_async: Arc::new(None),
+            router_maps: None,
             lynn_config,
-            lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
+            lynn_thread_pool: thread_pool,
         }
     }
 
@@ -164,9 +171,10 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            router_map_async: Arc::new(Mutex::new(None)),
+            router_map_async: Arc::new(None),
+            router_maps: None,
             lynn_config,
-            lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
+            lynn_thread_pool: thread_pool,
         }
     }
 
@@ -184,9 +192,10 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         Self {
             clients: Arc::new(Mutex::new(HashMap::new())),
-            router_map_async: Arc::new(Mutex::new(None)),
+            router_map_async: Arc::new(None),
+            router_maps: None,
             lynn_config,
-            lynn_thread_pool: Arc::new(Mutex::new(thread_pool)),
+            lynn_thread_pool: thread_pool,
         }
     }
 
@@ -200,20 +209,20 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// The modified `LynnServer` instance.
-    pub async fn add_router(self, method_id: u16, handler: AsyncFunc) -> Self {
-        let router_map = self.router_map_async.clone();
-        tokio::spawn(async move {
-            let mut router_map_mutex = router_map.lock().await;
-            let router_map_guard = router_map_mutex.deref_mut();
-            if let Some(map) = router_map_guard {
-                map.insert(method_id, Arc::new(handler));
-            } else {
-                let mut map = HashMap::new();
-                map.insert(method_id, Arc::new(handler));
-                *router_map_guard = Some(map);
-            }
-        });
+    pub fn add_router(mut self, method_id: u16, handler: AsyncFunc) -> Self {
+        if let Some(ref mut map) = self.router_maps {
+            map.insert(method_id, Arc::new(handler));
+        } else {
+            let mut map = HashMap::new();
+            map.insert(method_id, Arc::new(handler));
+            self.router_maps = Some(map);
+        }
         self
+    }
+
+    pub(crate) async fn synchronous_router(&mut self) {
+        self.router_map_async = Arc::new(self.router_maps.clone());
+        self.router_maps = None;
     }
 
     /// Adds a new client to the server.
@@ -305,7 +314,8 @@ impl<'a> LynnServer<'a> {
         });
     }
 
-    pub async fn start(self: Self) {
+    pub async fn start(mut self: Self) {
+        self.synchronous_router().await;
         self.log_server().await;
         let server_arc = Arc::new(self);
         server_arc.run().await;
@@ -357,7 +367,7 @@ impl<'a> LynnServer<'a> {
                     let addr = addr.clone();
                     let process_permit_clone = process_permit.clone();
                     let last_communicate_time_clone = last_communicate_time.clone();
-                    let thread_pool_clone = self.lynn_thread_pool.clone();
+                    let thread_pool_task_body_sender_clone = self.lynn_thread_pool.task_body_sender.clone();
                     let message_header_mark = self.lynn_config.get_message_header_mark().clone();
                     let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
                     // Spawns a new asynchronous task to handle each client connection.
@@ -404,8 +414,7 @@ impl<'a> LynnServer<'a> {
                                             }
                                         });
                                         if let Some(method_id) = input_buf_vo.get_method_id() {
-                                            let mut mutex = router_map_async.lock().await;
-                                            let guard = mutex.deref_mut();
+                                            let guard = router_map_async.deref();
                                             if let Some(map) = guard {
                                                 if map.contains_key(&method_id) {
                                                     let a = map.get(&method_id).unwrap();
@@ -415,7 +424,7 @@ impl<'a> LynnServer<'a> {
                                                         process_permit.clone(),
                                                         clients_clone.clone(),
                                                         a.clone(),
-                                                        thread_pool_clone.clone(),
+                                                        thread_pool_task_body_sender_clone.clone(),
                                                     )
                                                     .await;
                                                 } else {

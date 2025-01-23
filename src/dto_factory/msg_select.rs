@@ -1,9 +1,11 @@
-use std::{net::SocketAddr, ops::DerefMut, sync::Arc};
+use std::{net::SocketAddr, ops::{Deref, DerefMut}, sync::Arc};
 
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
+use tracing::debug;
+use tracing_subscriber::field::debug;
 
 use crate::{
-    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
+    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser, TaskBody},
     vo_factory::input_vo::InputBufVO,
 };
 
@@ -62,7 +64,7 @@ impl IHandlerCombinedTrait for MsgSelect {
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        thread_pool: mpsc::Sender<TaskBody>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -100,14 +102,12 @@ impl IHandlerMethod for MsgSelect {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        thread_pool: mpsc::Sender<TaskBody>,
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
     ) {
-        let mut thread_pool_mutex = thread_pool.lock().await;
-        let thread_pool_guard = thread_pool_mutex.deref_mut();
         let task_body = (handler_method.clone(), self.input_buf_vo.clone(), clients);
-        thread_pool_guard.submit(task_body).await;
+        thread_pool.send(task_body).await;
     }
 }

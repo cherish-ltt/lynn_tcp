@@ -1,10 +1,10 @@
 use input_dto::{IHandlerCombinedTrait, MsgSelect};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{mpsc, Mutex, Semaphore};
 use tracing::{debug, warn};
 
 use crate::{
-    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser, AsyncFunc},
+    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser, AsyncFunc, TaskBody},
     vo_factory::input_vo::InputBufVO,
 };
 
@@ -25,7 +25,7 @@ pub(crate) async fn input_dto_build(
     process_permit: Arc<Semaphore>,
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+    thread_pool: mpsc::Sender<TaskBody>,
 ) {
     tokio::spawn(async move {
         // Attempt to acquire a permit from the semaphore.
@@ -50,7 +50,7 @@ async fn spawn_handler(
     mut result: MsgSelect,
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+    thread_pool: mpsc::Sender<TaskBody>,
 ) {
     result.execute(clients, handler_method, thread_pool).await;
 }

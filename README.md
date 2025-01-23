@@ -54,7 +54,7 @@ use lynn_tcp::server::{HandlerResult, InputBufVO, LynnServerConfigBuilder, LynnS
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = LynnServer::new().await.add_router(1, async_func_wrapper!(my_service)).await.start().await;
+    let _ = LynnServer::new().await.add_router(1, async_func_wrapper!(my_service)).start().await;
     Ok(())
 }
 
@@ -80,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .build(),
     )
     .await
-    .add_router(1, async_func_wrapper!(my_service)).await
+    .add_router(1, async_func_wrapper!(my_service))
     .start()
     .await;
     Ok(())

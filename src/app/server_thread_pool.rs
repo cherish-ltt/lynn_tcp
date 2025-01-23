@@ -7,14 +7,14 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use crate::{
     dto_factory::input_dto::{check_handler_result, HandlerResult},
     vo_factory::input_vo::InputBufVO,
 };
 
-use super::{lynn_server_user::LynnUser, AsyncFunc, DEFAULT_SYSTEM_CHANNEL_SIZE};
+use super::{lynn_server_user::LynnUser, AsyncFunc, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
 
 /// A thread pool for handling tasks concurrently.
 pub(crate) struct LynnServerThreadPool {
@@ -27,8 +27,9 @@ pub(crate) struct LynnServerThreadPool {
         )>,
         JoinHandle<()>,
     )>,
+    pub(crate) task_body_sender: mpsc::Sender<TaskBody>,
     /// An index used for load balancing when submitting tasks.
-    index: Arc<Mutex<usize>>,
+    index: usize,
 }
 
 impl LynnServerThreadPool {
@@ -48,6 +49,8 @@ impl LynnServerThreadPool {
             HandlerResult,
             Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
         )>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
+        let (task_body_sender, task_body_rx) = mpsc::channel::<TaskBody>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
+        let mut thread_task_body_rx_vec = Vec::new();
         for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
             let (tx, mut rx) = mpsc::channel::<(
@@ -64,14 +67,32 @@ impl LynnServerThreadPool {
                     }
                 }
             });
-            threads.push((tx, handle));
+            threads.push((tx.clone(), handle));
+            thread_task_body_rx_vec.push(tx);
         }
-        let lynn_thread_pool = LynnServerThreadPool {
-            threads,
-            index: Arc::new(Mutex::new(0)),
-        }
-        .spawn_handler_result(rx_result)
-        .await;
+        
+        let join_handle = tokio::spawn(async move{
+            let mut index = 0;
+            let thread_len = thread_task_body_rx_vec.len();
+            let mut task_body_rx = task_body_rx;
+            loop {
+                if let Some(task_body) = task_body_rx.recv().await {
+                    let thread_index = index % thread_len;
+                    index += 1;
+                    if let Some(tx) = thread_task_body_rx_vec.get_mut(thread_index) {
+                        tx.send(task_body).await.unwrap_or_else(|e| {
+                            error!("send task to thread-{} err: {}", thread_index, e);
+                        });
+                    }
+                    if index >= thread_len {
+                        index = 0;
+                    }
+                }
+            }
+        });
+        let lynn_thread_pool = LynnServerThreadPool { threads, index: 0,task_body_sender }
+            .spawn_handler_result(rx_result)
+            .await;
         lynn_thread_pool
     }
 
@@ -80,6 +101,7 @@ impl LynnServerThreadPool {
     /// # Parameters
     ///
     /// * `task_body` - A tuple containing the service, input buffer, and client map.
+    #[deprecated(since="v1.0.0",note = "No need to manually 'submit'")]
     pub(crate) async fn submit(
         &mut self,
         task_body: (
@@ -88,16 +110,16 @@ impl LynnServerThreadPool {
             Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
         ),
     ) {
-        let mut idx = self.index.lock().await;
-        let thread_index = *idx % self.threads.len();
-        *idx += 1;
+        let mut idx = self.index;
+        let thread_index = idx % self.threads.len();
+        idx += 1;
         if let Some((tx, _)) = self.threads.get_mut(thread_index) {
             tx.send(task_body).await.unwrap_or_else(|e| {
                 error!("send task to thread-{} err: {}", thread_index, e);
             });
         }
-        if *idx >= self.threads.len() {
-            *idx = 0;
+        if idx >= self.threads.len() {
+            self.index = 0;
         }
     }
 

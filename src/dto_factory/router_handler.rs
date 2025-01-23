@@ -1,10 +1,10 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
 
 use crate::app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser};
 
-use super::AsyncFunc;
+use super::{AsyncFunc, TaskBody};
 
 /// A struct representing the result of a handler.
 ///
@@ -133,7 +133,7 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
         &mut self,
         clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        thread_pool: mpsc::Sender<TaskBody>,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -166,7 +166,7 @@ pub(crate) trait IHandlerMethod {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: Arc<Mutex<LynnServerThreadPool>>,
+        thread_pool: mpsc::Sender<TaskBody>,
         clients: std::sync::Arc<
             tokio::sync::Mutex<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
