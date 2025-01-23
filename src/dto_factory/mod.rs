@@ -5,8 +5,7 @@ use tracing::{debug, warn};
 
 use crate::{
     app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser, AsyncFunc},
-    service::IService,
-    vo_factory::{input_vo::InputBufVO, InputBufVOTrait},
+    vo_factory::input_vo::InputBufVO,
 };
 
 mod msg_select;
@@ -22,7 +21,7 @@ pub mod input_dto {
 
 pub(crate) async fn input_dto_build(
     addr: SocketAddr,
-    mut input_buf: InputBufVO,
+    input_buf: InputBufVO,
     process_permit: Arc<Semaphore>,
     clients: Arc<Mutex<HashMap<SocketAddr, LynnUser>>>,
     handler_method: Arc<AsyncFunc>,

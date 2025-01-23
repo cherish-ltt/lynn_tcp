@@ -2,10 +2,7 @@ use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
 use tokio::sync::Mutex;
 
-use crate::{
-    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser},
-    service::IService,
-};
+use crate::app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser};
 
 use super::AsyncFunc;
 
@@ -74,7 +71,7 @@ impl HandlerResult {
     /// The response data as an optional byte vector.
     pub(crate) fn get_response_data(&self) -> Option<Vec<u8>> {
         match self.result_data.clone() {
-            Some((num, mut bytes)) => {
+            Some((num, bytes)) => {
                 let mut vec = Vec::new();
                 // Convert the u64 to a big-endian (network byte order) byte slice.
                 let num_bytes = num.to_be_bytes();

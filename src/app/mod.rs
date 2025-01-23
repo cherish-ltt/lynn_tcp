@@ -3,10 +3,15 @@ mod lynn_server_user;
 mod server_thread_pool;
 
 use std::{
-    collections::HashMap, future::Future, net::SocketAddr, ops::{Deref, DerefMut}, pin::Pin, sync::Arc, time::{Duration, SystemTime}
+    collections::HashMap,
+    future::Future,
+    net::SocketAddr,
+    ops::{Deref, DerefMut},
+    pin::Pin,
+    sync::Arc,
+    time::{Duration, SystemTime},
 };
 
-use bytes::{BufMut, BytesMut};
 use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
 use lynn_server_user::LynnUser;
 use server_thread_pool::LynnServerThreadPool;
@@ -21,7 +26,11 @@ use tracing::{debug, error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 use crate::{
-    const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE, dto_factory::input_dto_build, server::HandlerResult, service::IService, vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait}
+    const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE,
+    dto_factory::input_dto_build,
+    server::HandlerResult,
+    service::IService,
+    vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
 };
 
 pub(crate) mod lynn_user_api {
@@ -94,24 +103,30 @@ pub struct LynnServer<'a> {
     lynn_thread_pool: Arc<Mutex<LynnServerThreadPool>>,
 }
 
-pub type AsyncFunc = Box<dyn Fn(InputBufVO)->Pin<Box<(dyn Future<Output = HandlerResult> + Send +'static)>> + Send  +Sync>;
-#[deprecated(since = "0.1.0", note = "use AsyncFunc instead")]
+pub type AsyncFunc = Box<
+    dyn Fn(InputBufVO) -> Pin<Box<(dyn Future<Output = HandlerResult> + Send + 'static)>>
+        + Send
+        + Sync,
+>;
+#[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
 pub type SyncFunc = Arc<Box<dyn IService>>;
 
 #[macro_export]
 macro_rules! async_func_wrapper {
-    ($async_func:ident) => {
-        {
-            type AsyncFunc = Box<dyn Fn(InputBufVO)->Pin<Box<(dyn Future<Output = HandlerResult> + Send +'static)>> + Send  +Sync>;
-            let wrapper = move |input_buf_vo: InputBufVO| {
-                let fut: Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>> = Box::pin($async_func(input_buf_vo));
-                fut
-            };
-            Box::new(wrapper) as AsyncFunc
-        }
-    };
+    ($async_func:ident) => {{
+        type AsyncFunc = Box<
+            dyn Fn(InputBufVO) -> Pin<Box<(dyn Future<Output = HandlerResult> + Send + 'static)>>
+                + Send
+                + Sync,
+        >;
+        let wrapper = move |input_buf_vo: InputBufVO| {
+            let fut: Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>> =
+                Box::pin($async_func(input_buf_vo));
+            fut
+        };
+        Box::new(wrapper) as AsyncFunc
+    }};
 }
-
 
 /// Implementation of methods for the LynnServer struct.
 impl<'a> LynnServer<'a> {
@@ -172,7 +187,6 @@ impl<'a> LynnServer<'a> {
     /// A new instance of `LynnServer`.
     pub async fn new_with_config(lynn_config: LynnServerConfig<'a>) -> Self {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let server_single_processs_permit = lynn_config.get_server_single_processs_permit();
         let thread_pool =
             LynnServerThreadPool::new(server_max_threadpool_size, server_single_processs_permit)
@@ -195,15 +209,14 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// The modified `LynnServer` instance.
-    pub async fn add_router(self, method_id: u16, handler: AsyncFunc) -> Self 
-    {
+    pub async fn add_router(self, method_id: u16, handler: AsyncFunc) -> Self {
         let router_map = self.router_map_async.clone();
-        tokio::spawn(async move{
+        tokio::spawn(async move {
             let mut router_map_mutex = router_map.lock().await;
             let router_map_guard = router_map_mutex.deref_mut();
             if let Some(map) = router_map_guard {
                 map.insert(method_id, Arc::new(handler));
-            }else {
+            } else {
                 let mut map = HashMap::new();
                 map.insert(method_id, Arc::new(handler));
                 *router_map_guard = Some(map);
@@ -313,7 +326,7 @@ impl<'a> LynnServer<'a> {
     ///
     /// Returns `Ok(())` if the server starts successfully, otherwise returns an error.
     async fn run(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
-        /// Binds a TCP listener to the local address.
+        // Binds a TCP listener to the local address.
         let listener = TcpListener::bind(self.lynn_config.get_server_ipv4()).await?;
         info!(
             "Server - [Main-LynnServer] start success!!! with [server_ipv4:{}]",
@@ -323,7 +336,7 @@ impl<'a> LynnServer<'a> {
         self.check_heart().await;
 
         loop {
-            /// Waits for a client to connect.
+            // Waits for a client to connect.
             let clinet_result = listener.accept().await;
             if let Ok((mut socket, addr)) = clinet_result {
                 let mut socket_permit = true;
@@ -341,7 +354,7 @@ impl<'a> LynnServer<'a> {
                 if socket_permit {
                     info!("Accepted connection from: {}", addr);
 
-                    /// Creates a channel for sending data to the client.
+                    // Creates a channel for sending data to the client.
                     let (tx, mut rx) = mpsc::channel::<Vec<u8>>(
                         *self.lynn_config.get_server_single_channel_size(),
                     );
@@ -358,13 +371,13 @@ impl<'a> LynnServer<'a> {
                     let thread_pool_clone = self.lynn_thread_pool.clone();
                     let message_header_mark = self.lynn_config.get_message_header_mark().clone();
                     let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
-                    /// Spawns a new asynchronous task to handle each client connection.
+                    // Spawns a new asynchronous task to handle each client connection.
                     let join_handle = tokio::spawn(async move {
                         let mut stream = socket; // 获取TcpStream
                         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
                         let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
                         let addr = addr;
-                        /// Reads data sent by the client in a loop.
+                        // Reads data sent by the client in a loop.
                         loop {
                             tokio::select! {
                                 result = stream.read(&mut buf) => {
@@ -422,7 +435,7 @@ impl<'a> LynnServer<'a> {
                             }
                         }
 
-                        /// Removes the client from the HashMap after the connection is closed.
+                        // Removes the client from the HashMap after the connection is closed.
                         {
                             let mut clients = clients_clone.lock().await;
                             let guard = clients.deref_mut();
@@ -431,7 +444,7 @@ impl<'a> LynnServer<'a> {
                             }
                         }
                     });
-                    /// Saves the client's ID and send channel to the HashMap.
+                    // Saves the client's ID and send channel to the HashMap.
                     self.add_client(
                         tx.clone(),
                         addr,

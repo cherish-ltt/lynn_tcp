@@ -11,7 +11,6 @@ use tracing::{error, info};
 
 use crate::{
     dto_factory::input_dto::{check_handler_result, HandlerResult},
-    service::IService,
     vo_factory::input_vo::InputBufVO,
 };
 
@@ -59,7 +58,7 @@ impl LynnServerThreadPool {
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
-                    if let Some((task, mut input_buf_vo, clients)) = rx.recv().await {
+                    if let Some((task, input_buf_vo, clients)) = rx.recv().await {
                         let result = task(input_buf_vo).await;
                         let _ = tx_result.send((result, clients)).await;
                     }
