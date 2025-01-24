@@ -59,12 +59,6 @@ impl InputBufVO {
 }
 
 impl InputBufVOTrait for InputBufVO {
-    fn is_structure_complete(&mut self) -> bool {
-        true
-    }
-    fn is_standard_header(&mut self) -> bool {
-        true
-    }
     /// Retrieves the constructor ID from the input buffer.
     ///
     /// This method extracts a `u64` value from the first 8 bytes of the input

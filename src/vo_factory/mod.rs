@@ -3,8 +3,6 @@ mod input_buf_vo;
 
 #[cfg(any(feature = "server", feature = "client"))]
 pub trait InputBufVOTrait {
-    fn is_structure_complete(&mut self) -> bool;
-    fn is_standard_header(&mut self) -> bool;
     fn get_constructor_id(&mut self) -> Option<u8>;
     fn get_method_id(&mut self) -> Option<u16>;
     fn next_u64(&mut self) -> Option<u64>;
