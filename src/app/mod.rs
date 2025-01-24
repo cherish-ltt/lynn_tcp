@@ -518,7 +518,9 @@ impl<'a> LynnServer<'a> {
                     warn!("Server socket's count is more than MAX_CONNECTIONS ,can not accept new client:{}",addr);
                 }
             } else {
-                warn!("Failed to accept connection , server run next");
+                if let Err(e) = clinet_result {
+                    warn!("Failed to accept connection , server run next, e :{}", e);
+                }
             }
         }
     }
