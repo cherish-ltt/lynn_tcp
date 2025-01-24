@@ -290,26 +290,30 @@ impl<'a> LynnServer<'a> {
             loop {
                 interval.tick().await;
                 let mut remove_list = vec![];
-                let mut clients_mutex = clients.write().await;
-                let guard = clients_mutex.deref_mut();
-                for (addr, lynn_user) in guard.iter() {
-                    let last_communicate_time = lynn_user.last_communicate_time.lock().await;
-                    let time_old = last_communicate_time.deref().clone();
-                    let time_now = SystemTime::now();
-                    match time_old.partial_cmp(&time_now) {
-                        Some(std::cmp::Ordering::Less) => match time_now.duration_since(time_old) {
-                            Ok(duration) => {
-                                if duration.as_secs() > server_check_heart_timeout_time {
-                                    remove_list.push(addr.clone());
+                {
+                    let mut clients_mutex = clients.read().await;
+                    let guard = clients_mutex.deref();
+                    for (addr, lynn_user) in guard.iter() {
+                        let last_communicate_time = lynn_user.last_communicate_time.lock().await;
+                        let time_old = last_communicate_time.deref().clone();
+                        let time_now = SystemTime::now();
+                        match time_old.partial_cmp(&time_now) {
+                            Some(std::cmp::Ordering::Less) => match time_now.duration_since(time_old) {
+                                Ok(duration) => {
+                                    if duration.as_secs() > server_check_heart_timeout_time {
+                                        remove_list.push(addr.clone());
+                                    }
                                 }
-                            }
-                            Err(e) => {
-                                warn!("unable to compare time,{}", e)
-                            }
-                        },
-                        Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) | None => {}
+                                Err(e) => {
+                                    warn!("unable to compare time,{}", e)
+                                }
+                            },
+                            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) | None => {}
+                        }
                     }
                 }
+                let mut clients_mutex = clients.write().await;
+                let guard = clients_mutex.deref_mut();
                 for i in remove_list {
                     if guard.contains_key(&i) {
                         guard.remove(&i);
