@@ -94,29 +94,34 @@ pub(crate) mod lynn_thread_pool_api {
 #[cfg(feature = "server")]
 pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
-    clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
-    client_channel_maps: Arc<Option<HashMap<SocketAddr, mpsc::Sender<Vec<u8>>>>>,
+    clients: ClientsStruct,
+    client_channel_maps: ClientChannelMapsStruct,
     /// A map of routes, where the key is a method ID and the value is a service handler.
-    router_map_async: Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
-    router_maps: Option<HashMap<u16, Arc<AsyncFunc>>>,
+    router_map_async: RouterMapAsyncStruct,
+    router_maps: RouterMapsStruct,
     /// The configuration for the server.
     lynn_config: LynnServerConfig<'a>,
     /// The thread pool for the server.
     lynn_thread_pool: LynnServerThreadPool,
 }
 
-pub type AsyncFunc = Box<
+struct ClientsStruct(Arc<RwLock<HashMap<SocketAddr, LynnUser>>>);
+struct ClientChannelMapsStruct(Arc<Option<HashMap<SocketAddr, mpsc::Sender<Vec<u8>>>>>);
+struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
+struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
+
+pub(crate) type AsyncFunc = Box<
     dyn Fn(InputBufVO) -> Pin<Box<(dyn Future<Output = HandlerResult> + Send + 'static)>>
         + Send
         + Sync,
 >;
 #[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
-pub type SyncFunc = Arc<Box<dyn IService>>;
-pub(crate) type TaskBody = (
+pub(crate) type SyncFunc = Arc<Box<dyn IService>>;
+pub(crate) type TaskBody = mpsc::Sender<(
     Arc<AsyncFunc>,
     InputBufVO,
     Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
-);
+)>;
 
 #[macro_export]
 macro_rules! async_func_wrapper {
@@ -147,10 +152,10 @@ impl<'a> LynnServer<'a> {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
-            client_channel_maps: Arc::new(None),
-            router_map_async: Arc::new(None),
-            router_maps: None,
+            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
+            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
+            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
+            router_maps: RouterMapsStruct(None),
             lynn_config,
             lynn_thread_pool: thread_pool,
         };
@@ -174,10 +179,10 @@ impl<'a> LynnServer<'a> {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
-            client_channel_maps: Arc::new(None),
-            router_map_async: Arc::new(None),
-            router_maps: None,
+            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
+            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
+            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
+            router_maps: RouterMapsStruct(None),
             lynn_config,
             lynn_thread_pool: thread_pool,
         };
@@ -198,10 +203,10 @@ impl<'a> LynnServer<'a> {
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
-            client_channel_maps: Arc::new(None),
-            router_map_async: Arc::new(None),
-            router_maps: None,
+            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
+            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
+            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
+            router_maps: RouterMapsStruct(None),
             lynn_config,
             lynn_thread_pool: thread_pool,
         };
@@ -220,19 +225,19 @@ impl<'a> LynnServer<'a> {
     ///
     /// The modified `LynnServer` instance.
     pub fn add_router(mut self, method_id: u16, handler: AsyncFunc) -> Self {
-        if let Some(ref mut map) = self.router_maps {
+        if let Some(ref mut map) = self.router_maps.0 {
             map.insert(method_id, Arc::new(handler));
         } else {
             let mut map = HashMap::new();
             map.insert(method_id, Arc::new(handler));
-            self.router_maps = Some(map);
+            self.router_maps.0 = Some(map);
         }
         self
     }
 
     pub(crate) async fn synchronous_router(&mut self) {
-        self.router_map_async = Arc::new(self.router_maps.clone());
-        self.router_maps = None;
+        self.router_map_async.0 = Arc::new(self.router_maps.0.clone());
+        self.router_maps.0 = None;
     }
 
     /// Adds a new client to the server.
@@ -252,7 +257,7 @@ impl<'a> LynnServer<'a> {
         join_handle: JoinHandle<()>,
         last_communicate_time: Arc<Mutex<SystemTime>>,
     ) {
-        let mut clients = self.clients.write().await;
+        let mut clients = self.clients.0.write().await;
         let guard = clients.deref_mut();
         let lynn_user = LynnUser::new(sender, process_permit, join_handle, last_communicate_time);
         guard.insert(addr, lynn_user);
@@ -264,7 +269,7 @@ impl<'a> LynnServer<'a> {
     ///
     /// * `addr` - The address of the client to remove.
     pub(crate) async fn remove_client(&mut self, addr: SocketAddr) {
-        let mut clients = self.clients.write().await;
+        let mut clients = self.clients.0.write().await;
         let guard = clients.deref_mut();
         if guard.contains_key(&addr) {
             guard.remove(&addr);
@@ -273,7 +278,7 @@ impl<'a> LynnServer<'a> {
 
     /// Checks the heartbeat of connected clients and removes those that have not sent messages for a long time.
     pub(crate) async fn check_heart(&self) {
-        let clients = self.clients.clone();
+        let clients = self.clients.0.clone();
         let server_check_heart_interval =
             self.lynn_config.get_server_check_heart_interval().clone();
         let server_check_heart_timeout_time = self
@@ -298,17 +303,20 @@ impl<'a> LynnServer<'a> {
                         let time_old = last_communicate_time.deref().clone();
                         let time_now = SystemTime::now();
                         match time_old.partial_cmp(&time_now) {
-                            Some(std::cmp::Ordering::Less) => match time_now.duration_since(time_old) {
-                                Ok(duration) => {
-                                    if duration.as_secs() > server_check_heart_timeout_time {
-                                        remove_list.push(addr.clone());
+                            Some(std::cmp::Ordering::Less) => {
+                                match time_now.duration_since(time_old) {
+                                    Ok(duration) => {
+                                        if duration.as_secs() > server_check_heart_timeout_time {
+                                            remove_list.push(addr.clone());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!("unable to compare time,{}", e)
                                     }
                                 }
-                                Err(e) => {
-                                    warn!("unable to compare time,{}", e)
-                                }
-                            },
-                            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) | None => {}
+                            }
+                            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+                            | None => {}
                         }
                     }
                 }
@@ -356,7 +364,7 @@ impl<'a> LynnServer<'a> {
                 let mut socket_permit = true;
                 {
                     if let Some(max_connections) = self.lynn_config.get_server_max_connections() {
-                        let clients = self.clients.write().await;
+                        let clients = self.clients.0.write().await;
                         let guard = clients.deref();
                         if guard.len() < *max_connections {
                             socket_permit = true;
@@ -370,11 +378,11 @@ impl<'a> LynnServer<'a> {
                     let process_permit = Arc::new(Semaphore::new(
                         *self.lynn_config.get_server_single_processs_permit(),
                     ));
-                    let clients_clone = self.clients.clone();
-                    let clients_clone_alone = self.clients.clone();
-                    let router_map_async = self.router_map_async.clone();
+                    let clients_clone = self.clients.0.clone();
+                    let clients_clone_alone = self.clients.0.clone();
+                    let router_map_async = self.router_map_async.0.clone();
                     let thread_pool_task_body_sender_clone =
-                        self.lynn_thread_pool.task_body_sender.clone();
+                        self.lynn_thread_pool.task_body_sender.0.clone();
                     let message_header_mark = self.lynn_config.get_message_header_mark().clone();
                     let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
                     tokio::spawn(async move {

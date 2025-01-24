@@ -134,7 +134,7 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
         &mut self,
         clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
+        thread_pool: TaskBody,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -167,7 +167,7 @@ pub(crate) trait IHandlerMethod {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
+        thread_pool: TaskBody,
         clients: std::sync::Arc<
             tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,

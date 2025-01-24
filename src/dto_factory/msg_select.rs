@@ -68,7 +68,7 @@ impl IHandlerCombinedTrait for MsgSelect {
             tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
+        thread_pool: TaskBody,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -106,7 +106,7 @@ impl IHandlerMethod for MsgSelect {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
+        thread_pool: TaskBody,
         clients: std::sync::Arc<
             tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
         >,

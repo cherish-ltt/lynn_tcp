@@ -16,18 +16,28 @@ use crate::{
 
 use super::{lynn_server_user::LynnUser, AsyncFunc, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
 
+type Threads = Vec<(
+    mpsc::Sender<(
+        Arc<AsyncFunc>,
+        InputBufVO,
+        Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+    )>,
+    JoinHandle<()>,
+)>;
+
+struct ThreadsStruct(Threads);
+pub(super) struct TaskBodyStruct(pub(super) TaskBody);
+
+type TaskBodyOutChannel = (
+    Arc<AsyncFunc>,
+    InputBufVO,
+    Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+);
 /// A thread pool for handling tasks concurrently.
 pub(crate) struct LynnServerThreadPool {
     /// A vector of tuples containing the task sender and the join handle for each thread.
-    threads: Vec<(
-        mpsc::Sender<(
-            Arc<AsyncFunc>,
-            InputBufVO,
-            Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
-        )>,
-        JoinHandle<()>,
-    )>,
-    pub(crate) task_body_sender: mpsc::Sender<TaskBody>,
+    threads: ThreadsStruct,
+    pub(crate) task_body_sender: TaskBodyStruct,
     /// An index used for load balancing when submitting tasks.
     index: usize,
 }
@@ -50,7 +60,7 @@ impl LynnServerThreadPool {
             Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
         )>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
         let (task_body_sender, task_body_rx) =
-            mpsc::channel::<TaskBody>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
+            mpsc::channel::<TaskBodyOutChannel>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
         let mut thread_task_body_rx_vec = Vec::new();
         for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
@@ -64,7 +74,9 @@ impl LynnServerThreadPool {
                 loop {
                     if let Some((task, input_buf_vo, clients)) = rx.recv().await {
                         let result = task(input_buf_vo).await;
-                        let _ = tx_result.send((result, clients)).await;
+                        if let Err(e) = tx_result.send((result, clients)).await {
+                            error!("Failed to send result to result channel: {}", e);
+                        }
                     }
                 }
             });
@@ -81,9 +93,9 @@ impl LynnServerThreadPool {
                     let thread_index = index % thread_len;
                     index += 1;
                     if let Some(tx) = thread_task_body_rx_vec.get_mut(thread_index) {
-                        tx.send(task_body).await.unwrap_or_else(|e| {
-                            error!("send task to thread-{} err: {}", thread_index, e);
-                        });
+                        if let Err(e) = tx.send(task_body).await {
+                            error!("Failed to send task to thread-{}: {}", thread_index, e);
+                        }
                     }
                     if index >= thread_len {
                         index = 0;
@@ -92,9 +104,9 @@ impl LynnServerThreadPool {
             }
         });
         let lynn_thread_pool = LynnServerThreadPool {
-            threads,
+            threads: ThreadsStruct(threads),
             index: 0,
-            task_body_sender,
+            task_body_sender: TaskBodyStruct(task_body_sender),
         }
         .spawn_handler_result(rx_result)
         .await;
@@ -116,14 +128,14 @@ impl LynnServerThreadPool {
         ),
     ) {
         let mut idx = self.index;
-        let thread_index = idx % self.threads.len();
+        let thread_index = idx % self.threads.0.len();
         idx += 1;
-        if let Some((tx, _)) = self.threads.get_mut(thread_index) {
+        if let Some((tx, _)) = self.threads.0.get_mut(thread_index) {
             tx.send(task_body).await.unwrap_or_else(|e| {
                 error!("send task to thread-{} err: {}", thread_index, e);
             });
         }
-        if idx >= self.threads.len() {
+        if idx >= self.threads.0.len() {
             self.index = 0;
         }
     }
@@ -147,7 +159,6 @@ impl LynnServerThreadPool {
             loop {
                 if let Some((result, clients)) = rx.recv().await {
                     check_handler_result(result, clients).await;
-                    //debug!("发送开始");
                 }
             }
         });

@@ -27,7 +27,7 @@ pub(crate) async fn input_dto_build(
     process_permit: Arc<Semaphore>,
     clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: mpsc::Sender<TaskBody>,
+    thread_pool: TaskBody,
 ) {
     tokio::spawn(async move {
         // Attempt to acquire a permit from the semaphore.
@@ -52,7 +52,7 @@ async fn spawn_handler(
     mut result: MsgSelect,
     clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: mpsc::Sender<TaskBody>,
+    thread_pool: TaskBody,
 ) {
     result.execute(clients, handler_method, thread_pool).await;
 }
