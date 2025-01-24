@@ -68,6 +68,7 @@ impl BigBufReader {
                 }
             } else {
                 self.data.clear();
+                self.target_len = None;
                 if let Some(buf) = &self.remaining_data {
                     let buf = buf.clone();
                     self.remaining_data = None;
@@ -81,6 +82,7 @@ impl BigBufReader {
             if let Some(buf) = &self.remaining_data {
                 let buf = buf.clone();
                 self.remaining_data = None;
+                self.target_len = None;
                 self.extend_from_slice(&buf);
             }
         }
@@ -117,6 +119,12 @@ impl BigBufReader {
     /// `true` if the buffer is complete, `false` otherwise.
     pub(crate) fn is_complete(&mut self) -> bool {
         if let Some(target_len) = self.target_len {
+            if target_len <= 5 && self.data.len() >= 7 {
+                self.check_data();
+                if self.target_len.is_none() {
+                    return false;
+                }
+            }
             if !self.is_empty()
                 && self.data.len() >= 10 + target_len.try_into().unwrap_or(0)
                 && self.data.len() >= 12
@@ -168,7 +176,6 @@ impl BigBufReader {
             }
             if let Some(target_len) = self.target_len {
                 if target_len <= 5 && self.data.len() >= 7 {
-                    info!("heart");
                     self.check_data();
                 }
             }

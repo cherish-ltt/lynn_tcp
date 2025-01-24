@@ -223,7 +223,13 @@ impl InputBufVOTrait for InputBufVO {
     ///
     /// A vector containing all the bytes from the input buffer.
     fn get_all_bytes(&self) -> Vec<u8> {
-        self.data.clone()
+        let mut vec = self.data.clone();
+        if vec.len() >= 3 {
+            vec.drain(0..3);
+        } else {
+            vec = Vec::new();
+        }
+        vec
     }
 
     /// Calculates the length of the remaining data in the input buffer.
