@@ -165,9 +165,7 @@ pub(crate) trait IHandlerMethod {
         &mut self,
         handler_method: Arc<AsyncFunc>,
         thread_pool: TaskBody,
-        clients: std::sync::Arc<
-            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
-        >,
+        clients: ClientsStructType,
     );
 }
 

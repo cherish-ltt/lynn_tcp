@@ -8,7 +8,7 @@ use crate::{
 use super::{
     input_dto::IHandlerCombinedTrait,
     router_handler::{HandlerData, IHandlerData, IHandlerMethod},
-    AsyncFunc,
+    AsyncFunc, ClientsStructType,
 };
 
 /// A struct representing a message selection.
@@ -56,9 +56,7 @@ impl IHandlerCombinedTrait for MsgSelect {
     /// A `Future` that resolves when the handler execution is complete.
     async fn execute(
         &mut self,
-        clients: std::sync::Arc<
-            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
-        >,
+        clients: ClientsStructType,
         handler_method: Arc<AsyncFunc>,
         thread_pool: TaskBody,
     ) {
@@ -99,9 +97,7 @@ impl IHandlerMethod for MsgSelect {
         &mut self,
         handler_method: Arc<AsyncFunc>,
         thread_pool: TaskBody,
-        clients: std::sync::Arc<
-            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
-        >,
+        clients: ClientsStructType,
     ) {
         let task_body = (handler_method.clone(), self.input_buf_vo.clone(), clients);
         thread_pool.send(task_body).await;
