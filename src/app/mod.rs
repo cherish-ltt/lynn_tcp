@@ -54,7 +54,7 @@ pub(crate) mod lynn_thread_pool_api {
 /// # Example
 /// Use default config
 /// ```rust
-/// use lynn_tcp::app::LynnServer;
+/// use lynn_tcp::{async_func_wrapper, server::*};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -69,7 +69,7 @@ pub(crate) mod lynn_thread_pool_api {
 /// # Example
 /// Use customized config
 /// ```rust
-/// use lynn_tcp::app::LynnServer;
+/// use lynn_tcp::{async_func_wrapper, server::*};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
