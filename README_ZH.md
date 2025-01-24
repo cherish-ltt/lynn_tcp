@@ -57,6 +57,8 @@ use lynn_tcp::{
     lynn_server::{LynnServer, LynnServerConfigBuilder},
     lynn_tcp_dependents::*,
 };
+use std::pin::Pin;
+use std::future::Future;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -78,6 +80,8 @@ use lynn_tcp::{
     lynn_server::{LynnServer, LynnServerConfigBuilder},
     lynn_tcp_dependents::*,
 };
+use std::pin::Pin;
+use std::future::Future;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

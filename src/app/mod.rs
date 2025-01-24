@@ -59,6 +59,8 @@ pub(crate) mod lynn_thread_pool_api {
 ///     lynn_server::{LynnServer, LynnServerConfigBuilder},
 ///     lynn_tcp_dependents::*,
 /// };
+/// use std::pin::Pin;
+/// use std::future::Future;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -78,6 +80,8 @@ pub(crate) mod lynn_thread_pool_api {
 ///     lynn_server::{LynnServer, LynnServerConfigBuilder},
 ///     lynn_tcp_dependents::*,
 /// };
+/// use std::pin::Pin;
+/// use std::future::Future;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -518,7 +522,9 @@ impl<'a> LynnServer<'a> {
                     warn!("Server socket's count is more than MAX_CONNECTIONS ,can not accept new client:{}",addr);
                 }
             } else {
-                warn!("Failed to accept connection , server run next");
+                if let Err(e) = clinet_result {
+                    warn!("Failed to accept connection , server run next, e :{}", e);
+                }
             }
         }
     }
