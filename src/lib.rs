@@ -1,41 +1,50 @@
-// #![allow(unused)]
-// #![allow(private_interfaces)]
-// #![allow(private_bounds)]
-// #![allow(deprecated)]
+#![allow(unused)]
+#![allow(private_interfaces)]
+#![allow(private_bounds)]
+#![allow(deprecated)]
 
-// Module containing application-specific components
+/// The application module, containing the server configuration API and server implementation.
 mod app;
-// Module containing constant configurations
-mod const_config;
-// Module containing data transfer objects and factory functions
-mod dto_factory;
-// Module containing service interfaces and implementations
+/// The client module, containing the client configuration and client implementation.
 mod client;
+/// The constant configuration module, containing constants used throughout the application.
+mod const_config;
+/// The DTO factory module, responsible for creating data transfer objects.
+mod dto_factory;
+/// The service module, containing the application's business logic.
 mod service;
+/// The VO factory module, responsible for creating value objects.
 mod vo_factory;
-/// The main library module for the Lynn TCP Server.
-///
-/// This module exports various components and utilities for building and running a TCP server.
-#[cfg(feature="server")]
+
+/// The server module, containing the server configuration API and server implementation.
+#[cfg(feature = "server")]
 pub mod lynn_server {
-    // Exports the LynnServerConfigBuilder for configuring the server
-    pub use super::app::lynn_config_api::LynnServerConfigBuilder;
-    // Exports the LynnServerConfig for configuring the server
+    /// The server configuration API, providing methods to configure the server.
     pub use super::app::lynn_config_api::LynnServerConfig;
-    // Exports the LynnServer for running the server
+    /// The server configuration builder, providing a fluent interface to build server configurations.
+    pub use super::app::lynn_config_api::LynnServerConfigBuilder;
+    /// The server implementation, handling incoming connections and requests.
     pub use super::app::LynnServer;
 }
-#[cfg(any(feature="server",feature="client"))]
-pub mod lynn_tcp_dependents{
-    // Exports the HandlerResult for handling the results of server operations
+
+/// The TCP dependents module, containing common types used by both the server and client.
+#[cfg(any(feature = "server", feature = "client"))]
+pub mod lynn_tcp_dependents {
+    /// The handler result type, used to represent the result of a request handler.
     pub use super::dto_factory::input_dto::HandlerResult;
-    // Exports the InputBufVO for handling input data
+    /// The input buffer value object, representing the input data received by the server or client.
     pub use super::vo_factory::input_vo::InputBufVO;
+    /// The input buffer value object trait, defining the behavior of input buffer value objects.
     pub use super::vo_factory::InputBufVOTrait;
 }
-#[cfg(feature="client")]
-pub mod lynn_client{
-    pub use super::client::LynnClient;
-    pub use super::client::client_config::LynnClientConfigBuilder;
+
+/// The client module, containing the client configuration and client implementation.
+#[cfg(feature = "client")]
+pub mod lynn_client {
+    /// The client configuration API, providing methods to configure the client.
     pub use super::client::client_config::LynnClientConfig;
+    /// The client configuration builder, providing a fluent interface to build client configurations.
+    pub use super::client::client_config::LynnClientConfigBuilder;
+    /// The client implementation, handling outgoing connections and requests.
+    pub use super::client::LynnClient;
 }

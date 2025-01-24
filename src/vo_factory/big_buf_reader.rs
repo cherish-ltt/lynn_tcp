@@ -1,15 +1,31 @@
 use bytes::BytesMut;
 use tracing::info;
 
+/// A struct for reading large buffers.
 pub(crate) struct BigBufReader {
+    /// The data buffer.
     data: BytesMut,
+    /// The remaining data buffer.
     remaining_data: Option<Vec<u8>>,
+    /// The target length of the data buffer.
     target_len: Option<usize>,
+    /// The message header mark.
     message_header_mark: u16,
+    /// The message tail mark.
     message_tail_mark: u16,
 }
 
 impl BigBufReader {
+    /// Creates a new `BigBufReader` instance.
+    ///
+    /// # Parameters
+    ///
+    /// * `message_header_mark` - The message header mark.
+    /// * `message_tail_mark` - The message tail mark.
+    ///
+    /// # Returns
+    ///
+    /// A new `BigBufReader` instance.
     pub(crate) fn new(message_header_mark: u16, message_tail_mark: u16) -> Self {
         Self {
             data: BytesMut::with_capacity(0),
@@ -20,12 +36,14 @@ impl BigBufReader {
         }
     }
 
+    /// Forces the buffer to be cleared.
     pub(crate) fn forced_clear(&mut self) {
         self.data.clear();
         self.remaining_data = None;
         self.target_len = None;
     }
 
+    /// Checks the data in the buffer.
     pub(crate) fn check_data(&mut self) {
         if let Some(target_len) = self.target_len {
             if target_len > 5 {
@@ -68,10 +86,20 @@ impl BigBufReader {
         }
     }
 
+    /// Checks if the buffer is empty.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the buffer is empty, `false` otherwise.
     pub(crate) fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
+    /// Gets the length of the next buffer to be extended.
+    ///
+    /// # Returns
+    ///
+    /// The length of the next buffer to be extended, or `None` if the buffer is already complete.
     pub(crate) fn get_next_extend_buf_len(&mut self) -> Option<usize> {
         if let Some(target_len) = self.target_len {
             let len = self.data.len();
@@ -82,6 +110,11 @@ impl BigBufReader {
         None
     }
 
+    /// Checks if the buffer is complete.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the buffer is complete, `false` otherwise.
     pub(crate) fn is_complete(&mut self) -> bool {
         if let Some(target_len) = self.target_len {
             if !self.is_empty()
@@ -98,12 +131,22 @@ impl BigBufReader {
         false
     }
 
+    /// Gets the data from the buffer.
+    ///
+    /// # Returns
+    ///
+    /// The data from the buffer.
     pub(crate) fn get_data(&mut self) -> Vec<u8> {
         let result = self.data[10..self.target_len.unwrap() + 8].to_vec();
         self.check_data();
         result
     }
 
+    /// Extends the buffer with the given slice.
+    ///
+    /// # Parameters
+    ///
+    /// * `buf` - The slice to extend the buffer with.
     pub(crate) fn extend_from_slice(&mut self, buf: &[u8]) {
         let buf_len = buf.len();
         if !self.is_complete() {

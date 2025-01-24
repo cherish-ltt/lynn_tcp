@@ -19,20 +19,57 @@ use crate::{
     vo_factory::big_buf::BigBufReader,
 };
 
-pub mod client_config{
-    pub use super::lynn_client_config::LynnClientConfigBuilder;
+pub mod client_config {
     pub use super::lynn_client_config::LynnClientConfig;
+    pub use super::lynn_client_config::LynnClientConfigBuilder;
 }
 
+/// A client for communicating with a server over TCP.
+///
+/// The `LynnClient` struct represents a client that can connect to a server, send data, and receive data.
+/// It uses a configuration object to specify the server's IP address and other settings.
+/// The client runs in a separate task and uses channels to communicate with the main task.
+/// # Example
+/// Use default config
+/// ```rust
+/// use lynn_tcp::{
+///     lynn_client::LynnClient,
+///     lynn_tcp_dependents::*,
+/// };
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let client = LynnClient::new_with_ipv4("127.0.0.1:9177")
+///             .await
+///             .start()
+///             .await;
+///     let _ = client.send_data(HandlerResult::new_with_send_to_server(1, "hello".into())).await;
+///     let input_buf_vo = client.get_receive_data().await.unwrap();
+///     Ok(())
+/// }
+/// ```
 #[cfg(feature = "client")]
 pub struct LynnClient<'a> {
+    /// The configuration for the client.
     lynn_client_config: LynnClientConfig<'a>,
+    /// The handle for the connection task.
     connection_join_handle: Option<JoinHandle<()>>,
+    /// The sender for the write channel.
     tx_write: Option<mpsc::Sender<HandlerResult>>,
+    /// The receiver for the read channel.
     rx_read: Option<mpsc::Receiver<InputBufVO>>,
 }
 
 impl<'a> LynnClient<'a> {
+    /// Creates a new `LynnClient` instance with the given configuration.
+    ///
+    /// # Parameters
+    ///
+    /// - `lynn_client_config`: The configuration for the client.
+    ///
+    /// # Returns
+    ///
+    /// A new `LynnClient` instance.
     pub async fn new_with_config(lynn_client_config: LynnClientConfig<'a>) -> Self {
         let client = Self {
             lynn_client_config,
@@ -44,6 +81,15 @@ impl<'a> LynnClient<'a> {
         client
     }
 
+    /// Creates a new `LynnClient` instance with the given IPv4 address.
+    ///
+    /// # Parameters
+    ///
+    /// - `server_ipv4`: The IPv4 address of the server.
+    ///
+    /// # Returns
+    ///
+    /// A new `LynnClient` instance.
     pub async fn new_with_ipv4(server_ipv4: &'a str) -> Self {
         let client = Self {
             lynn_client_config: LynnClientConfigBuilder::new()
@@ -57,6 +103,11 @@ impl<'a> LynnClient<'a> {
         client
     }
 
+    /// Starts the client and returns the instance.
+    ///
+    /// # Returns
+    ///
+    /// The `LynnClient` instance.
     pub async fn start(mut self: Self) -> Self {
         match self.run().await {
             Ok(_) => self,
@@ -67,6 +118,11 @@ impl<'a> LynnClient<'a> {
         }
     }
 
+    /// Runs the client and connects to the server.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating whether the connection was successful.
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let retry_count = 3;
         let timeout = Duration::from_secs(3);
@@ -136,8 +192,11 @@ impl<'a> LynnClient<'a> {
                         self.tx_write = Some(tx_write);
                         self.rx_read = Some(rx_read);
                         self.connection_join_handle = Some(join_handle);
-                        //self.check_heart().await;
-                        info!("Client - [Main-LynnClient] connection to [server_ipv4:{}] success!!! ",{ip_v4});
+                        self.check_heart().await;
+                        info!(
+                            "Client - [Main-LynnClient] connection to [server_ipv4:{}] success!!! ",
+                            { ip_v4 }
+                        );
                         return Ok(());
                     } else {
                         warn!("connect to server failed - TcpStream e: {:?}", stream);
@@ -153,6 +212,7 @@ impl<'a> LynnClient<'a> {
         Err("connect to server failed".into())
     }
 
+    /// Logs the server information.
     pub(crate) async fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::DEBUG)
@@ -160,21 +220,32 @@ impl<'a> LynnClient<'a> {
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
                 info!("Client - [log server] start sucess!!!")
-            },
+            }
             Err(e) => {
                 warn!("set_global_default failed - e: {:?}", e)
-            },
+            }
         }
     }
 
+    /// Gets the received data from the server.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the received data.
     pub async fn get_receive_data(&mut self) -> Option<InputBufVO> {
         self.rx_read.as_mut().unwrap().recv().await
     }
 
+    /// Gets the sender for the write channel.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the sender.
     pub async fn get_sender(&mut self) -> Option<mpsc::Sender<HandlerResult>> {
         self.tx_write.clone()
     }
 
+    /// Sends data to the server.
     pub async fn send_data(
         &mut self,
         handler_result: HandlerResult,
@@ -192,6 +263,7 @@ impl<'a> LynnClient<'a> {
         }
     }
 
+    /// Checks the heart.
     pub(crate) async fn check_heart(&mut self) {
         let interval_time = self
             .lynn_client_config

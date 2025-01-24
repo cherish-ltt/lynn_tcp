@@ -4,7 +4,7 @@ use tokio::{
     sync::mpsc::{self, Receiver},
     task::JoinHandle,
 };
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::{
     dto_factory::input_dto::{check_handler_result, HandlerResult},

@@ -1,9 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use crate::{
-    app::lynn_user_api::LynnUser,
-    const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK},
-};
+use crate::const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK};
 
 use super::{AsyncFunc, ClientsStructType, TaskBody};
 

@@ -22,7 +22,7 @@ use tokio::{
     task::JoinHandle,
     time::interval,
 };
-use tracing::{debug, error, info, warn, Level};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 use crate::{
@@ -54,7 +54,11 @@ pub(crate) mod lynn_thread_pool_api {
 /// # Example
 /// Use default config
 /// ```rust
-/// use lynn_tcp::{async_func_wrapper, server::*};
+/// use lynn_tcp::{
+///     async_func_wrapper,
+///     lynn_server::{LynnServer, LynnServerConfigBuilder},
+///     lynn_tcp_dependents::*,
+/// };
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -69,7 +73,11 @@ pub(crate) mod lynn_thread_pool_api {
 /// # Example
 /// Use customized config
 /// ```rust
-/// use lynn_tcp::{async_func_wrapper, server::*};
+/// use lynn_tcp::{
+///     async_func_wrapper,
+///     lynn_server::{LynnServer, LynnServerConfigBuilder},
+///     lynn_tcp_dependents::*,
+/// };
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -523,10 +531,10 @@ impl<'a> LynnServer<'a> {
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
                 info!("Server - [log server] start sucess!!!")
-            },
+            }
             Err(e) => {
                 warn!("set_global_default failed - e: {:?}", e)
-            },
+            }
         }
     }
 }

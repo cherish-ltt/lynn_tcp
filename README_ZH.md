@@ -52,7 +52,11 @@ lynn_tcp = { git = "https://github.com/cherish-ltt/lynn_tcp.git", branch = "main
 #### Server
 
 ```rust
-use lynn_tcp::server::{HandlerResult, InputBufVO, LynnServerConfigBuilder, LynnServer};
+use lynn_tcp::{
+    async_func_wrapper,
+    lynn_server::{LynnServer, LynnServerConfigBuilder},
+    lynn_tcp_dependents::*,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -69,7 +73,11 @@ pub async fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
 #### Server with config
 
 ```rust
-use lynn_tcp::server::{HandlerResult, InputBufVO, LynnServerConfigBuilder, LynnServer};
+use lynn_tcp::{
+    async_func_wrapper,
+    lynn_server::{LynnServer, LynnServerConfigBuilder},
+    lynn_tcp_dependents::*,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -91,6 +99,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 pub async fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
     println!("service read from :{}", input_buf_vo.get_input_addr());
     HandlerResult::new_without_send()
+}
+```
+
+#### Client
+
+```rust
+use lynn_tcp::{
+    lynn_client::LynnClient,
+    lynn_tcp_dependents::*,
+};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = LynnClient::new_with_ipv4("127.0.0.1:9177")
+            .await
+            .start()
+            .await;
+    let _ = client.send_data(HandlerResult::new_with_send_to_server(1, "hello".into())).await;
+    let input_buf_vo = client.get_receive_data().await.unwrap();
+    Ok(())
 }
 ```
 

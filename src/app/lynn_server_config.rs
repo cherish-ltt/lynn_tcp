@@ -27,7 +27,9 @@ pub struct LynnServerConfig<'a> {
     server_check_heart_interval: &'a u64,
     // The timeout time for checking heartbeats.
     server_check_heart_timeout_time: &'a u64,
+    // The mark for the message header.
     message_header_mark: &'a u16,
+    // The mark for the message tail.
     message_tail_mark: &'a u16,
 }
 
@@ -169,29 +171,39 @@ impl<'a> LynnServerConfig<'a> {
         self.server_max_receive_bytes_reader_size
     }
 
+    /// Gets the mark for the message header.
+    ///
+    /// # Returns
+    ///
+    /// The mark for the message header.
     pub(crate) fn get_message_header_mark(&self) -> &u16 {
         self.message_header_mark
     }
 
+    /// Gets the mark for the message tail.
+    ///
+    /// # Returns
+    ///
+    /// The mark for the message tail.
     pub(crate) fn get_message_tail_mark(&self) -> &u16 {
         self.message_tail_mark
     }
 }
 
-/// Builder for constructing a LynnServerConfig instance.
+/// A builder for creating a LynnServerConfig instance.
 ///
-/// This builder provides a series of methods to set the various parameters of LynnServerConfig
-/// and finally builds a LynnServerConfig instance.
+/// This struct provides a fluent interface for setting the configuration parameters.
 #[cfg(feature = "server")]
 pub struct LynnServerConfigBuilder<'a> {
+    // The LynnServerConfig instance being built.
     pub lynn_config: LynnServerConfig<'a>,
 }
 
 /// Implementation for LynnServerConfigBuilder, providing methods to set the configuration parameters.
 ///
-/// This implementation includes a constructor for the default configuration and methods to set the configuration parameters.
+/// This implementation includes methods to set each configuration parameter and a method to build the final LynnServerConfig instance.
 impl<'a> LynnServerConfigBuilder<'a> {
-    /// Creates a new LynnServerConfigBuilder instance.
+    /// Creates a new LynnServerConfigBuilder instance with the default configuration.
     ///
     /// # Returns
     ///
@@ -201,8 +213,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
             lynn_config: LynnServerConfig::default(),
         }
     }
-
-    /// Sets the IPv4 address of the server.
+    /// Sets the server's IPv4 address.
     ///
     /// # Parameters
     ///
@@ -210,7 +221,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Self {
         self.lynn_config.server_ipv4 = server_ipv4;
         self
@@ -224,7 +235,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_single_channel_size(
         mut self,
         server_single_channel_size: &'a usize,
@@ -241,7 +252,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_single_processs_permit(
         mut self,
         server_single_processs_permit: &'a usize,
@@ -249,6 +260,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
         self.lynn_config.server_single_processs_permit = server_single_processs_permit;
         self
     }
+
     /// Sets the interval for checking heartbeats.
     ///
     /// # Parameters
@@ -257,7 +269,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_check_heart_interval(
         mut self,
         server_check_heart_interval: &'a u64,
@@ -274,7 +286,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_check_heart_timeout_time(
         mut self,
         server_check_heart_timeout_time: &'a u64,
@@ -291,7 +303,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_max_connections(
         mut self,
         server_max_connections: Option<&'a usize>,
@@ -308,7 +320,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_max_threadpool_size(
         mut self,
         server_max_threadpool_size: &'a usize,
@@ -325,7 +337,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Returns
     ///
-    /// The modified LynnServerConfigBuilder instance.
+    /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_max_receive_bytes_reader_size(
         mut self,
         server_max_receive_bytes_reader_size: &'a usize,
@@ -335,20 +347,38 @@ impl<'a> LynnServerConfigBuilder<'a> {
         self
     }
 
-    /// Builds and returns the final LynnServerConfig instance.
+    /// Builds the `LynnServerConfig` instance.
     ///
     /// # Returns
     ///
-    /// The final LynnServerConfig instance.
+    /// The built `LynnServerConfig` instance.
     pub fn build(self) -> LynnServerConfig<'a> {
         self.lynn_config
     }
 
+    /// Sets the mark for the message header.
+    ///
+    /// # Parameters
+    ///
+    /// * `msg_header_mark` - The mark for the message header.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
     pub(crate) fn with_message_header_mark(mut self, msg_header_mark: &'a u16) -> Self {
         self.lynn_config.message_header_mark = msg_header_mark;
         self
     }
 
+    /// Sets the mark for the message tail.
+    ///
+    /// # Parameters
+    ///
+    /// * `msg_tail_mark` - The mark for the message tail.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
     pub(crate) fn with_message_tail_mark(mut self, msg_tail_mark: &'a u16) -> Self {
         self.lynn_config.message_tail_mark = msg_tail_mark;
         self
