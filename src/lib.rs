@@ -1,6 +1,7 @@
 #![allow(unused)]
 #![allow(private_interfaces)]
 #![allow(private_bounds)]
+#![allow(deprecated)]
 
 // Module containing application-specific components
 mod app;

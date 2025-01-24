@@ -1,10 +1,8 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::sync::Arc;
 
 use tokio::{
-    sync::{
+    sync::
         mpsc::{self, Receiver},
-        Mutex, RwLock,
-    },
     task::JoinHandle,
 };
 use tracing::{debug, error, info};
@@ -14,13 +12,13 @@ use crate::{
     vo_factory::input_vo::InputBufVO,
 };
 
-use super::{lynn_server_user::LynnUser, AsyncFunc, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
+use super::{AsyncFunc, ClientsStructType, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
 
 type Threads = Vec<(
     mpsc::Sender<(
         Arc<AsyncFunc>,
         InputBufVO,
-        Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+        ClientsStructType,
     )>,
     JoinHandle<()>,
 )>;
@@ -31,7 +29,7 @@ pub(super) struct TaskBodyStruct(pub(super) TaskBody);
 type TaskBodyOutChannel = (
     Arc<AsyncFunc>,
     InputBufVO,
-    Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+    ClientsStructType,
 );
 /// A thread pool for handling tasks concurrently.
 pub(crate) struct LynnServerThreadPool {
@@ -57,7 +55,7 @@ impl LynnServerThreadPool {
         let mut threads = Vec::with_capacity(*num_threads);
         let (tx_result, rx_result) = mpsc::channel::<(
             HandlerResult,
-            Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+            ClientsStructType,
         )>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
         let (task_body_sender, task_body_rx) =
             mpsc::channel::<TaskBodyOutChannel>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
@@ -67,7 +65,7 @@ impl LynnServerThreadPool {
             let (tx, mut rx) = mpsc::channel::<(
                 Arc<AsyncFunc>,
                 InputBufVO,
-                Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+                ClientsStructType,
             )>(DEFAULT_SYSTEM_CHANNEL_SIZE);
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
@@ -124,7 +122,7 @@ impl LynnServerThreadPool {
         task_body: (
             Arc<AsyncFunc>,
             InputBufVO,
-            Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+            ClientsStructType,
         ),
     ) {
         let mut idx = self.index;
@@ -152,7 +150,7 @@ impl LynnServerThreadPool {
     /// The modified `LynnServerThreadPool` instance.
     pub(crate) async fn spawn_handler_result(
         self,
-        mut rx: Receiver<(HandlerResult, Arc<RwLock<HashMap<SocketAddr, LynnUser>>>)>,
+        mut rx: Receiver<(HandlerResult, ClientsStructType)>,
     ) -> Self {
         tokio::spawn(async move {
             info!("Server - [thread-result-listening] is listening success!!!");

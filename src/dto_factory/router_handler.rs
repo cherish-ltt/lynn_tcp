@@ -1,11 +1,8 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use tokio::sync::{mpsc, Mutex, RwLock};
-use tracing::debug;
+use crate::app::{lynn_user_api::LynnUser};
 
-use crate::app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser};
-
-use super::{AsyncFunc, TaskBody};
+use super::{AsyncFunc, ClientsStructType, TaskBody};
 
 /// A struct representing the result of a handler.
 ///
@@ -132,7 +129,7 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
     /// * `tx`: The channel for sending the HandlerResult instance.
     async fn execute(
         &mut self,
-        clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+        clients: ClientsStructType,
         handler_method: Arc<AsyncFunc>,
         thread_pool: TaskBody,
     ) {
@@ -179,7 +176,7 @@ pub(crate) trait IHandlerMethod {
 /// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
 pub(crate) async fn check_handler_result(
     handler_result: HandlerResult,
-    clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+    clients: ClientsStructType,
 ) {
     tokio::spawn(async move {
         // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.

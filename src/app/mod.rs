@@ -105,7 +105,8 @@ pub struct LynnServer<'a> {
     lynn_thread_pool: LynnServerThreadPool,
 }
 
-struct ClientsStruct(Arc<RwLock<HashMap<SocketAddr, LynnUser>>>);
+type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
+struct ClientsStruct(ClientsStructType);
 struct ClientChannelMapsStruct(Arc<Option<HashMap<SocketAddr, mpsc::Sender<Vec<u8>>>>>);
 struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
 struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
@@ -117,11 +118,7 @@ pub(crate) type AsyncFunc = Box<
 >;
 #[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
 pub(crate) type SyncFunc = Arc<Box<dyn IService>>;
-pub(crate) type TaskBody = mpsc::Sender<(
-    Arc<AsyncFunc>,
-    InputBufVO,
-    Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
-)>;
+pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, InputBufVO, ClientsStructType)>;
 
 #[macro_export]
 macro_rules! async_func_wrapper {
