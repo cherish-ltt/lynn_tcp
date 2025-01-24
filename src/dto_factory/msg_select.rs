@@ -1,22 +1,11 @@
-use std::{
-    net::SocketAddr,
-    ops::{Deref, DerefMut},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
-use tokio::sync::{mpsc, Mutex};
-use tracing::debug;
-use tracing_subscriber::field::debug;
-
-use crate::{
-    app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser, TaskBody},
-    vo_factory::input_vo::InputBufVO,
-};
+use crate::{app::TaskBody, vo_factory::input_vo::InputBufVO};
 
 use super::{
     input_dto::IHandlerCombinedTrait,
     router_handler::{HandlerData, IHandlerData, IHandlerMethod},
-    AsyncFunc,
+    AsyncFunc, ClientsStructType,
 };
 
 /// A struct representing a message selection.
@@ -64,11 +53,9 @@ impl IHandlerCombinedTrait for MsgSelect {
     /// A `Future` that resolves when the handler execution is complete.
     async fn execute(
         &mut self,
-        clients: std::sync::Arc<
-            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
-        >,
+        clients: ClientsStructType,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
+        thread_pool: TaskBody,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -106,10 +93,8 @@ impl IHandlerMethod for MsgSelect {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
-        clients: std::sync::Arc<
-            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
-        >,
+        thread_pool: TaskBody,
+        clients: ClientsStructType,
     ) {
         let task_body = (handler_method.clone(), self.input_buf_vo.clone(), clients);
         thread_pool.send(task_body).await;

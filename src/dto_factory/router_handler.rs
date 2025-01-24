@@ -1,16 +1,14 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use tokio::sync::{mpsc, Mutex, RwLock};
-use tracing::debug;
+use crate::const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK};
 
-use crate::app::{lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser};
-
-use super::{AsyncFunc, TaskBody};
+use super::{AsyncFunc, ClientsStructType, TaskBody};
 
 /// A struct representing the result of a handler.
 ///
 /// This struct contains a boolean indicating whether data should be sent, optional result data, and optional addresses.
 #[cfg(any(feature = "server", feature = "client"))]
+#[derive(Clone)]
 pub struct HandlerResult {
     // A boolean indicating whether data should be sent.
     is_send: bool,
@@ -18,6 +16,8 @@ pub struct HandlerResult {
     result_data: Option<(u16, Vec<u8>)>,
     // Optional vector of socket addresses.
     addrs: Option<Vec<SocketAddr>>,
+    message_header_mark: Option<u16>,
+    message_tail_mark: Option<u16>,
 }
 
 impl HandlerResult {
@@ -31,6 +31,7 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
+    #[cfg(feature = "server")]
     pub fn new_with_send(
         method_id: u16,
         response_data: Vec<u8>,
@@ -40,6 +41,19 @@ impl HandlerResult {
             is_send: true,
             result_data: Some((method_id, response_data)),
             addrs: Some(target_addrs),
+            message_header_mark: None,
+            message_tail_mark: None,
+        }
+    }
+
+    #[cfg(feature = "client")]
+    pub fn new_with_send_to_server(method_id: u16, response_data: Vec<u8>) -> Self {
+        Self {
+            is_send: true,
+            result_data: Some((method_id, response_data)),
+            addrs: None,
+            message_header_mark: None,
+            message_tail_mark: None,
         }
     }
 
@@ -48,11 +62,14 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
+    #[cfg(feature = "server")]
     pub fn new_without_send() -> Self {
         Self {
             is_send: false,
             result_data: None,
             addrs: None,
+            message_header_mark: None,
+            message_tail_mark: None,
         }
     }
 
@@ -65,6 +82,23 @@ impl HandlerResult {
         self.is_send
     }
 
+    pub(crate) fn get_addrs(&self) -> Option<Vec<SocketAddr>> {
+        self.addrs.clone()
+    }
+
+    pub(crate) fn is_with_mark(&self) -> bool {
+        if self.message_header_mark.is_some() && self.message_tail_mark.is_some() {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn set_marks(&mut self, message_header_mark: u16, message_tail_mark: u16) {
+        self.message_header_mark = Some(message_header_mark);
+        self.message_tail_mark = Some(message_tail_mark);
+    }
+
     /// Gets the response data, converting the u64 number to a big-endian byte slice and inserting it at the beginning of the byte vector.
     ///
     /// # Returns
@@ -72,13 +106,37 @@ impl HandlerResult {
     /// The response data as an optional byte vector.
     pub(crate) fn get_response_data(&self) -> Option<Vec<u8>> {
         match self.result_data.clone() {
-            Some((num, bytes)) => {
+            Some((method_id, bytes)) => {
                 let mut vec = Vec::new();
-                // Convert the u64 to a big-endian (network byte order) byte slice.
-                let num_bytes = num.to_be_bytes();
-                vec.extend_from_slice(&num_bytes);
-                // Insert num_bytes at the beginning of the byte vector.
+
+                if let Some(mark) = self.message_header_mark {
+                    vec.extend_from_slice(&mark.to_be_bytes());
+                } else {
+                    vec.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_be_bytes());
+                }
+
+                let mut msg_len = 0_u64;
+                let constructor_id = 1_u8.to_be_bytes();
+                let method_id_bytes = method_id.to_be_bytes();
+                let bytes_body_len = bytes.len();
+                let msg_tail_len = 2_u64;
+                msg_len = constructor_id.len() as u64
+                    + method_id_bytes.len() as u64
+                    + bytes_body_len as u64
+                    + msg_tail_len;
+
+                vec.extend_from_slice(&msg_len.to_be_bytes());
+
+                vec.extend_from_slice(&constructor_id);
+
+                vec.extend_from_slice(&method_id_bytes);
+
                 vec.extend_from_slice(&bytes);
+                if let Some(mark) = self.message_tail_mark {
+                    vec.extend_from_slice(&mark.to_be_bytes());
+                } else {
+                    vec.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_be_bytes());
+                }
                 Some(vec)
             }
             None => None,
@@ -132,9 +190,9 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
     /// * `tx`: The channel for sending the HandlerResult instance.
     async fn execute(
         &mut self,
-        clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+        clients: ClientsStructType,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
+        thread_pool: TaskBody,
     ) {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
@@ -167,10 +225,8 @@ pub(crate) trait IHandlerMethod {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: mpsc::Sender<TaskBody>,
-        clients: std::sync::Arc<
-            tokio::sync::RwLock<std::collections::HashMap<SocketAddr, LynnUser>>,
-        >,
+        thread_pool: TaskBody,
+        clients: ClientsStructType,
     );
 }
 
@@ -179,7 +235,7 @@ pub(crate) trait IHandlerMethod {
 /// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
 pub(crate) async fn check_handler_result(
     handler_result: HandlerResult,
-    clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+    clients: ClientsStructType,
 ) {
     tokio::spawn(async move {
         // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
@@ -189,7 +245,7 @@ pub(crate) async fn check_handler_result(
             {
                 let mutex = clients.read().await;
                 let guard = mutex.deref();
-                if let Some(addrs) = handler_result.addrs {
+                if let Some(addrs) = handler_result.get_addrs() {
                     for i in addrs {
                         if guard.contains_key(&i) {
                             socket_vec.push(guard.get(&i).unwrap().sender.clone());
@@ -199,7 +255,7 @@ pub(crate) async fn check_handler_result(
             }
             if !socket_vec.is_empty() && response.is_some() {
                 for i in socket_vec {
-                    let response = response.clone().unwrap();
+                    let response = handler_result.clone();
                     let _ = i.send(response).await;
                 }
             }

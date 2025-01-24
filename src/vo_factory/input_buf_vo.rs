@@ -15,7 +15,7 @@ pub struct InputBufVO {
     /// The current index in the data vector, used for reading data in chunks.
     index: usize,
     /// The address from which the data was received.
-    input_addr: SocketAddr,
+    input_addr: Option<SocketAddr>,
 }
 
 /// Implementation of methods for the `InputBufVO` struct.
@@ -42,7 +42,29 @@ impl InputBufVO {
         Self {
             data: buf,
             index: 3,
-            input_addr,
+            input_addr: Some(input_addr),
+        }
+    }
+
+    /// Creates a new `InputBufVO` instance without a socket address.
+    ///
+    /// This function takes a byte vector and returns a new `InputBufVO` instance
+    /// with the provided data. The index is initialized to 3, which might be the
+    /// starting position of a specific field in the data. The input address is set
+    /// to `None` as it is not provided.
+    ///
+    /// # Parameters
+    ///
+    /// - `buf`: A byte vector containing the input data.
+    ///
+    /// # Returns
+    ///
+    /// A new `InputBufVO` instance.
+    pub(crate) fn new_without_socket_addr(buf: Vec<u8>) -> Self {
+        Self {
+            data: buf,
+            index: 3,
+            input_addr: None,
         }
     }
 
@@ -53,18 +75,12 @@ impl InputBufVO {
     /// # Returns
     ///
     /// The input address.
-    pub fn get_input_addr(&self) -> SocketAddr {
+    pub fn get_input_addr(&self) -> Option<SocketAddr> {
         self.input_addr
     }
 }
 
 impl InputBufVOTrait for InputBufVO {
-    fn is_structure_complete(&mut self) -> bool {
-        true
-    }
-    fn is_standard_header(&mut self) -> bool {
-        true
-    }
     /// Retrieves the constructor ID from the input buffer.
     ///
     /// This method extracts a `u64` value from the first 8 bytes of the input
@@ -194,6 +210,42 @@ impl InputBufVOTrait for InputBufVO {
             let bytes = &mut self.data[self.index..self.index + len].to_vec();
             self.index = self.index + len;
             Some(String::from_utf8_lossy(bytes).to_string())
+        }
+    }
+
+    /// Retrieves all the bytes from the input buffer.
+    ///
+    /// This method returns a clone of the entire byte vector that represents
+    /// the input data. This can be useful for cases where the entire data needs
+    /// to be accessed or processed.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing all the bytes from the input buffer.
+    fn get_all_bytes(&self) -> Vec<u8> {
+        self.data.clone()
+    }
+
+    /// Calculates the length of the remaining data in the input buffer.
+    ///
+    /// This method determines how many bytes are left to be read from the input
+    /// buffer based on the current index. It returns the difference between the
+    /// total length of the data and the current index. If the index is greater
+    /// than or equal to the data length, it returns 0, indicating that there is
+    /// no remaining data.
+    ///
+    /// # Returns
+    ///
+    /// The length of the remaining data in the input buffer.
+    fn get_remaining_data_len(&self) -> usize {
+        let data_len = self.data.len();
+        let index = self.index;
+        if data_len <= 0 {
+            0
+        } else if data_len - 1 >= index {
+            data_len - index
+        } else {
+            0
         }
     }
 }

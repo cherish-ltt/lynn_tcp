@@ -1,17 +1,17 @@
 use input_dto::{IHandlerCombinedTrait, MsgSelect};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::{mpsc, Mutex, RwLock, Semaphore};
+use tokio::sync::{RwLock, Semaphore};
 use tracing::{debug, warn};
 
 use crate::{
-    app::{
-        lynn_thread_pool_api::LynnServerThreadPool, lynn_user_api::LynnUser, AsyncFunc, TaskBody,
-    },
+    app::{lynn_user_api::LynnUser, AsyncFunc, TaskBody},
     vo_factory::input_vo::InputBufVO,
 };
 
 mod msg_select;
 mod router_handler;
+
+type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
 
 pub mod input_dto {
     pub(crate) use super::msg_select::*;
@@ -25,9 +25,9 @@ pub(crate) async fn input_dto_build(
     addr: SocketAddr,
     input_buf: InputBufVO,
     process_permit: Arc<Semaphore>,
-    clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+    clients: ClientsStructType,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: mpsc::Sender<TaskBody>,
+    thread_pool: TaskBody,
 ) {
     tokio::spawn(async move {
         // Attempt to acquire a permit from the semaphore.
@@ -50,9 +50,9 @@ pub(crate) async fn input_dto_build(
 
 async fn spawn_handler(
     mut result: MsgSelect,
-    clients: Arc<RwLock<HashMap<SocketAddr, LynnUser>>>,
+    clients: ClientsStructType,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: mpsc::Sender<TaskBody>,
+    thread_pool: TaskBody,
 ) {
     result.execute(clients, handler_method, thread_pool).await;
 }
