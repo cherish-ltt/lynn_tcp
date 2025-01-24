@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use tokio::{
-    sync::
-        mpsc::{self, Receiver},
+    sync::mpsc::{self, Receiver},
     task::JoinHandle,
 };
 use tracing::{debug, error, info};
@@ -15,22 +14,14 @@ use crate::{
 use super::{AsyncFunc, ClientsStructType, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
 
 type Threads = Vec<(
-    mpsc::Sender<(
-        Arc<AsyncFunc>,
-        InputBufVO,
-        ClientsStructType,
-    )>,
+    mpsc::Sender<(Arc<AsyncFunc>, InputBufVO, ClientsStructType)>,
     JoinHandle<()>,
 )>;
 
 struct ThreadsStruct(Threads);
 pub(super) struct TaskBodyStruct(pub(super) TaskBody);
 
-type TaskBodyOutChannel = (
-    Arc<AsyncFunc>,
-    InputBufVO,
-    ClientsStructType,
-);
+type TaskBodyOutChannel = (Arc<AsyncFunc>, InputBufVO, ClientsStructType);
 /// A thread pool for handling tasks concurrently.
 pub(crate) struct LynnServerThreadPool {
     /// A vector of tuples containing the task sender and the join handle for each thread.
@@ -53,20 +44,17 @@ impl LynnServerThreadPool {
     /// A new instance of `LynnServerThreadPool`.
     pub(crate) async fn new(num_threads: &usize) -> Self {
         let mut threads = Vec::with_capacity(*num_threads);
-        let (tx_result, rx_result) = mpsc::channel::<(
-            HandlerResult,
-            ClientsStructType,
-        )>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
+        let (tx_result, rx_result) = mpsc::channel::<(HandlerResult, ClientsStructType)>(
+            *num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE,
+        );
         let (task_body_sender, task_body_rx) =
             mpsc::channel::<TaskBodyOutChannel>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
         let mut thread_task_body_rx_vec = Vec::new();
         for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
-            let (tx, mut rx) = mpsc::channel::<(
-                Arc<AsyncFunc>,
-                InputBufVO,
-                ClientsStructType,
-            )>(DEFAULT_SYSTEM_CHANNEL_SIZE);
+            let (tx, mut rx) = mpsc::channel::<(Arc<AsyncFunc>, InputBufVO, ClientsStructType)>(
+                DEFAULT_SYSTEM_CHANNEL_SIZE,
+            );
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
@@ -119,11 +107,7 @@ impl LynnServerThreadPool {
     #[deprecated(since = "v1.0.0", note = "No need to manually 'submit'")]
     pub(crate) async fn submit(
         &mut self,
-        task_body: (
-            Arc<AsyncFunc>,
-            InputBufVO,
-            ClientsStructType,
-        ),
+        task_body: (Arc<AsyncFunc>, InputBufVO, ClientsStructType),
     ) {
         let mut idx = self.index;
         let thread_index = idx % self.threads.0.len();

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use crate::app::{lynn_user_api::LynnUser};
+use crate::app::lynn_user_api::LynnUser;
 
 use super::{AsyncFunc, ClientsStructType, TaskBody};
 

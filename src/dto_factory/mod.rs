@@ -4,9 +4,7 @@ use tokio::sync::{RwLock, Semaphore};
 use tracing::{debug, warn};
 
 use crate::{
-    app::{
-        lynn_user_api::LynnUser, AsyncFunc, TaskBody,
-    },
+    app::{lynn_user_api::LynnUser, AsyncFunc, TaskBody},
     vo_factory::input_vo::InputBufVO,
 };
 

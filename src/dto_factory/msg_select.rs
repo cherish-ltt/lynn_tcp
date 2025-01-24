@@ -1,8 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-};
-
+use std::{net::SocketAddr, sync::Arc};
 
 use crate::{
     app::{lynn_user_api::LynnUser, TaskBody},
