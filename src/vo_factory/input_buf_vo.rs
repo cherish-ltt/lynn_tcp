@@ -15,7 +15,7 @@ pub struct InputBufVO {
     /// The current index in the data vector, used for reading data in chunks.
     index: usize,
     /// The address from which the data was received.
-    input_addr: SocketAddr,
+    input_addr: Option<SocketAddr>,
 }
 
 /// Implementation of methods for the `InputBufVO` struct.
@@ -42,7 +42,15 @@ impl InputBufVO {
         Self {
             data: buf,
             index: 3,
-            input_addr,
+            input_addr: Some(input_addr),
+        }
+    }
+
+    pub(crate) fn new_without_socket_addr(buf: Vec<u8>) -> Self {
+        Self {
+            data: buf,
+            index: 3,
+            input_addr: None,
         }
     }
 
@@ -53,7 +61,7 @@ impl InputBufVO {
     /// # Returns
     ///
     /// The input address.
-    pub fn get_input_addr(&self) -> SocketAddr {
+    pub fn get_input_addr(&self) -> Option<SocketAddr> {
         self.input_addr
     }
 }

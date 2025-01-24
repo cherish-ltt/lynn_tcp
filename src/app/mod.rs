@@ -28,7 +28,7 @@ use tracing_subscriber::fmt;
 use crate::{
     const_config::{DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE},
     dto_factory::input_dto_build,
-    server::HandlerResult,
+    lynn_tcp_dependents::HandlerResult,
     service::IService,
     vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
 };
@@ -248,7 +248,7 @@ impl<'a> LynnServer<'a> {
     /// * `last_communicate_time` - The last time the client communicated.
     pub(crate) async fn add_client(
         &self,
-        sender: mpsc::Sender<Vec<u8>>,
+        sender: mpsc::Sender<HandlerResult>,
         addr: SocketAddr,
         process_permit: Arc<Semaphore>,
         join_handle: JoinHandle<()>,
@@ -382,16 +382,19 @@ impl<'a> LynnServer<'a> {
                         self.lynn_thread_pool.task_body_sender.0.clone();
                     let message_header_mark = self.lynn_config.get_message_header_mark().clone();
                     let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
+                    let message_header_mark_clone = message_header_mark.clone();
+                    let message_tail_mark_clone = message_tail_mark.clone();
                     tokio::spawn(async move {
                         // Creates a channel for sending data to the client.
-                        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(DEFAULT_SYSTEM_CHANNEL_SIZE);
+                        let (tx, mut rx) =
+                            mpsc::channel::<HandlerResult>(DEFAULT_SYSTEM_CHANNEL_SIZE);
                         let last_communicate_time = Arc::new(Mutex::new(SystemTime::now()));
                         let addr = addr.clone();
                         let process_permit_clone = process_permit.clone();
                         let last_communicate_time_clone = last_communicate_time.clone();
                         // Spawns a new asynchronous task to handle each client connection.
                         let join_handle = tokio::spawn(async move {
-                            let mut stream = socket; // 获取TcpStream
+                            let stream = socket; // 获取TcpStream
                             let (mut read_half, mut write_half) = split(stream);
                             let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
                             let mut big_buf =
@@ -399,10 +402,19 @@ impl<'a> LynnServer<'a> {
                             let addr = addr;
                             // Write data to the client in a loop.
                             let join_handle = tokio::spawn(async move {
-                                while let Some(response_data) = rx.recv().await {
-                                    if let Err(e) = write_half.write_all(&response_data).await {
-                                        error!("Failed to write to socket: {}", e);
-                                        continue;
+                                while let Some(mut handler_result) = rx.recv().await {
+                                    if !handler_result.is_with_mark() {
+                                        handler_result.set_marks(
+                                            message_header_mark_clone.clone(),
+                                            message_tail_mark_clone.clone(),
+                                        );
+                                    }
+                                    if let Some(response_data) = handler_result.get_response_data()
+                                    {
+                                        if let Err(e) = write_half.write_all(&response_data).await {
+                                            error!("Failed to write to socket: {}", e);
+                                            continue;
+                                        }
                                     }
                                 }
                             });
@@ -412,28 +424,27 @@ impl<'a> LynnServer<'a> {
                                 match result {
                                     Ok(n) if n <= 0 => continue,
                                     Ok(n) => {
+                                        let last_communicate_time = last_communicate_time.clone();
+                                        tokio::spawn(async move {
+                                            let time_now = SystemTime::now();
+                                            let mut mutex = last_communicate_time.lock().await;
+                                            let guard = mutex.deref_mut();
+                                            let time_old = guard.clone();
+                                            match time_old.partial_cmp(&time_now) {
+                                                Some(std::cmp::Ordering::Less) => {
+                                                    *guard = time_now;
+                                                }
+                                                Some(
+                                                    std::cmp::Ordering::Equal
+                                                    | std::cmp::Ordering::Greater,
+                                                )
+                                                | None => {}
+                                            }
+                                        });
                                         big_buf.extend_from_slice(&buf[..n]);
                                         while big_buf.is_complete() {
                                             let mut input_buf_vo =
                                                 InputBufVO::new(big_buf.get_data(), addr);
-                                            let last_communicate_time =
-                                                last_communicate_time.clone();
-                                            tokio::spawn(async move {
-                                                let time_now = SystemTime::now();
-                                                let mut mutex = last_communicate_time.lock().await;
-                                                let guard = mutex.deref_mut();
-                                                let time_old = guard.clone();
-                                                match time_old.partial_cmp(&time_now) {
-                                                    Some(std::cmp::Ordering::Less) => {
-                                                        *guard = time_now;
-                                                    }
-                                                    Some(
-                                                        std::cmp::Ordering::Equal
-                                                        | std::cmp::Ordering::Greater,
-                                                    )
-                                                    | None => {}
-                                                }
-                                            });
                                             if let Some(method_id) = input_buf_vo.get_method_id() {
                                                 let guard = router_map_async.deref();
                                                 if let Some(map) = guard {
@@ -509,7 +520,13 @@ impl<'a> LynnServer<'a> {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::DEBUG)
             .finish();
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("failed to set global subscribers");
+        match tracing::subscriber::set_global_default(subscriber) {
+            Ok(_) => {
+                info!("Server - [log server] start sucess!!!")
+            },
+            Err(e) => {
+                warn!("set_global_default failed - e: {:?}", e)
+            },
+        }
     }
 }

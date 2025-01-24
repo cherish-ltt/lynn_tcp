@@ -1,4 +1,5 @@
 use bytes::BytesMut;
+use tracing::info;
 
 pub(crate) struct BigBufReader {
     data: BytesMut,
@@ -27,19 +28,28 @@ impl BigBufReader {
 
     pub(crate) fn check_data(&mut self) {
         if let Some(target_len) = self.target_len {
-            if self.data.len() > 10 + target_len && self.data.len() > 12 {
-                let mut data;
-                if target_len != 0 && target_len >= 2 {
-                    data = self.data.split_off(10 + target_len);
+            if target_len > 5 {
+                if self.data.len() > 10 + target_len && self.data.len() > 12 {
+                    let data;
+                    if target_len != 0 && target_len >= 2 {
+                        data = self.data.split_off(10 + target_len);
+                    } else {
+                        data = self.data.split_off(12);
+                    }
+                    self.data.clear();
+                    self.target_len = None;
+                    self.extend_from_slice(&data);
                 } else {
-                    data = self.data.split_off(12);
+                    self.data.clear();
+                    self.target_len = None;
+                    if let Some(buf) = &self.remaining_data {
+                        let buf = buf.clone();
+                        self.remaining_data = None;
+                        self.extend_from_slice(&buf);
+                    }
                 }
-                self.data.clear();
-                self.target_len = None;
-                self.extend_from_slice(&data);
             } else {
                 self.data.clear();
-                self.target_len = None;
                 if let Some(buf) = &self.remaining_data {
                     let buf = buf.clone();
                     self.remaining_data = None;
@@ -89,7 +99,7 @@ impl BigBufReader {
     }
 
     pub(crate) fn get_data(&mut self) -> Vec<u8> {
-        let result = self.data[10..self.target_len.unwrap() - 2].to_vec();
+        let result = self.data[10..self.target_len.unwrap() + 8].to_vec();
         self.check_data();
         result
     }
@@ -113,6 +123,12 @@ impl BigBufReader {
                     }
                 }
             }
+            if let Some(target_len) = self.target_len {
+                if target_len <= 5 && self.data.len() >= 7 {
+                    info!("heart");
+                    self.check_data();
+                }
+            }
             if self.target_len.is_none() {
                 let data_len = self.data.len();
                 if data_len >= 2 {
@@ -130,7 +146,7 @@ impl BigBufReader {
                                 self.data[8].clone(),
                                 self.data[9].clone(),
                             ]);
-                            self.target_len = Some(msg_len.try_into().unwrap_or(0));
+                            self.target_len = Some(msg_len.try_into().unwrap_or(5));
                         }
                     } else {
                         self.forced_clear();

@@ -5,13 +5,15 @@ use tokio::{
     task::JoinHandle,
 };
 
+use crate::lynn_tcp_dependents::HandlerResult;
+
 /// Represents a user in the Lynn system.
 ///
 /// This struct holds information about a user, including their sender channel, user ID,
 /// process permit, last communicate time, and associated thread.
 pub(crate) struct LynnUser {
     /// The sender channel used to send data to the client.
-    pub(crate) sender: mpsc::Sender<Vec<u8>>,
+    pub(crate) sender: mpsc::Sender<HandlerResult>,
     /// An optional user ID.
     pub(crate) user_id: Option<u64>,
     /// The process permit for the user.
@@ -37,7 +39,7 @@ impl LynnUser {
     ///
     /// A new instance of LynnUser.
     pub(crate) fn new(
-        sender: mpsc::Sender<Vec<u8>>,
+        sender: mpsc::Sender<HandlerResult>,
         process_permit: Arc<Semaphore>,
         join_handle: JoinHandle<()>,
         last_communicate_time: Arc<Mutex<SystemTime>>,
