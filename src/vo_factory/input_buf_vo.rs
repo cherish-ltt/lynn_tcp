@@ -196,4 +196,20 @@ impl InputBufVOTrait for InputBufVO {
             Some(String::from_utf8_lossy(bytes).to_string())
         }
     }
+
+    fn get_all_bytes(&self) -> Vec<u8> {
+        self.data.clone()
+    }
+
+    fn get_remaining_data_len(&self) -> usize {
+        let data_len = self.data.len();
+        let index = self.index;
+        if data_len <= 0 {
+            0
+        } else if data_len - 1 >= index {
+            data_len - index
+        } else {
+            0
+        }
+    }
 }
