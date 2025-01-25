@@ -1,6 +1,6 @@
 ## Lynn_tcp
 
-![](https://camo.githubusercontent.com/6581c31c16c1b13ddc2efb92e2ad69a93ddc4a92fd871ff15d401c4c6c9155a4/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f6c6963656e73652d4d49542d626c75652e737667)
+[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp)[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE)
 
 `Lynn_tcp` 是一个轻量级的tcp服务器框架
 
@@ -29,6 +29,8 @@
 在Cargo.toml上激活你所需的lynn_tcp功能：
 
 **full features**
+
+使用 `cargo add lynn_tcp` 或者:
 
 ```rust
 [dependencies]
@@ -159,7 +161,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 流程图
 
-[FlowChart.png](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png)
+[FlowChart.png](![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png?raw=true))
+
+![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png?raw=true)
 
 ### 版本介绍
 
