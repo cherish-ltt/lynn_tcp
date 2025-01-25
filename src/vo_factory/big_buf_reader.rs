@@ -46,26 +46,16 @@ impl BigBufReader {
     /// Checks the data in the buffer.
     pub(crate) fn check_data(&mut self) {
         if let Some(target_len) = self.target_len {
-            if target_len > 5 {
-                if self.data.len() > 10 + target_len && self.data.len() > 12 {
-                    let data;
-                    if target_len != 0 && target_len >= 2 {
-                        data = self.data.split_off(10 + target_len);
-                    } else {
-                        data = self.data.split_off(12);
-                    }
-                    self.data.clear();
-                    self.target_len = None;
-                    self.extend_from_slice(&data);
+            if self.data.len() > 10 + target_len && self.data.len() > 12 {
+                let data;
+                if target_len != 0 && target_len >= 2 {
+                    data = self.data.split_off(10 + target_len);
                 } else {
-                    self.data.clear();
-                    self.target_len = None;
-                    if let Some(buf) = &self.remaining_data {
-                        let buf = buf.clone();
-                        self.remaining_data = None;
-                        self.extend_from_slice(&buf);
-                    }
+                    data = self.data.split_off(12);
                 }
+                self.data.clear();
+                self.target_len = None;
+                self.extend_from_slice(&data);
             } else {
                 self.data.clear();
                 self.target_len = None;
@@ -119,12 +109,6 @@ impl BigBufReader {
     /// `true` if the buffer is complete, `false` otherwise.
     pub(crate) fn is_complete(&mut self) -> bool {
         if let Some(target_len) = self.target_len {
-            if target_len <= 5 && self.data.len() >= 7 {
-                self.check_data();
-                if self.target_len.is_none() {
-                    return false;
-                }
-            }
             if !self.is_empty()
                 && self.data.len() >= 10 + target_len.try_into().unwrap_or(0)
                 && self.data.len() >= 12
@@ -172,11 +156,6 @@ impl BigBufReader {
                         data.extend_from_slice(&bytes_mut);
                         self.remaining_data = Some(data)
                     }
-                }
-            }
-            if let Some(target_len) = self.target_len {
-                if target_len <= 5 && self.data.len() >= 7 {
-                    self.check_data();
                 }
             }
             if self.target_len.is_none() {

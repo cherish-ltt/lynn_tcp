@@ -12,6 +12,7 @@ use super::{AsyncFunc, ClientsStructType, TaskBody};
 pub struct HandlerResult {
     // A boolean indicating whether data should be sent.
     is_send: bool,
+    is_heart: bool,
     // Optional result data, containing a u64 number and a byte vector.
     result_data: Option<(u16, Vec<u8>)>,
     // Optional vector of socket addresses.
@@ -39,6 +40,7 @@ impl HandlerResult {
     ) -> Self {
         Self {
             is_send: true,
+            is_heart: false,
             result_data: Some((method_id, response_data)),
             addrs: Some(target_addrs),
             message_header_mark: None,
@@ -50,7 +52,19 @@ impl HandlerResult {
     pub fn new_with_send_to_server(method_id: u16, response_data: Vec<u8>) -> Self {
         Self {
             is_send: true,
+            is_heart: false,
             result_data: Some((method_id, response_data)),
+            addrs: None,
+            message_header_mark: None,
+            message_tail_mark: None,
+        }
+    }
+
+    pub(crate) fn new_with_send_heart_to_server() -> Self {
+        Self {
+            is_send: true,
+            is_heart: true,
+            result_data: Some((0_u16, Vec::new())),
             addrs: None,
             message_header_mark: None,
             message_tail_mark: None,
@@ -66,6 +80,7 @@ impl HandlerResult {
     pub fn new_without_send() -> Self {
         Self {
             is_send: false,
+            is_heart: false,
             result_data: None,
             addrs: None,
             message_header_mark: None,
@@ -116,7 +131,11 @@ impl HandlerResult {
                 }
 
                 let mut msg_len = 0_u64;
-                let constructor_id = 1_u8.to_be_bytes();
+                let constructor_id = if self.is_heart {
+                    2_u8.to_be_bytes()
+                } else {
+                    1_u8.to_be_bytes()
+                };
                 let method_id_bytes = method_id.to_be_bytes();
                 let bytes_body_len = bytes.len();
                 let msg_tail_len = 2_u64;

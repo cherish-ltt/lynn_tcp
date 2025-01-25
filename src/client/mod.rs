@@ -279,7 +279,7 @@ impl<'a> LynnClient<'a> {
                 loop {
                     interval.tick().await;
                     if let Err(e) = sender
-                        .send(HandlerResult::new_with_send_to_server(0_u16, vec![]))
+                        .send(HandlerResult::new_with_send_heart_to_server())
                         .await
                     {
                         error!("send to server failed - e: {:?}", e)
