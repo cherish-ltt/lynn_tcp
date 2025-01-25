@@ -457,32 +457,43 @@ impl<'a> LynnServer<'a> {
                                         while big_buf.is_complete() {
                                             let mut input_buf_vo =
                                                 InputBufVO::new(big_buf.get_data(), addr);
-                                            if let Some(method_id) = input_buf_vo.get_method_id() {
-                                                let guard = router_map_async.deref();
-                                                if let Some(map) = guard {
-                                                    if map.contains_key(&method_id) {
-                                                        let a = map.get(&method_id).unwrap();
-                                                        input_dto_build(
-                                                            addr,
-                                                            input_buf_vo,
-                                                            process_permit.clone(),
-                                                            clients_clone.clone(),
-                                                            a.clone(),
-                                                            thread_pool_task_body_sender_clone
-                                                                .clone(),
-                                                        )
-                                                        .await;
+                                            if let Some(constructor_id) =
+                                                input_buf_vo.get_constructor_id()
+                                            {
+                                                if constructor_id == 2 {
+                                                    continue;
+                                                } else if constructor_id == 1 {
+                                                    if let Some(method_id) =
+                                                        input_buf_vo.get_method_id()
+                                                    {
+                                                        let guard = router_map_async.deref();
+                                                        if let Some(map) = guard {
+                                                            if map.contains_key(&method_id) {
+                                                                let a =
+                                                                    map.get(&method_id).unwrap();
+                                                                input_dto_build(
+                                                                    addr,
+                                                                    input_buf_vo,
+                                                                    process_permit.clone(),
+                                                                    clients_clone.clone(),
+                                                                    a.clone(),
+                                                                    thread_pool_task_body_sender_clone
+                                                                        .clone(),
+                                                                )
+                                                                .await;
+                                                            } else {
+                                                                warn!(
+                                                                    "router_map_async no method match,{}",
+                                                                    method_id
+                                                                );
+                                                            }
+                                                        } else {
+                                                            warn!("server router is none");
+                                                        }
                                                     } else {
-                                                        warn!(
-                                                            "router_map_async no method match,{}",
-                                                            method_id
-                                                        );
+                                                        warn!("router_map_async input_buf_vo no method_id");
                                                     }
-                                                } else {
-                                                    warn!("server router is none");
                                                 }
-                                            } else {
-                                                warn!("router_map_async input_buf_vo no method_id");
                                             }
                                         }
                                     }
