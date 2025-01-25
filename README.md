@@ -139,15 +139,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #### Basic functions
 
-√ Tcp server
+ ✅ Tcp server
 
-√ Tcp client
+ ✅ Tcp client
 
-√ Custom message parsing
+ ✅ Custom message parsing
 
-√ Automatically clean sockets
+ ✅ Automatically clean sockets
 
-√ Routing service for asynchronous tasks
+ ✅ Routing service for asynchronous tasks
 
 > Note:
 >
