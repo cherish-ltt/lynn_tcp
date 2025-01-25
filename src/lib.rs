@@ -16,6 +16,10 @@ mod service;
 /// The VO factory module, responsible for creating value objects.
 mod vo_factory;
 
+pub extern crate tokio;
+pub extern crate tracing;
+pub extern crate tracing_subscriber;
+
 /// The server module, containing the server configuration API and server implementation.
 #[cfg(feature = "server")]
 pub mod lynn_server {
