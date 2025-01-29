@@ -8,20 +8,21 @@ use tracing::{error, info};
 
 use crate::{
     dto_factory::input_dto::{check_handler_result, HandlerResult},
+    handler::HandlerContext,
     vo_factory::input_vo::InputBufVO,
 };
 
 use super::{AsyncFunc, ClientsStructType, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
 
 type Threads = Vec<(
-    mpsc::Sender<(Arc<AsyncFunc>, InputBufVO, ClientsStructType)>,
+    mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>,
     JoinHandle<()>,
 )>;
 
 struct ThreadsStruct(Threads);
 pub(super) struct TaskBodyStruct(pub(super) TaskBody);
 
-type TaskBodyOutChannel = (Arc<AsyncFunc>, InputBufVO, ClientsStructType);
+type TaskBodyOutChannel = (Arc<AsyncFunc>, HandlerContext, ClientsStructType);
 /// A thread pool for handling tasks concurrently.
 pub(crate) struct LynnServerThreadPool {
     /// A vector of tuples containing the task sender and the join handle for each thread.
@@ -52,14 +53,15 @@ impl LynnServerThreadPool {
         let mut thread_task_body_rx_vec = Vec::new();
         for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
-            let (tx, mut rx) = mpsc::channel::<(Arc<AsyncFunc>, InputBufVO, ClientsStructType)>(
+            let (tx, mut rx) = mpsc::channel::<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>(
                 DEFAULT_SYSTEM_CHANNEL_SIZE,
             );
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
-                    if let Some((task, input_buf_vo, clients)) = rx.recv().await {
-                        let result = task(input_buf_vo).await;
+                    if let Some((task, context, clients)) = rx.recv().await {
+                        //let result = task(input_buf_vo).await;
+                        let result = task.handler(context).await;
                         if let Err(e) = tx_result.send((result, clients)).await {
                             error!("Failed to send result to result channel: {}", e);
                         }
@@ -107,7 +109,7 @@ impl LynnServerThreadPool {
     #[deprecated(since = "v1.0.0", note = "No need to manually 'submit'")]
     pub(crate) async fn submit(
         &mut self,
-        task_body: (Arc<AsyncFunc>, InputBufVO, ClientsStructType),
+        task_body: (Arc<AsyncFunc>, HandlerContext, ClientsStructType),
     ) {
         let mut idx = self.index;
         let thread_index = idx % self.threads.0.len();

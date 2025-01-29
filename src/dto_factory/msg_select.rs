@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use crate::{app::TaskBody, vo_factory::input_vo::InputBufVO};
+use crate::{app::TaskBody, handler::HandlerContext, vo_factory::input_vo::InputBufVO};
 
 use super::{
     input_dto::IHandlerCombinedTrait,
@@ -15,7 +15,7 @@ pub(crate) struct MsgSelect {
     /// The address from which the message was sent.
     pub(crate) addr: SocketAddr,
     /// The input buffer containing the message data.
-    pub(crate) input_buf_vo: InputBufVO,
+    pub(crate) handler_context: HandlerContext,
 }
 
 impl MsgSelect {
@@ -31,8 +31,11 @@ impl MsgSelect {
     /// # Returns
     ///
     /// A new `MsgSelect` instance.
-    pub(crate) fn new(addr: SocketAddr, input_buf_vo: InputBufVO) -> Self {
-        Self { addr, input_buf_vo }
+    pub(crate) fn new(addr: SocketAddr, handler_context: HandlerContext) -> Self {
+        Self {
+            addr,
+            handler_context,
+        }
     }
 }
 
@@ -96,7 +99,11 @@ impl IHandlerMethod for MsgSelect {
         thread_pool: TaskBody,
         clients: ClientsStructType,
     ) {
-        let task_body = (handler_method.clone(), self.input_buf_vo.clone(), clients);
+        let task_body = (
+            handler_method.clone(),
+            self.handler_context.clone(),
+            clients,
+        );
         thread_pool.send(task_body).await;
     }
 }

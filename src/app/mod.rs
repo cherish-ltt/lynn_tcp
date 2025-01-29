@@ -28,6 +28,7 @@ use tracing_subscriber::fmt;
 use crate::{
     const_config::{DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE},
     dto_factory::input_dto_build,
+    handler::{HandlerContext, IHandler, IntoSystem},
     lynn_tcp_dependents::HandlerResult,
     service::IService,
     vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
@@ -117,22 +118,20 @@ pub struct LynnServer<'a> {
     lynn_thread_pool: LynnServerThreadPool,
 }
 
-type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
-struct ClientsStruct(ClientsStructType);
+pub(crate) type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
+#[derive(Clone)]
+pub(crate) struct ClientsStruct(pub(crate) ClientsStructType);
 struct ClientChannelMapsStruct(Arc<Option<HashMap<SocketAddr, mpsc::Sender<Vec<u8>>>>>);
 struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
 struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 
-pub(crate) type AsyncFunc = Box<
-    dyn Fn(InputBufVO) -> Pin<Box<(dyn Future<Output = HandlerResult> + Send + 'static)>>
-        + Send
-        + Sync,
->;
+pub(crate) type AsyncFunc = Box<dyn IHandler>;
 #[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
 pub(crate) type SyncFunc = Arc<Box<dyn IService>>;
-pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, InputBufVO, ClientsStructType)>;
+pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
 
 #[macro_export]
+#[deprecated(since = "v1.1.0", note = "will delete on v1.1.1")]
 macro_rules! async_func_wrapper {
     ($async_func:ident) => {{
         type AsyncFunc = Box<
@@ -233,12 +232,12 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// The modified `LynnServer` instance.
-    pub fn add_router(mut self, method_id: u16, handler: AsyncFunc) -> Self {
+    pub fn add_router<Param>(mut self, method_id: u16, handler: impl IntoSystem<Param>) -> Self {
         if let Some(ref mut map) = self.router_maps.0 {
-            map.insert(method_id, Arc::new(handler));
+            map.insert(method_id, Arc::new(Box::new(handler.to_system())));
         } else {
-            let mut map = HashMap::new();
-            map.insert(method_id, Arc::new(handler));
+            let mut map: HashMap<u16, Arc<Box<dyn IHandler>>> = HashMap::new();
+            map.insert(method_id, Arc::new(Box::new(handler.to_system())));
             self.router_maps.0 = Some(map);
         }
         self
