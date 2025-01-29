@@ -55,53 +55,70 @@ pub(crate) mod lynn_thread_pool_api {
 /// # Example
 /// Use default config
 /// ```rust
-/// use lynn_tcp::{
-///     async_func_wrapper,
-///     lynn_server::{LynnServer, LynnServerConfigBuilder},
-///     lynn_tcp_dependents::*,
-/// };
-/// use std::pin::Pin;
-/// use std::future::Future;
+/// use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let _ = LynnServer::new().await.add_router(1, async_func_wrapper!(my_service)).start().await;
+///     let _ = LynnServer::new()
+///         .await
+///         .add_router(1, my_service)
+///         .add_router(2, my_service_with_buf)
+///         .add_router(3, my_service_with_clients)
+///         .start()
+///         .await;
 ///     Ok(())
 /// }
-/// pub async fn my_service(input_buf_vo: InputBufVO) -> HandlerResult {
-///     println!("service read from :{}", input_buf_vo.get_input_addr());
+///
+/// pub async fn my_service() -> HandlerResult {
 ///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_buf(input_buf_vo: InputBufVO) -> HandlerResult {
+///     println!(
+///         "service read from :{}",
+///         input_buf_vo.get_input_addr().unwrap()
+///     );
+///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
+///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 /// }
 /// ```
 /// # Example
 /// Use customized config
 /// ```rust
-/// use lynn_tcp::{
-///     async_func_wrapper,
-///     lynn_server::{LynnServer, LynnServerConfigBuilder},
-///     lynn_tcp_dependents::*,
-/// };
-/// use std::pin::Pin;
-/// use std::future::Future;
+/// use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let _ = LynnServer::new_with_config(
-///     LynnServerConfigBuilder::new()
-///         .with_server_ipv4("0.0.0.0:9177")
-///         .with_server_max_connections(Some(&200))
-///         .with_server_max_threadpool_size(&10)
-///         .build(),
-/// )
-/// .await
-/// .add_router(1, async_func_wrapper!(my_service))
-/// .start()
-/// .await;
-/// Ok(())
+///     let _ = LynnServer::new_with_config(
+///         LynnServerConfigBuilder::new()
+///             .with_server_ipv4("0.0.0.0:9177")
+///             .with_server_max_connections(Some(&200))
+///             .with_server_max_threadpool_size(&10)
+///             // ...more
+///             .build(),
+///         )
+///         .await
+///         .add_router(1, my_service)
+///         .add_router(2, my_service_with_buf)
+///         .add_router(3, my_service_with_clients)
+///         .start()
+///         .await;
+///     Ok(())
 /// }
-/// pub fn async my_service(input_buf_vo: InputBufVO) -> HandlerResult {
-///     println!("service read from :{}", input_buf_vo.get_input_addr());
+///
+/// pub async fn my_service() -> HandlerResult {
 ///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_buf(input_buf_vo: InputBufVO) -> HandlerResult {
+///     println!(
+///         "service read from :{}",
+///         input_buf_vo.get_input_addr().unwrap()
+///     );
+///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
+///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 /// }
 /// ```
 #[cfg(feature = "server")]

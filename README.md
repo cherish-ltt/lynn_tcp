@@ -36,56 +36,59 @@ Use `cargo add lynn_tcp` or:
 
 ```rust
 [dependencies]
-lynn_tcp = "1.0.3"
+lynn_tcp = "1.1.0"
 ```
 
 **server feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.0.3" , features = "server" }
+lynn_tcp = { version = "1.1.0" , features = "server" }
 ```
 
 **client feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.0.3" , features = "client" }
+lynn_tcp = { version = "1.1.0" , features = "client" }
 ```
 
 #### Server
 
 ```rust
-use lynn_tcp::{
-    async_func_wrapper,
-    lynn_server::{LynnServer, LynnServerConfigBuilder},
-    lynn_tcp_dependents::*,
-};
-use std::pin::Pin;
-use std::future::Future;
+use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = LynnServer::new().await.add_router(1, async_func_wrapper!(my_service)).start().await;
+    let _ = LynnServer::new()
+        .await
+        .add_router(1, my_service)
+        .add_router(2, my_service_with_buf)
+        .add_router(3, my_service_with_clients)
+        .start()
+        .await;
     Ok(())
 }
 
-pub async fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
-    println!("service read from :{}", input_buf_vo.get_input_addr());
+pub async fn my_service() -> HandlerResult {
     HandlerResult::new_without_send()
+}
+pub async fn my_service_with_buf(input_buf_vo: InputBufVO) -> HandlerResult {
+    println!(
+        "service read from :{}",
+        input_buf_vo.get_input_addr().unwrap()
+    );
+    HandlerResult::new_without_send()
+}
+pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
+    HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 }
 ```
 
 #### Server with config
 
 ```rust
-use lynn_tcp::{
-    async_func_wrapper,
-    lynn_server::{LynnServer, LynnServerConfigBuilder},
-    lynn_tcp_dependents::*,
-};
-use std::pin::Pin;
-use std::future::Future;
+use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -94,19 +97,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_server_ipv4("0.0.0.0:9177")
             .with_server_max_connections(Some(&200))
             .with_server_max_threadpool_size(&10)
-      			// ...more
+            // ...more
             .build(),
     )
     .await
-    .add_router(1, async_func_wrapper!(my_service))
+    .add_router(1, my_service)
+    .add_router(2, my_service_with_buf)
+    .add_router(3, my_service_with_clients)
     .start()
     .await;
     Ok(())
 }
 
-pub async fn my_service(input_buf_vo: &mut InputBufVO) -> HandlerResult {
-    println!("service read from :{}", input_buf_vo.get_input_addr());
+pub async fn my_service() -> HandlerResult {
     HandlerResult::new_without_send()
+}
+pub async fn my_service_with_buf(input_buf_vo: InputBufVO) -> HandlerResult {
+    println!(
+        "service read from :{}",
+        input_buf_vo.get_input_addr().unwrap()
+    );
+    HandlerResult::new_without_send()
+}
+pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
+    HandlerResult::new_with_send(
+        1,
+        "hello lynn".into(),
+        clients_context.get_all_clients_addrs().await,
+    )
 }
 ```
 
