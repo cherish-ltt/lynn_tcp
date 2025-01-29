@@ -4,14 +4,13 @@ use tokio::sync::{RwLock, Semaphore};
 use tracing::{debug, warn};
 
 use crate::{
-    app::{lynn_user_api::LynnUser, AsyncFunc, TaskBody},
+    app::{lynn_user_api::LynnUser, AsyncFunc, ClientsStruct, ClientsStructType, TaskBody},
+    handler::{ClientsContext, HandlerContext},
     vo_factory::input_vo::InputBufVO,
 };
 
 mod msg_select;
 mod router_handler;
-
-type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
 
 pub mod input_dto {
     pub(crate) use super::msg_select::*;
@@ -23,7 +22,7 @@ pub mod input_dto {
 
 pub(crate) async fn input_dto_build(
     addr: SocketAddr,
-    input_buf: InputBufVO,
+    input_buf_vo: InputBufVO,
     process_permit: Arc<Semaphore>,
     clients: ClientsStructType,
     handler_method: Arc<AsyncFunc>,
@@ -35,7 +34,13 @@ pub(crate) async fn input_dto_build(
         match result_permit {
             Ok(permit) => {
                 // If the permit is acquired successfully, create a new `MsgSelect` instance and spawn a handler task.
-                let result = MsgSelect::new(addr, input_buf);
+                let result = MsgSelect::new(
+                    addr,
+                    HandlerContext::new(
+                        input_buf_vo,
+                        ClientsContext::new(ClientsStruct(clients.clone())),
+                    ),
+                );
                 spawn_handler(result, clients, handler_method, thread_pool).await;
                 // Release the permit after the handler task is completed.
                 drop(permit);

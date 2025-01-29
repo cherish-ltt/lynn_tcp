@@ -46,6 +46,14 @@ impl InputBufVO {
         }
     }
 
+    pub(crate) fn new_none() -> Self {
+        Self {
+            data: Vec::new(),
+            index: 3,
+            input_addr: None,
+        }
+    }
+
     /// Creates a new `InputBufVO` instance without a socket address.
     ///
     /// This function takes a byte vector and returns a new `InputBufVO` instance

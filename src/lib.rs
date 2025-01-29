@@ -2,6 +2,7 @@
 #![allow(private_interfaces)]
 #![allow(private_bounds)]
 #![allow(deprecated)]
+#![allow(non_snake_case)]
 
 /// The application module, containing the server configuration API and server implementation.
 mod app;
@@ -11,6 +12,8 @@ mod client;
 mod const_config;
 /// The DTO factory module, responsible for creating data transfer objects.
 mod dto_factory;
+mod handler;
+mod macros;
 /// The service module, containing the application's business logic.
 mod service;
 /// The VO factory module, responsible for creating value objects.
@@ -29,6 +32,7 @@ pub mod lynn_server {
     pub use super::app::lynn_config_api::LynnServerConfigBuilder;
     /// The server implementation, handling incoming connections and requests.
     pub use super::app::LynnServer;
+    pub use super::handler::ClientsContext;
 }
 
 /// The TCP dependents module, containing common types used by both the server and client.

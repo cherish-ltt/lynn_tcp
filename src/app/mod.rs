@@ -28,6 +28,7 @@ use tracing_subscriber::fmt;
 use crate::{
     const_config::{DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE},
     dto_factory::input_dto_build,
+    handler::{HandlerContext, IHandler, IntoSystem},
     lynn_tcp_dependents::HandlerResult,
     service::IService,
     vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
@@ -54,53 +55,70 @@ pub(crate) mod lynn_thread_pool_api {
 /// # Example
 /// Use default config
 /// ```rust
-/// use lynn_tcp::{
-///     async_func_wrapper,
-///     lynn_server::{LynnServer, LynnServerConfigBuilder},
-///     lynn_tcp_dependents::*,
-/// };
-/// use std::pin::Pin;
-/// use std::future::Future;
+/// use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let _ = LynnServer::new().await.add_router(1, async_func_wrapper!(my_service)).start().await;
+///     let _ = LynnServer::new()
+///         .await
+///         .add_router(1, my_service)
+///         .add_router(2, my_service_with_buf)
+///         .add_router(3, my_service_with_clients)
+///         .start()
+///         .await;
 ///     Ok(())
 /// }
-/// pub async fn my_service(input_buf_vo: InputBufVO) -> HandlerResult {
-///     println!("service read from :{}", input_buf_vo.get_input_addr());
+///
+/// pub async fn my_service() -> HandlerResult {
 ///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_buf(input_buf_vo: InputBufVO) -> HandlerResult {
+///     println!(
+///         "service read from :{}",
+///         input_buf_vo.get_input_addr().unwrap()
+///     );
+///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
+///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 /// }
 /// ```
 /// # Example
 /// Use customized config
 /// ```rust
-/// use lynn_tcp::{
-///     async_func_wrapper,
-///     lynn_server::{LynnServer, LynnServerConfigBuilder},
-///     lynn_tcp_dependents::*,
-/// };
-/// use std::pin::Pin;
-/// use std::future::Future;
+/// use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let _ = LynnServer::new_with_config(
-///     LynnServerConfigBuilder::new()
-///         .with_server_ipv4("0.0.0.0:9177")
-///         .with_server_max_connections(Some(&200))
-///         .with_server_max_threadpool_size(&10)
-///         .build(),
-/// )
-/// .await
-/// .add_router(1, async_func_wrapper!(my_service))
-/// .start()
-/// .await;
-/// Ok(())
+///     let _ = LynnServer::new_with_config(
+///         LynnServerConfigBuilder::new()
+///             .with_server_ipv4("0.0.0.0:9177")
+///             .with_server_max_connections(Some(&200))
+///             .with_server_max_threadpool_size(&10)
+///             // ...more
+///             .build(),
+///         )
+///         .await
+///         .add_router(1, my_service)
+///         .add_router(2, my_service_with_buf)
+///         .add_router(3, my_service_with_clients)
+///         .start()
+///         .await;
+///     Ok(())
 /// }
-/// pub fn async my_service(input_buf_vo: InputBufVO) -> HandlerResult {
-///     println!("service read from :{}", input_buf_vo.get_input_addr());
+///
+/// pub async fn my_service() -> HandlerResult {
 ///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_buf(input_buf_vo: InputBufVO) -> HandlerResult {
+///     println!(
+///         "service read from :{}",
+///         input_buf_vo.get_input_addr().unwrap()
+///     );
+///     HandlerResult::new_without_send()
+/// }
+/// pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
+///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 /// }
 /// ```
 #[cfg(feature = "server")]
@@ -117,22 +135,20 @@ pub struct LynnServer<'a> {
     lynn_thread_pool: LynnServerThreadPool,
 }
 
-type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
-struct ClientsStruct(ClientsStructType);
+pub(crate) type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
+#[derive(Clone)]
+pub(crate) struct ClientsStruct(pub(crate) ClientsStructType);
 struct ClientChannelMapsStruct(Arc<Option<HashMap<SocketAddr, mpsc::Sender<Vec<u8>>>>>);
 struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
 struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 
-pub(crate) type AsyncFunc = Box<
-    dyn Fn(InputBufVO) -> Pin<Box<(dyn Future<Output = HandlerResult> + Send + 'static)>>
-        + Send
-        + Sync,
->;
+pub(crate) type AsyncFunc = Box<dyn IHandler>;
 #[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
 pub(crate) type SyncFunc = Arc<Box<dyn IService>>;
-pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, InputBufVO, ClientsStructType)>;
+pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
 
 #[macro_export]
+#[deprecated(since = "v1.1.0", note = "will delete on v1.1.1")]
 macro_rules! async_func_wrapper {
     ($async_func:ident) => {{
         type AsyncFunc = Box<
@@ -233,12 +249,12 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// The modified `LynnServer` instance.
-    pub fn add_router(mut self, method_id: u16, handler: AsyncFunc) -> Self {
+    pub fn add_router<Param>(mut self, method_id: u16, handler: impl IntoSystem<Param>) -> Self {
         if let Some(ref mut map) = self.router_maps.0 {
-            map.insert(method_id, Arc::new(handler));
+            map.insert(method_id, Arc::new(Box::new(handler.to_system())));
         } else {
-            let mut map = HashMap::new();
-            map.insert(method_id, Arc::new(handler));
+            let mut map: HashMap<u16, Arc<Box<dyn IHandler>>> = HashMap::new();
+            map.insert(method_id, Arc::new(Box::new(handler.to_system())));
             self.router_maps.0 = Some(map);
         }
         self

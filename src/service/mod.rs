@@ -4,7 +4,10 @@ use crate::{dto_factory::input_dto::HandlerResult, vo_factory::input_vo::InputBu
 ///
 /// This trait is used to define the behavior of services that can process `InputBufVO` and return a `HandlerResult`.
 /// It requires that the implementing type be `Send` and `Sync`, which means it can be safely sent between threads and accessed concurrently.
-#[deprecated(since = "v1.0.0", note = "use `async tasks` instead")]
+#[deprecated(
+    since = "v1.0.0",
+    note = "use `async tasks` instead , will delete on v1.1.1"
+)]
 pub(crate) trait IService: Send + Sync {
     /// Processes the given `InputBufVO` and returns a `HandlerResult`.
     ///
