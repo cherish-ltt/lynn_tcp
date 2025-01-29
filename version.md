@@ -1,6 +1,6 @@
 # Version Note
 
-### v1.0.x - release
+### v1.1.x - release
 
 #### v1.1.1 - release
 
@@ -13,6 +13,8 @@
 1.feat
 
 - Support asynchronous function tasks with different parameter routing
+
+### v1.0.x - release
 
 #### v1.0.3 - release
 
