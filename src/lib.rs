@@ -1,7 +1,7 @@
-// #![allow(unused)]
-// #![allow(private_interfaces)]
-// #![allow(private_bounds)]
-// #![allow(deprecated)]
+#![allow(unused)]
+#![allow(private_interfaces)]
+#![allow(private_bounds)]
+#![allow(deprecated)]
 #![allow(non_snake_case)]
 
 /// The application module, containing the server configuration API and server implementation.

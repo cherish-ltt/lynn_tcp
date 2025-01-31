@@ -25,10 +25,7 @@ use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 use crate::{
-    const_config::{
-        SERVER_MESSAGE_HEADER_MARK,
-        SERVER_MESSAGE_TAIL_MARK,
-    },
+    const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK},
     handler::{HandlerContext, IHandler, IntoSystem},
 };
 
