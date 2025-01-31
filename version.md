@@ -8,6 +8,22 @@
 
 - Overall performance optimization
 
+2.fix
+
+- Fix `LynnConfigBuilder` failed to export correctly
+
+3.refactor
+
+- Structural optimization and adjustment mainly focus on code readability and maintainability
+
+4.docs
+
+- Improve the crate documentation
+
+5.redundancy
+
+- Delete abandoned code
+
 #### v1.1.0 - release
 
 1.feat
