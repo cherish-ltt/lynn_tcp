@@ -1,10 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use crate::{app::TaskBody, handler::HandlerContext};
-
-use super::{
-    input_dto::IHandlerCombinedTrait, router_handler::IHandlerMethod, AsyncFunc, ClientsStructType,
+use crate::{
+    app::{AsyncFunc, ClientsStructType, TaskBody},
+    handler::HandlerContext,
 };
+
+use super::{input_dto::IHandlerCombinedTrait, router_handler::IHandlerMethod};
 
 /// A struct representing a message selection.
 ///

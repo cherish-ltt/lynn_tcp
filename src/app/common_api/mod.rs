@@ -16,13 +16,17 @@ use tokio::{
 use tracing::{error, info, warn};
 
 use crate::{
-    const_config::{DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE},
-    dto_factory::input_dto_build,
-    lynn_tcp_dependents::InputBufVO,
+    const_config::{
+        DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
+        DEFAULT_SYSTEM_CHANNEL_SIZE, SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK,
+    },
+    dto_factory::input_dto::{IHandlerCombinedTrait, MsgSelect},
+    handler::{ClientsContext, HandlerContext},
+    lynn_tcp_dependents::{HandlerResult, InputBufVO},
     vo_factory::big_buf::BigBufReader,
 };
 
-use super::{lynn_server_user::LynnUser, AsyncFunc, ClientsStructType, TaskBody};
+use super::{lynn_server_user::LynnUser, AsyncFunc, ClientsStruct, ClientsStructType, TaskBody};
 
 use crate::vo_factory::InputBufVOTrait;
 
@@ -202,4 +206,88 @@ pub(super) fn spawn_socket_server(
             guard.insert(addr, lynn_user);
         }
     });
+}
+
+/// A function for checking and sending a HandlerResult instance.
+///
+/// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
+#[inline(always)]
+pub(crate) async fn check_handler_result(
+    mut handler_result: HandlerResult,
+    clients: ClientsStructType,
+) {
+    tokio::spawn(async move {
+        // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
+        if handler_result.get_is_send() {
+            let response = handler_result.get_response_data();
+            if response.is_some() && handler_result.get_addrs().is_some() {
+                if !handler_result.is_with_mark() {
+                    handler_result.set_marks(
+                        *SERVER_MESSAGE_HEADER_MARK
+                            .get()
+                            .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
+                        *SERVER_MESSAGE_TAIL_MARK
+                            .get()
+                            .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
+                    );
+                }
+                let response = response.unwrap();
+                let mutex = clients.read().await;
+                let guard = mutex.deref();
+                if let Some(addrs) = handler_result.get_addrs() {
+                    for socket_addr in addrs {
+                        if guard.contains_key(&socket_addr) {
+                            if let Some(socket) = guard.get(&socket_addr) {
+                                socket.send_response(response.clone()).await;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+#[inline(always)]
+pub(crate) async fn input_dto_build(
+    addr: SocketAddr,
+    input_buf_vo: InputBufVO,
+    process_permit: Arc<Semaphore>,
+    clients: ClientsStructType,
+    handler_method: Arc<AsyncFunc>,
+    thread_pool: TaskBody,
+) {
+    tokio::spawn(async move {
+        // Attempt to acquire a permit from the semaphore.
+        let result_permit = process_permit.try_acquire();
+        match result_permit {
+            Ok(permit) => {
+                // If the permit is acquired successfully, create a new `MsgSelect` instance and spawn a handler task.
+                let result = MsgSelect::new(
+                    addr,
+                    HandlerContext::new(
+                        input_buf_vo,
+                        ClientsContext::new(ClientsStruct(clients.clone())),
+                    ),
+                );
+                spawn_handler(result, clients, handler_method, thread_pool).await;
+                // Release the permit after the handler task is completed.
+                drop(permit);
+            }
+            Err(_) => {
+                // If the permit cannot be acquired, log a warning.
+                warn!("addr:{} PROCESS_PERMIT_SIZE is full", addr)
+            }
+        }
+    });
+}
+
+#[inline(always)]
+async fn spawn_handler(
+    mut result: MsgSelect,
+    clients: ClientsStructType,
+    handler_method: Arc<AsyncFunc>,
+    thread_pool: TaskBody,
+) {
+    result.execute(clients, handler_method, thread_pool).await;
 }

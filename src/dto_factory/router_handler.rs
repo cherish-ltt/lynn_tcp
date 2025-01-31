@@ -1,13 +1,11 @@
-use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use bytes::{Buf, Bytes, BytesMut};
 
-use crate::const_config::{
-    DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, SERVER_MESSAGE_HEADER_MARK,
-    SERVER_MESSAGE_TAIL_MARK,
+use crate::{
+    app::{AsyncFunc, ClientsStructType, TaskBody},
+    const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK},
 };
-
-use super::{AsyncFunc, ClientsStructType, TaskBody};
 
 /// A struct representing the result of a handler.
 ///
@@ -211,44 +209,4 @@ pub(crate) trait IHandlerMethod {
         thread_pool: TaskBody,
         clients: ClientsStructType,
     );
-}
-
-/// A function for checking and sending a HandlerResult instance.
-///
-/// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
-#[inline]
-pub(crate) async fn check_handler_result(
-    mut handler_result: HandlerResult,
-    clients: ClientsStructType,
-) {
-    tokio::spawn(async move {
-        // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
-        if handler_result.get_is_send() {
-            let response = handler_result.get_response_data();
-            if response.is_some() && handler_result.get_addrs().is_some() {
-                if !handler_result.is_with_mark() {
-                    handler_result.set_marks(
-                        *SERVER_MESSAGE_HEADER_MARK
-                            .get()
-                            .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
-                        *SERVER_MESSAGE_TAIL_MARK
-                            .get()
-                            .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
-                    );
-                }
-                let response = response.unwrap();
-                let mutex = clients.read().await;
-                let guard = mutex.deref();
-                if let Some(addrs) = handler_result.get_addrs() {
-                    for socket_addr in addrs {
-                        if guard.contains_key(&socket_addr) {
-                            if let Some(socket) = guard.get(&socket_addr) {
-                                socket.send_response(response.clone()).await;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    });
 }
