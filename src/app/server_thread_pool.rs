@@ -7,11 +7,10 @@ use tokio::{
 use tracing::{error, info};
 
 use crate::{
-    dto_factory::input_dto::{check_handler_result, HandlerResult},
-    handler::HandlerContext,
+    const_config::DEFAULT_SYSTEM_CHANNEL_SIZE, dto_factory::input_dto::{check_handler_result, HandlerResult}, handler::HandlerContext
 };
 
-use super::{AsyncFunc, ClientsStructType, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
+use super::{AsyncFunc, ClientsStructType, TaskBody};
 
 type Threads = Vec<(
     mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>,

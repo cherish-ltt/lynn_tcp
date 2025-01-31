@@ -40,7 +40,7 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
-    #[cfg(any(feature = "server", feature = "client"))]
+    #[cfg(feature = "server")]
     pub fn new_with_send(
         method_id: u16,
         response_data: Vec<u8>,
@@ -169,41 +169,6 @@ impl HandlerResult {
             }
             None => None,
         }
-    }
-}
-
-/// A struct representing the data for a handler.
-///
-/// This struct contains an optional HashMap with u64 keys and byte vector values.
-pub(crate) struct HandlerData {
-    // Optional HashMap with u64 keys and byte vector values.
-    pub(crate) data_map: Option<HashMap<u64, Vec<u8>>>,
-}
-
-/// Implementation of methods for the HandlerData struct.
-impl HandlerData {
-    /// Creates a new HandlerData instance with a data map containing the provided data.
-    ///
-    /// # Parameters
-    ///
-    /// * `data`: The data as a HashMap with u64 keys and byte vector values.
-    ///
-    /// # Returns
-    ///
-    /// A new HandlerData instance.
-    pub(crate) fn new_with_data(data: HashMap<u64, Vec<u8>>) -> Self {
-        Self {
-            data_map: Some(data),
-        }
-    }
-
-    /// Creates a new HandlerData instance without a data map.
-    ///
-    /// # Returns
-    ///
-    /// A new HandlerData instance.
-    pub(crate) fn new_without_data() -> Self {
-        Self { data_map: None }
     }
 }
 
