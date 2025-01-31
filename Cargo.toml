@@ -1,19 +1,19 @@
 [package]
 name = "lynn_tcp"
-version = "1.1.0"
+version = "1.1.1"
 edition = "2021"
 rust-version = "1.83"
 authors = ["lynn_tcp Contributors"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/cherish-ltt/lynn_tcp"
-description = "Lightweight Tcp framework"
+description = "Lightweight asynchronous TCP framework"
 categories = ["network-programming"]
-keywords = ["tcp" , "tcp-server" , "tcp_client"]
+keywords = ["tcp" , "tcp-server" , "tcp-client" , "network"]
 
 [dependencies]
 bytes = "1.9"
-tokio = { version = "1", features = ["macros","net","sync","rt-multi-thread","time","io-util"] }
+tokio = { version = "1.43", features = ["macros","net","sync","rt-multi-thread","time","io-util"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
