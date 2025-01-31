@@ -151,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Features
 
 - `server`: Provide customizable TCP services that can easily achieve multi-user long connections and concurrent processing capabilities, with services for different routes
-- `client`: Provide custom TCP clients that can send messages to TCP servers and receive messages from servers, with different routing services
+- `client`: Provides a custom TCP client that sends and receives messages to and from a TCP server
 
 ### Road maps
 
