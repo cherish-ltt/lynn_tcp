@@ -25,7 +25,7 @@ use super::{lynn_server_user::LynnUser, AsyncFunc, ClientsStructType, TaskBody};
 
 use crate::vo_factory::InputBufVOTrait;
 
-#[inline]
+#[inline(always)]
 pub(super) fn spawn_check_heart(
     server_check_heart_interval: u64,
     server_check_heart_timeout_time: u64,
@@ -80,7 +80,7 @@ pub(super) fn spawn_check_heart(
     });
 }
 
-#[inline]
+#[inline(always)]
 pub(super) fn spawn_socket_server(
     addr: SocketAddr,
     process_permit: Arc<Semaphore>,

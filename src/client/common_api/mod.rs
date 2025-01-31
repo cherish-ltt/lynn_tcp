@@ -15,7 +15,7 @@ use crate::{
     vo_factory::big_buf::BigBufReader,
 };
 
-#[inline]
+#[inline(always)]
 pub(super) fn spawn_handle(
     stream: TcpStream,
     channel_size: usize,
@@ -70,7 +70,7 @@ pub(super) fn spawn_handle(
     (tx_write, rx_read, join_handle)
 }
 
-#[inline]
+#[inline(always)]
 pub(super) fn spawn_check_heart(interval_time: u64, sender: mpsc::Sender<HandlerResult>) {
     tokio::spawn(async move {
         info!(
