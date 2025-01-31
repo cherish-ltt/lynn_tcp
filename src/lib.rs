@@ -7,11 +7,11 @@
 //! `Lynn_tcp` is a lightweight TCP server framework
 //! ## Keywords
 //! **Lightweight**: concise code that is easier to learn and use
-//! 
+//!
 //! **Concurrent and Performance**: Based on Tokio's excellent asynchronous performance, it is easy to achieve concurrent processing capabilities for multi-user links
-//! 
+//!
 //! **Lower latency**: Design with read and write separation to achieve lower latency
-//! 
+//!
 //! **Security**: Code written with strong typing and memory safety in Rust
 //! ## Features
 //! - **server**: Provide customizable TCP services that can easily achieve multi-user long connections and concurrent processing capabilities, with services for different routes
