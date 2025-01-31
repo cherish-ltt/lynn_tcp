@@ -1,6 +1,9 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
-use crate::const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK};
+use crate::const_config::{
+    DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, SERVER_MESSAGE_HEADER_MARK,
+    SERVER_MESSAGE_TAIL_MARK,
+};
 
 use super::{AsyncFunc, ClientsStructType, TaskBody};
 
@@ -10,14 +13,19 @@ use super::{AsyncFunc, ClientsStructType, TaskBody};
 #[cfg(any(feature = "server", feature = "client"))]
 #[derive(Clone)]
 pub struct HandlerResult {
-    // A boolean indicating whether data should be sent.
+    /// A boolean indicating whether data should be sent.
     is_send: bool,
+    /// A boolean indicating whether the message is a heartbeat message.
     is_heart: bool,
     // Optional result data, containing a u64 number and a byte vector.
     result_data: Option<(u16, Vec<u8>)>,
     // Optional vector of socket addresses.
     addrs: Option<Vec<SocketAddr>>,
+    /// Optional message header mark, used to identify the start of a message.
+    /// The default value is `DEFAULT_MESSAGE_HEADER_MARK`(9177).
     message_header_mark: Option<u16>,
+    /// Optional message tail mark, used to identify the end of a message.
+    /// The default value is `DEFAULT_MESSAGE_TAIL_MARK`(7719).
     message_tail_mark: Option<u16>,
 }
 
@@ -32,7 +40,7 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
-    #[cfg(feature = "server")]
+    #[cfg(any(feature = "server", feature = "client"))]
     pub fn new_with_send(
         method_id: u16,
         response_data: Vec<u8>,
@@ -60,6 +68,7 @@ impl HandlerResult {
         }
     }
 
+    #[cfg(feature = "client")]
     pub(crate) fn new_with_send_heart_to_server() -> Self {
         Self {
             is_send: true,
@@ -76,7 +85,7 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
-    #[cfg(feature = "server")]
+    #[cfg(any(feature = "server", feature = "client"))]
     pub fn new_without_send() -> Self {
         Self {
             is_send: false,
@@ -201,7 +210,7 @@ impl HandlerData {
 /// A trait representing a combined handler method and data.
 ///
 /// This trait combines the IHandlerMethod and IHandlerData traits.
-pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
+pub(crate) trait IHandlerCombinedTrait: IHandlerMethod {
     /// Executes the handler logic and sends a HandlerResult instance through a channel.
     ///
     /// # Parameters
@@ -216,18 +225,6 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
     }
-}
-
-/// A trait representing the data for a handler.
-///
-/// This trait provides methods for getting the handler data and method ID.
-pub(crate) trait IHandlerData {
-    /// Gets the handler data.
-    ///
-    /// # Returns
-    ///
-    /// The handler data as a HandlerData instance.
-    fn get_data(&self) -> HandlerData;
 }
 
 /// A trait representing a handler method.
@@ -252,30 +249,37 @@ pub(crate) trait IHandlerMethod {
 /// A function for checking and sending a HandlerResult instance.
 ///
 /// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
+#[inline]
 pub(crate) async fn check_handler_result(
-    handler_result: HandlerResult,
+    mut handler_result: HandlerResult,
     clients: ClientsStructType,
 ) {
     tokio::spawn(async move {
         // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
         if handler_result.get_is_send() {
-            let mut socket_vec = vec![];
             let response = handler_result.get_response_data();
-            {
+            if response.is_some() && handler_result.get_addrs().is_some() {
+                if !handler_result.is_with_mark() {
+                    handler_result.set_marks(
+                        *SERVER_MESSAGE_HEADER_MARK
+                            .get()
+                            .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
+                        *SERVER_MESSAGE_TAIL_MARK
+                            .get()
+                            .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
+                    );
+                }
+                let response = response.unwrap();
                 let mutex = clients.read().await;
                 let guard = mutex.deref();
                 if let Some(addrs) = handler_result.get_addrs() {
-                    for i in addrs {
-                        if guard.contains_key(&i) {
-                            socket_vec.push(guard.get(&i).unwrap().sender.clone());
+                    for socket_addr in addrs {
+                        if guard.contains_key(&socket_addr) {
+                            if let Some(socket) = guard.get(&socket_addr) {
+                                socket.send_response(response.clone()).await;
+                            }
                         }
                     }
-                }
-            }
-            if !socket_vec.is_empty() && response.is_some() {
-                for i in socket_vec {
-                    let response = handler_result.clone();
-                    let _ = i.send(response).await;
                 }
             }
         }

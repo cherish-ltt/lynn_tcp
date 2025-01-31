@@ -4,10 +4,8 @@ mod server_thread_pool;
 
 use std::{
     collections::HashMap,
-    future::Future,
     net::SocketAddr,
     ops::{Deref, DerefMut},
-    pin::Pin,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -18,7 +16,7 @@ use server_thread_pool::LynnServerThreadPool;
 use tokio::{
     io::{split, AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
-    sync::{mpsc, Mutex, RwLock, Semaphore},
+    sync::{mpsc, RwLock, Semaphore},
     task::JoinHandle,
     time::interval,
 };
@@ -26,25 +24,18 @@ use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 use crate::{
-    const_config::{DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE},
+    const_config::{
+        DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE, SERVER_MESSAGE_HEADER_MARK,
+        SERVER_MESSAGE_TAIL_MARK,
+    },
     dto_factory::input_dto_build,
     handler::{HandlerContext, IHandler, IntoSystem},
-    lynn_tcp_dependents::HandlerResult,
-    service::IService,
     vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
 };
-
-pub(crate) mod lynn_user_api {
-    pub(crate) use super::lynn_server_user::LynnUser;
-}
 
 pub mod lynn_config_api {
     pub use super::lynn_server_config::LynnServerConfig;
     pub use super::lynn_server_config::LynnServerConfigBuilder;
-}
-
-pub(crate) mod lynn_thread_pool_api {
-    pub(crate) use super::server_thread_pool::LynnServerThreadPool;
 }
 
 /// Represents a server for the Lynn application.
@@ -125,7 +116,6 @@ pub(crate) mod lynn_thread_pool_api {
 pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: ClientsStruct,
-    client_channel_maps: ClientChannelMapsStruct,
     /// A map of routes, where the key is a method ID and the value is a service handler.
     router_map_async: RouterMapAsyncStruct,
     router_maps: RouterMapsStruct,
@@ -138,13 +128,10 @@ pub struct LynnServer<'a> {
 pub(crate) type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
 #[derive(Clone)]
 pub(crate) struct ClientsStruct(pub(crate) ClientsStructType);
-struct ClientChannelMapsStruct(Arc<Option<HashMap<SocketAddr, mpsc::Sender<Vec<u8>>>>>);
 struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
 struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 
 pub(crate) type AsyncFunc = Box<dyn IHandler>;
-#[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
-pub(crate) type SyncFunc = Arc<Box<dyn IService>>;
 pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
 
 #[macro_export]
@@ -178,7 +165,6 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
             clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
@@ -205,7 +191,6 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
             clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
@@ -229,7 +214,6 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
             clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
@@ -276,11 +260,11 @@ impl<'a> LynnServer<'a> {
     /// * `last_communicate_time` - The last time the client communicated.
     pub(crate) async fn add_client(
         &self,
-        sender: mpsc::Sender<HandlerResult>,
+        sender: mpsc::Sender<Vec<u8>>,
         addr: SocketAddr,
         process_permit: Arc<Semaphore>,
         join_handle: JoinHandle<()>,
-        last_communicate_time: Arc<Mutex<SystemTime>>,
+        last_communicate_time: Arc<RwLock<SystemTime>>,
     ) {
         let mut clients = self.clients.0.write().await;
         let guard = clients.deref_mut();
@@ -321,10 +305,11 @@ impl<'a> LynnServer<'a> {
                 interval.tick().await;
                 let mut remove_list = vec![];
                 {
-                    let mut clients_mutex = clients.read().await;
+                    let clients_mutex = clients.read().await;
                     let guard = clients_mutex.deref();
                     for (addr, lynn_user) in guard.iter() {
-                        let last_communicate_time = lynn_user.last_communicate_time.lock().await;
+                        let last_communicate_time = lynn_user.get_last_communicate_time();
+                        let last_communicate_time = last_communicate_time.read().await;
                         let time_old = last_communicate_time.deref().clone();
                         let time_now = SystemTime::now();
                         match time_old.partial_cmp(&time_now) {
@@ -363,8 +348,9 @@ impl<'a> LynnServer<'a> {
 
     pub async fn start(mut self: Self) {
         self.synchronous_router().await;
+        self.init_marks().await;
         let server_arc = Arc::new(self);
-        server_arc.run().await;
+        let _ = server_arc.run().await;
     }
 
     /// Starts the server and begins listening for client connections.
@@ -410,13 +396,10 @@ impl<'a> LynnServer<'a> {
                         self.lynn_thread_pool.task_body_sender.0.clone();
                     let message_header_mark = self.lynn_config.get_message_header_mark().clone();
                     let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
-                    let message_header_mark_clone = message_header_mark.clone();
-                    let message_tail_mark_clone = message_tail_mark.clone();
                     tokio::spawn(async move {
                         // Creates a channel for sending data to the client.
-                        let (tx, mut rx) =
-                            mpsc::channel::<HandlerResult>(DEFAULT_SYSTEM_CHANNEL_SIZE);
-                        let last_communicate_time = Arc::new(Mutex::new(SystemTime::now()));
+                        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(DEFAULT_SYSTEM_CHANNEL_SIZE);
+                        let last_communicate_time = Arc::new(RwLock::new(SystemTime::now()));
                         let addr = addr.clone();
                         let process_permit_clone = process_permit.clone();
                         let last_communicate_time_clone = last_communicate_time.clone();
@@ -430,19 +413,10 @@ impl<'a> LynnServer<'a> {
                             let addr = addr;
                             // Write data to the client in a loop.
                             let join_handle = tokio::spawn(async move {
-                                while let Some(mut handler_result) = rx.recv().await {
-                                    if !handler_result.is_with_mark() {
-                                        handler_result.set_marks(
-                                            message_header_mark_clone.clone(),
-                                            message_tail_mark_clone.clone(),
-                                        );
-                                    }
-                                    if let Some(response_data) = handler_result.get_response_data()
-                                    {
-                                        if let Err(e) = write_half.write_all(&response_data).await {
-                                            error!("Failed to write to socket: {}", e);
-                                            continue;
-                                        }
+                                while let Some(response) = rx.recv().await {
+                                    if let Err(e) = write_half.write_all(&response).await {
+                                        error!("Failed to write to socket: {}", e);
+                                        continue;
                                     }
                                 }
                             });
@@ -455,7 +429,7 @@ impl<'a> LynnServer<'a> {
                                         let last_communicate_time = last_communicate_time.clone();
                                         tokio::spawn(async move {
                                             let time_now = SystemTime::now();
-                                            let mut mutex = last_communicate_time.lock().await;
+                                            let mut mutex = last_communicate_time.write().await;
                                             let guard = mutex.deref_mut();
                                             let time_old = guard.clone();
                                             match time_old.partial_cmp(&time_now) {
@@ -554,6 +528,11 @@ impl<'a> LynnServer<'a> {
                 }
             }
         }
+    }
+
+    pub(crate) async fn init_marks(&self) {
+        SERVER_MESSAGE_HEADER_MARK.get_or_init(|| *self.lynn_config.get_message_header_mark());
+        SERVER_MESSAGE_TAIL_MARK.get_or_init(|| *self.lynn_config.get_message_tail_mark());
     }
 
     /// Logs server information.
