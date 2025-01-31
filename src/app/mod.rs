@@ -134,24 +134,6 @@ struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 pub(crate) type AsyncFunc = Box<dyn IHandler>;
 pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
 
-#[macro_export]
-#[deprecated(since = "v1.1.0", note = "will delete on v1.1.1")]
-macro_rules! async_func_wrapper {
-    ($async_func:ident) => {{
-        type AsyncFunc = Box<
-            dyn Fn(InputBufVO) -> Pin<Box<(dyn Future<Output = HandlerResult> + Send + 'static)>>
-                + Send
-                + Sync,
-        >;
-        let wrapper = move |input_buf_vo: InputBufVO| {
-            let fut: Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>> =
-                Box::pin($async_func(input_buf_vo));
-            fut
-        };
-        Box::new(wrapper) as AsyncFunc
-    }};
-}
-
 /// Implementation of methods for the LynnServer struct.
 impl<'a> LynnServer<'a> {
     /// Creates a new instance of `LynnServer` with default configuration.
