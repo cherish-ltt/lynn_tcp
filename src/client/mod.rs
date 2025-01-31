@@ -1,23 +1,15 @@
+mod common_api;
 mod lynn_client_config;
 
 use std::time::Duration;
 
+use common_api::{spawn_check_heart, spawn_handle};
 use lynn_client_config::{LynnClientConfig, LynnClientConfigBuilder};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-    sync::mpsc,
-    task::JoinHandle,
-    time::{self, interval},
-};
+use tokio::{net::TcpStream, sync::mpsc, task::JoinHandle, time};
 use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
-use crate::{
-    const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-    lynn_tcp_dependents::{HandlerResult, InputBufVO},
-    vo_factory::big_buf::BigBufReader,
-};
+use crate::lynn_tcp_dependents::{HandlerResult, InputBufVO};
 
 pub mod client_config {
     pub use super::lynn_client_config::LynnClientConfig;
@@ -30,7 +22,7 @@ pub mod client_config {
 /// It uses a configuration object to specify the server's IP address and other settings.
 /// The client runs in a separate task and uses channels to communicate with the main task.
 /// # Example
-/// Use default config
+/// Use default config (If you want to use custom configuration, please use `LynnClientConfigBuilder`)
 /// ```rust
 /// use lynn_tcp::{
 ///     lynn_client::LynnClient,
@@ -126,11 +118,7 @@ impl<'a> LynnClient<'a> {
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let retry_count = 3;
         let timeout = Duration::from_secs(3);
-        let ip_v4 = self
-            .lynn_client_config
-            .get_server_ipv4()
-            .clone()
-            .to_string();
+        let ip_v4 = self.lynn_client_config.get_server_ipv4().to_string();
         let channel_size = self
             .lynn_client_config
             .get_client_single_channel_size()
@@ -141,54 +129,12 @@ impl<'a> LynnClient<'a> {
             match time::timeout(timeout, TcpStream::connect(ip_v4.clone())).await {
                 Ok(stream) => {
                     if let Ok(stream) = stream {
-                        let (tx_read, rx_read) = mpsc::channel::<InputBufVO>(channel_size);
-                        let (tx_write, mut rx_write) = mpsc::channel::<HandlerResult>(channel_size);
-                        let join_handle = tokio::spawn(async move {
-                            let (mut read_half, mut write_half) = tokio::io::split(stream);
-                            let message_header_mark_clone = message_header_mark.clone();
-                            let message_tail_mark_clone = message_tail_mark.clone();
-                            tokio::spawn(async move {
-                                while let Some(mut handler_result) = rx_write.recv().await {
-                                    if !handler_result.is_with_mark() {
-                                        handler_result.set_marks(
-                                            message_header_mark_clone.clone(),
-                                            message_tail_mark_clone.clone(),
-                                        );
-                                    }
-                                    if let Some(response) = handler_result.get_response_data() {
-                                        if let Err(e) = write_half.write_all(&response).await {
-                                            error!("write to server failed - e: {:?}", e);
-                                        }
-                                    } else {
-                                        warn!("nothing to send");
-                                    }
-                                }
-                            });
-                            let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
-                            let mut big_buf =
-                                BigBufReader::new(message_header_mark, message_tail_mark);
-                            loop {
-                                match read_half.read(&mut buf).await {
-                                    Ok(n) if n <= 0 => {
-                                        continue;
-                                    }
-                                    Ok(n) => {
-                                        big_buf.extend_from_slice(&buf[..n]);
-                                        while big_buf.is_complete() {
-                                            let input_buf_vo = InputBufVO::new_without_socket_addr(
-                                                big_buf.get_data(),
-                                            );
-                                            if let Err(e) = tx_read.send(input_buf_vo).await {
-                                                error!("send to channel failed - e: {:?}", e);
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("read from server failed : {}", e);
-                                    }
-                                }
-                            }
-                        });
+                        let (tx_write, rx_read, join_handle) = spawn_handle(
+                            stream,
+                            channel_size,
+                            message_header_mark,
+                            message_tail_mark,
+                        );
                         self.tx_write = Some(tx_write);
                         self.rx_read = Some(rx_read);
                         self.connection_join_handle = Some(join_handle);
@@ -270,22 +216,7 @@ impl<'a> LynnClient<'a> {
             .get_server_check_heart_interval()
             .clone();
         if let Some(sender) = self.get_sender().await {
-            tokio::spawn(async move {
-                info!(
-                    "Client - [check heart] start sucess!!! with [client_check_heart_interval:{}s]",
-                    interval_time
-                );
-                let mut interval = interval(Duration::from_secs(interval_time));
-                loop {
-                    interval.tick().await;
-                    if let Err(e) = sender
-                        .send(HandlerResult::new_with_send_heart_to_server())
-                        .await
-                    {
-                        error!("send to server failed - e: {:?}", e)
-                    }
-                }
-            });
+            spawn_check_heart(interval_time, sender);
         } else {
             warn!("Client - [check heart] start failed!!!");
         }

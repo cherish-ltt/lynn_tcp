@@ -1,6 +1,6 @@
 ## Lynn_tcp
 
-[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp)  [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp)  [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE) [![doc](https://docs.rs/axum/badge.svg)](https://crates.io/crates/lynn_tcp)
 
 English|[简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/README_ZH.md)
 
@@ -36,21 +36,21 @@ Use `cargo add lynn_tcp` or:
 
 ```rust
 [dependencies]
-lynn_tcp = "1.1.0"
+lynn_tcp = "1.1.1"
 ```
 
 **server feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.0" , features = "server" }
+lynn_tcp = { version = "1.1.1" , features = "server" }
 ```
 
 **client feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.0" , features = "client" }
+lynn_tcp = { version = "1.1.1" , features = "client" }
 ```
 
 #### Server
@@ -151,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Features
 
 - `server`: Provide customizable TCP services that can easily achieve multi-user long connections and concurrent processing capabilities, with services for different routes
-- `client`: Provide custom TCP clients that can send messages to TCP servers and receive messages from servers, with different routing services
+- `client`: Provides a custom TCP client that sends and receives messages to and from a TCP server
 
 ### Road maps
 

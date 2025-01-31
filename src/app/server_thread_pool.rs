@@ -7,12 +7,11 @@ use tokio::{
 use tracing::{error, info};
 
 use crate::{
-    dto_factory::input_dto::{check_handler_result, HandlerResult},
-    handler::HandlerContext,
-    vo_factory::input_vo::InputBufVO,
+    app::common_api::check_handler_result, const_config::DEFAULT_SYSTEM_CHANNEL_SIZE,
+    dto_factory::input_dto::HandlerResult, handler::HandlerContext,
 };
 
-use super::{AsyncFunc, ClientsStructType, TaskBody, DEFAULT_SYSTEM_CHANNEL_SIZE};
+use super::{AsyncFunc, ClientsStructType, TaskBody};
 
 type Threads = Vec<(
     mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>,
@@ -72,7 +71,7 @@ impl LynnServerThreadPool {
             thread_task_body_rx_vec.push(tx);
         }
 
-        let join_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut index = 0;
             let thread_len = thread_task_body_rx_vec.len();
             let mut task_body_rx = task_body_rx;
@@ -99,29 +98,6 @@ impl LynnServerThreadPool {
         .spawn_handler_result(rx_result)
         .await;
         lynn_thread_pool
-    }
-
-    /// Submits a task to the thread pool for execution.
-    ///
-    /// # Parameters
-    ///
-    /// * `task_body` - A tuple containing the service, input buffer, and client map.
-    #[deprecated(since = "v1.0.0", note = "No need to manually 'submit'")]
-    pub(crate) async fn submit(
-        &mut self,
-        task_body: (Arc<AsyncFunc>, HandlerContext, ClientsStructType),
-    ) {
-        let mut idx = self.index;
-        let thread_index = idx % self.threads.0.len();
-        idx += 1;
-        if let Some((tx, _)) = self.threads.0.get_mut(thread_index) {
-            tx.send(task_body).await.unwrap_or_else(|e| {
-                error!("send task to thread-{} err: {}", thread_index, e);
-            });
-        }
-        if idx >= self.threads.0.len() {
-            self.index = 0;
-        }
     }
 
     /// Spawns a new task to handle the results of completed tasks.

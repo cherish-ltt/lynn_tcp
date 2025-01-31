@@ -1,8 +1,11 @@
-use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
-use crate::const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK};
+use bytes::{Buf, Bytes, BytesMut};
 
-use super::{AsyncFunc, ClientsStructType, TaskBody};
+use crate::{
+    app::{AsyncFunc, ClientsStructType, TaskBody},
+    const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK},
+};
 
 /// A struct representing the result of a handler.
 ///
@@ -10,14 +13,19 @@ use super::{AsyncFunc, ClientsStructType, TaskBody};
 #[cfg(any(feature = "server", feature = "client"))]
 #[derive(Clone)]
 pub struct HandlerResult {
-    // A boolean indicating whether data should be sent.
+    /// A boolean indicating whether data should be sent.
     is_send: bool,
+    /// A boolean indicating whether the message is a heartbeat message.
     is_heart: bool,
     // Optional result data, containing a u64 number and a byte vector.
-    result_data: Option<(u16, Vec<u8>)>,
+    result_data: Option<(u16, Bytes)>,
     // Optional vector of socket addresses.
     addrs: Option<Vec<SocketAddr>>,
+    /// Optional message header mark, used to identify the start of a message.
+    /// The default value is `DEFAULT_MESSAGE_HEADER_MARK`(9177).
     message_header_mark: Option<u16>,
+    /// Optional message tail mark, used to identify the end of a message.
+    /// The default value is `DEFAULT_MESSAGE_TAIL_MARK`(7719).
     message_tail_mark: Option<u16>,
 }
 
@@ -35,7 +43,7 @@ impl HandlerResult {
     #[cfg(feature = "server")]
     pub fn new_with_send(
         method_id: u16,
-        response_data: Vec<u8>,
+        response_data: Bytes,
         target_addrs: Vec<SocketAddr>,
     ) -> Self {
         Self {
@@ -49,7 +57,7 @@ impl HandlerResult {
     }
 
     #[cfg(feature = "client")]
-    pub fn new_with_send_to_server(method_id: u16, response_data: Vec<u8>) -> Self {
+    pub fn new_with_send_to_server(method_id: u16, response_data: Bytes) -> Self {
         Self {
             is_send: true,
             is_heart: false,
@@ -60,11 +68,12 @@ impl HandlerResult {
         }
     }
 
+    #[cfg(feature = "client")]
     pub(crate) fn new_with_send_heart_to_server() -> Self {
         Self {
             is_send: true,
             is_heart: true,
-            result_data: Some((0_u16, Vec::new())),
+            result_data: Some((0_u16, Bytes::new())),
             addrs: None,
             message_header_mark: None,
             message_tail_mark: None,
@@ -76,7 +85,7 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
-    #[cfg(feature = "server")]
+    #[cfg(any(feature = "server", feature = "client"))]
     pub fn new_without_send() -> Self {
         Self {
             is_send: false,
@@ -119,15 +128,15 @@ impl HandlerResult {
     /// # Returns
     ///
     /// The response data as an optional byte vector.
-    pub(crate) fn get_response_data(&self) -> Option<Vec<u8>> {
+    pub(crate) fn get_response_data(&self) -> Option<Bytes> {
         match self.result_data.clone() {
             Some((method_id, bytes)) => {
-                let mut vec = Vec::new();
+                let mut bytes_mut = BytesMut::new();
 
                 if let Some(mark) = self.message_header_mark {
-                    vec.extend_from_slice(&mark.to_be_bytes());
+                    bytes_mut.extend_from_slice(&mark.to_be_bytes());
                 } else {
-                    vec.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_be_bytes());
+                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_be_bytes());
                 }
 
                 let mut msg_len = 0_u64;
@@ -144,64 +153,29 @@ impl HandlerResult {
                     + bytes_body_len as u64
                     + msg_tail_len;
 
-                vec.extend_from_slice(&msg_len.to_be_bytes());
+                bytes_mut.extend_from_slice(&msg_len.to_be_bytes());
 
-                vec.extend_from_slice(&constructor_id);
+                bytes_mut.extend_from_slice(&constructor_id);
 
-                vec.extend_from_slice(&method_id_bytes);
+                bytes_mut.extend_from_slice(&method_id_bytes);
 
-                vec.extend_from_slice(&bytes);
+                bytes_mut.extend_from_slice(&bytes);
                 if let Some(mark) = self.message_tail_mark {
-                    vec.extend_from_slice(&mark.to_be_bytes());
+                    bytes_mut.extend_from_slice(&mark.to_be_bytes());
                 } else {
-                    vec.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_be_bytes());
+                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_be_bytes());
                 }
-                Some(vec)
+                Some(bytes_mut.copy_to_bytes(bytes_mut.len()))
             }
             None => None,
         }
     }
 }
 
-/// A struct representing the data for a handler.
-///
-/// This struct contains an optional HashMap with u64 keys and byte vector values.
-pub(crate) struct HandlerData {
-    // Optional HashMap with u64 keys and byte vector values.
-    pub(crate) data_map: Option<HashMap<u64, Vec<u8>>>,
-}
-
-/// Implementation of methods for the HandlerData struct.
-impl HandlerData {
-    /// Creates a new HandlerData instance with a data map containing the provided data.
-    ///
-    /// # Parameters
-    ///
-    /// * `data`: The data as a HashMap with u64 keys and byte vector values.
-    ///
-    /// # Returns
-    ///
-    /// A new HandlerData instance.
-    pub(crate) fn new_with_data(data: HashMap<u64, Vec<u8>>) -> Self {
-        Self {
-            data_map: Some(data),
-        }
-    }
-
-    /// Creates a new HandlerData instance without a data map.
-    ///
-    /// # Returns
-    ///
-    /// A new HandlerData instance.
-    pub(crate) fn new_without_data() -> Self {
-        Self { data_map: None }
-    }
-}
-
 /// A trait representing a combined handler method and data.
 ///
 /// This trait combines the IHandlerMethod and IHandlerData traits.
-pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
+pub(crate) trait IHandlerCombinedTrait: IHandlerMethod {
     /// Executes the handler logic and sends a HandlerResult instance through a channel.
     ///
     /// # Parameters
@@ -216,18 +190,6 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod + IHandlerData {
         // Business logic
         self.handler(handler_method, thread_pool, clients).await;
     }
-}
-
-/// A trait representing the data for a handler.
-///
-/// This trait provides methods for getting the handler data and method ID.
-pub(crate) trait IHandlerData {
-    /// Gets the handler data.
-    ///
-    /// # Returns
-    ///
-    /// The handler data as a HandlerData instance.
-    fn get_data(&self) -> HandlerData;
 }
 
 /// A trait representing a handler method.
@@ -247,37 +209,4 @@ pub(crate) trait IHandlerMethod {
         thread_pool: TaskBody,
         clients: ClientsStructType,
     );
-}
-
-/// A function for checking and sending a HandlerResult instance.
-///
-/// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
-pub(crate) async fn check_handler_result(
-    handler_result: HandlerResult,
-    clients: ClientsStructType,
-) {
-    tokio::spawn(async move {
-        // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
-        if handler_result.get_is_send() {
-            let mut socket_vec = vec![];
-            let response = handler_result.get_response_data();
-            {
-                let mutex = clients.read().await;
-                let guard = mutex.deref();
-                if let Some(addrs) = handler_result.get_addrs() {
-                    for i in addrs {
-                        if guard.contains_key(&i) {
-                            socket_vec.push(guard.get(&i).unwrap().sender.clone());
-                        }
-                    }
-                }
-            }
-            if !socket_vec.is_empty() && response.is_some() {
-                for i in socket_vec {
-                    let response = handler_result.clone();
-                    let _ = i.send(response).await;
-                }
-            }
-        }
-    });
 }

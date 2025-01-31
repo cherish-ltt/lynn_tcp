@@ -2,19 +2,18 @@ use std::{future::Future, pin::Pin};
 
 use crate::{
     handler::{HandlerContext, SystemParam, SystemParamFunction, SystemParamState},
-    lynn_tcp_dependents::{HandlerResult, InputBufVO},
+    lynn_tcp_dependents::HandlerResult,
 };
 
 macro_rules! impl_system_param_function {
     ($($ty:ident),*) => {
         impl<T,Fut,$($ty,)*> SystemParamFunction<($($ty,)*)> for T
         where
-            T: Fn($($ty,)*) -> Fut  +  Send+Sync+'static,
-            Fut: Future<Output = HandlerResult> + Send+'static,
+            T: Fn($($ty,)*) -> Fut + Send + Sync + 'static,
+            Fut: Future<Output = HandlerResult> + Send + 'static,
             $( $ty: SystemParam + Send, )*
         {
-            // type Fut=Fut;
-            fn run(&self,($($ty,)*):($($ty,)*)) -> Pin<Box<dyn Future<Output = HandlerResult>+Send+'static>> {
+            fn run(&self,($($ty,)*):($($ty,)*)) -> Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>> {
                 Box::pin((self)($($ty,)*))
             }
         }

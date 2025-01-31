@@ -1,18 +1,11 @@
 mod impl_for_context;
 
-use std::{future::Future, marker::PhantomData, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{future::Future, marker::PhantomData, net::SocketAddr, pin::Pin};
 
 use crate::{
     app::ClientsStruct,
     lynn_tcp_dependents::{HandlerResult, InputBufVO},
 };
-
-// pub mod handler_trait {
-//     pub use super::FunctionSystem;
-//     pub use super::SystemParam;
-//     pub use super::SystemParamFunction;
-//     pub use super::SystemParamState;
-// }
 
 #[derive(Clone)]
 pub(crate) struct HandlerContext {
@@ -30,6 +23,7 @@ impl HandlerContext {
 }
 
 #[derive(Clone)]
+#[cfg(feature = "server")]
 pub struct ClientsContext {
     clients: Option<ClientsStruct>,
 }
@@ -45,6 +39,7 @@ impl ClientsContext {
         Self { clients: None }
     }
 
+    #[cfg(feature = "server")]
     pub async fn get_all_clients_addrs(&self) -> Vec<SocketAddr> {
         let mut result = Vec::new();
         if let Some(clients) = &self.clients {
@@ -78,7 +73,7 @@ pub(crate) trait SystemParam: Send + Sync + 'static {
     type State: SystemParamState<Item = Self>;
 }
 
-pub trait SystemParamState: Send + Sync + 'static {
+pub(crate) trait SystemParamState: Send + Sync + 'static {
     type Item: SystemParam<State = Self>;
 
     fn init() -> Self;
@@ -87,7 +82,7 @@ pub trait SystemParamState: Send + Sync + 'static {
 }
 
 #[derive(Clone)]
-pub struct FunctionSystem<F, Param>
+pub(crate) struct FunctionSystem<F, Param>
 where
     Param: SystemParam + 'static,
     F: SystemParamFunction<Param> + 'static,
@@ -97,32 +92,24 @@ where
     _maker: PhantomData<Param>,
 }
 
-pub trait SystemParamFunction<Param>: Send + Sync + 'static {
+pub(crate) trait SystemParamFunction<Param>: Send + Sync + 'static {
     fn run(&self, params: Param) -> Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>>;
 }
 
 pub(crate) trait IntoSystem<Param>: Sized {
-    // 定义一个关联类型System，它必须实现IService trait
     type System: IHandler;
-    // 定义一个方法to_system，用于将当前类型转换为System类型
     fn to_system(self) -> Self::System;
 }
 
-// 为所有满足条件的F类型实现IntoSystem trait
 impl<Param: SystemParam + 'static, F: SystemParamFunction<Param> + 'static> IntoSystem<Param>
     for F
 {
-    // 指定System类型为FunctionSystem<F, Param>
     type System = FunctionSystem<F, Param>;
 
-    // 实现to_system方法，返回一个FunctionSystem实例
     fn to_system(self) -> Self::System {
         FunctionSystem {
-            // 将self赋值给func字段
             func: self,
-            // 调用Param的State的init方法初始化state字段
             state: Param::State::init(),
-            // 使用PhantomData占位符
             _maker: PhantomData,
         }
     }

@@ -1,11 +1,10 @@
 use std::{sync::Arc, time::SystemTime};
 
+use bytes::Bytes;
 use tokio::{
-    sync::{mpsc, Mutex, Semaphore},
+    sync::{mpsc, RwLock, Semaphore},
     task::JoinHandle,
 };
-
-use crate::lynn_tcp_dependents::HandlerResult;
 
 /// Represents a user in the Lynn system.
 ///
@@ -13,15 +12,15 @@ use crate::lynn_tcp_dependents::HandlerResult;
 /// process permit, last communicate time, and associated thread.
 pub(crate) struct LynnUser {
     /// The sender channel used to send data to the client.
-    pub(crate) sender: mpsc::Sender<HandlerResult>,
+    sender: mpsc::Sender<Bytes>,
     /// An optional user ID.
-    pub(crate) user_id: Option<u64>,
+    user_id: Option<u64>,
     /// The process permit for the user.
-    pub(crate) process_permit: Arc<Semaphore>,
+    process_permit: Arc<Semaphore>,
     /// The last time the user communicated.
-    pub(crate) last_communicate_time: Arc<Mutex<SystemTime>>,
+    last_communicate_time: Arc<RwLock<SystemTime>>,
     /// The thread associated with the user.
-    pub(crate) thread: Option<JoinHandle<()>>,
+    thread: Option<JoinHandle<()>>,
 }
 
 /// Implementation of methods for the LynnUser struct.
@@ -39,10 +38,10 @@ impl LynnUser {
     ///
     /// A new instance of LynnUser.
     pub(crate) fn new(
-        sender: mpsc::Sender<HandlerResult>,
+        sender: mpsc::Sender<Bytes>,
         process_permit: Arc<Semaphore>,
         join_handle: JoinHandle<()>,
-        last_communicate_time: Arc<Mutex<SystemTime>>,
+        last_communicate_time: Arc<RwLock<SystemTime>>,
     ) -> Self {
         Self {
             sender,
@@ -67,8 +66,12 @@ impl LynnUser {
     /// # Returns
     ///
     /// A clone of the last communicate time.
-    pub(crate) fn get_last_communicate_time(&self) -> Arc<Mutex<SystemTime>> {
+    pub(crate) fn get_last_communicate_time(&self) -> Arc<RwLock<SystemTime>> {
         self.last_communicate_time.clone()
+    }
+
+    pub(crate) async fn send_response(&self, response: Bytes) {
+        self.sender.send(response).await;
     }
 }
 

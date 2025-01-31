@@ -1,6 +1,6 @@
 ## Lynn_tcp
 
-[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp)[![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp)  [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE) [![doc](https://docs.rs/axum/badge.svg)](https://crates.io/crates/lynn_tcp)
 
 `Lynn_tcp` 是一个轻量级的tcp服务器框架
 
@@ -149,7 +149,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### 特性
 
 - `server`: 可定制的TCP服务，可以轻松实现多用户长连接和高并发处理能力，并为提供路由服务
-- `client`: 可自定义的TCP客户端，可以向TCP服务器发送消息，并从服务器接收消息，并为提供路由服务
+- `client`: 可自定义的TCP客户端，可以向TCP服务器发送消息，并从服务器接收消息
 
 ### 规划
 

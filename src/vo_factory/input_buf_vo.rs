@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use bytes::BytesMut;
+
 use super::InputBufVOTrait;
 
 /// A struct representing a value object for an input buffer.
@@ -11,7 +13,7 @@ use super::InputBufVOTrait;
 #[cfg(any(feature = "server", feature = "client"))]
 pub struct InputBufVO {
     /// The raw data received from the network as a byte vector.
-    data: Vec<u8>,
+    data: BytesMut,
     /// The current index in the data vector, used for reading data in chunks.
     index: usize,
     /// The address from which the data was received.
@@ -38,7 +40,7 @@ impl InputBufVO {
     /// # Returns
     ///
     /// A new `InputBufVO` instance.
-    pub(crate) fn new(buf: Vec<u8>, input_addr: SocketAddr) -> Self {
+    pub(crate) fn new(buf: BytesMut, input_addr: SocketAddr) -> Self {
         Self {
             data: buf,
             index: 3,
@@ -48,7 +50,7 @@ impl InputBufVO {
 
     pub(crate) fn new_none() -> Self {
         Self {
-            data: Vec::new(),
+            data: BytesMut::new(),
             index: 3,
             input_addr: None,
         }
@@ -68,7 +70,7 @@ impl InputBufVO {
     /// # Returns
     ///
     /// A new `InputBufVO` instance.
-    pub(crate) fn new_without_socket_addr(buf: Vec<u8>) -> Self {
+    pub(crate) fn new_without_socket_addr(buf: BytesMut) -> Self {
         Self {
             data: buf,
             index: 3,
@@ -103,7 +105,7 @@ impl InputBufVOTrait for InputBufVO {
         if length < 1 {
             return None;
         } else {
-            let bytes = &mut self.data[0..1];
+            let bytes = &self.data[0..1];
             match bytes.try_into() {
                 Ok(value) => {
                     return Some(u8::from_be_bytes(value));
@@ -129,7 +131,7 @@ impl InputBufVOTrait for InputBufVO {
         if length < 3 {
             return None;
         } else {
-            let bytes = &mut self.data[1..3];
+            let bytes = &self.data[1..3];
             match bytes.try_into() {
                 Ok(value) => {
                     return Some(u16::from_be_bytes(value));
@@ -155,7 +157,7 @@ impl InputBufVOTrait for InputBufVO {
         if length < self.index + 8 {
             return None;
         } else {
-            let bytes = &mut self.data[self.index..self.index + 8];
+            let bytes = &self.data[self.index..self.index + 8];
             match bytes.try_into() {
                 Ok(value) => {
                     self.index = self.index + 8;
@@ -182,7 +184,7 @@ impl InputBufVOTrait for InputBufVO {
         if length < self.index + 1 {
             return None;
         } else {
-            let bytes = &mut self.data[self.index..self.index + 1];
+            let bytes = &self.data[self.index..self.index + 1];
             match bytes.try_into() {
                 Ok(value) => {
                     self.index = self.index + 1;
@@ -230,12 +232,12 @@ impl InputBufVOTrait for InputBufVO {
     /// # Returns
     ///
     /// A vector containing all the bytes from the input buffer.
-    fn get_all_bytes(&self) -> Vec<u8> {
+    fn get_all_bytes(&self) -> BytesMut {
         let mut vec = self.data.clone();
-        if vec.len() >= 3 {
-            vec.drain(0..3);
+        if vec.len() > 3 {
+            return vec.split_off(3);
         } else {
-            vec = Vec::new();
+            vec = BytesMut::new();
         }
         vec
     }

@@ -125,7 +125,7 @@ impl<'a> LynnClientConfig<'a> {
 /// A builder for creating `LynnClientConfig` instances.
 ///
 /// This struct provides a fluent interface for setting the configuration options for the Lynn client.
-#[cfg(feature = "server")]
+#[cfg(feature = "client")]
 pub struct LynnClientConfigBuilder<'a> {
     /// The configuration for the Lynn client.
     pub lynn_config: LynnClientConfig<'a>,
@@ -209,7 +209,7 @@ impl<'a> LynnClientConfigBuilder<'a> {
     /// # Returns
     ///
     /// The `LynnClientConfigBuilder` instance.
-    pub(crate) fn with_message_header_mark(mut self, msg_header_mark: &'a u16) -> Self {
+    pub fn with_message_header_mark(mut self, msg_header_mark: &'a u16) -> Self {
         self.lynn_config.message_header_mark = msg_header_mark;
         self
     }
@@ -223,7 +223,7 @@ impl<'a> LynnClientConfigBuilder<'a> {
     /// # Returns
     ///
     /// The `LynnClientConfigBuilder` instance.
-    pub(crate) fn with_message_tail_mark(mut self, msg_tail_mark: &'a u16) -> Self {
+    pub fn with_message_tail_mark(mut self, msg_tail_mark: &'a u16) -> Self {
         self.lynn_config.message_tail_mark = msg_tail_mark;
         self
     }

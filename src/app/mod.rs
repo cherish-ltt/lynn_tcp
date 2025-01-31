@@ -1,50 +1,38 @@
+mod common_api;
 mod lynn_server_config;
 mod lynn_server_user;
 mod server_thread_pool;
 
 use std::{
     collections::HashMap,
-    future::Future,
     net::SocketAddr,
     ops::{Deref, DerefMut},
-    pin::Pin,
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
+use bytes::Bytes;
+use common_api::{spawn_check_heart, spawn_socket_server};
 use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
 use lynn_server_user::LynnUser;
 use server_thread_pool::LynnServerThreadPool;
 use tokio::{
-    io::{split, AsyncReadExt, AsyncWriteExt},
+    io::AsyncWriteExt,
     net::TcpListener,
-    sync::{mpsc, Mutex, RwLock, Semaphore},
+    sync::{mpsc, RwLock, Semaphore},
     task::JoinHandle,
-    time::interval,
 };
 use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 use crate::{
-    const_config::{DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_SYSTEM_CHANNEL_SIZE},
-    dto_factory::input_dto_build,
+    const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK},
     handler::{HandlerContext, IHandler, IntoSystem},
-    lynn_tcp_dependents::HandlerResult,
-    service::IService,
-    vo_factory::{big_buf::BigBufReader, input_vo::InputBufVO, InputBufVOTrait},
 };
-
-pub(crate) mod lynn_user_api {
-    pub(crate) use super::lynn_server_user::LynnUser;
-}
 
 pub mod lynn_config_api {
     pub use super::lynn_server_config::LynnServerConfig;
     pub use super::lynn_server_config::LynnServerConfigBuilder;
-}
-
-pub(crate) mod lynn_thread_pool_api {
-    pub(crate) use super::server_thread_pool::LynnServerThreadPool;
 }
 
 /// Represents a server for the Lynn application.
@@ -125,7 +113,6 @@ pub(crate) mod lynn_thread_pool_api {
 pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: ClientsStruct,
-    client_channel_maps: ClientChannelMapsStruct,
     /// A map of routes, where the key is a method ID and the value is a service handler.
     router_map_async: RouterMapAsyncStruct,
     router_maps: RouterMapsStruct,
@@ -138,32 +125,11 @@ pub struct LynnServer<'a> {
 pub(crate) type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
 #[derive(Clone)]
 pub(crate) struct ClientsStruct(pub(crate) ClientsStructType);
-struct ClientChannelMapsStruct(Arc<Option<HashMap<SocketAddr, mpsc::Sender<Vec<u8>>>>>);
 struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
 struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 
 pub(crate) type AsyncFunc = Box<dyn IHandler>;
-#[deprecated(since = "v1.0.0", note = "use AsyncFunc instead")]
-pub(crate) type SyncFunc = Arc<Box<dyn IService>>;
 pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
-
-#[macro_export]
-#[deprecated(since = "v1.1.0", note = "will delete on v1.1.1")]
-macro_rules! async_func_wrapper {
-    ($async_func:ident) => {{
-        type AsyncFunc = Box<
-            dyn Fn(InputBufVO) -> Pin<Box<(dyn Future<Output = HandlerResult> + Send + 'static)>>
-                + Send
-                + Sync,
-        >;
-        let wrapper = move |input_buf_vo: InputBufVO| {
-            let fut: Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>> =
-                Box::pin($async_func(input_buf_vo));
-            fut
-        };
-        Box::new(wrapper) as AsyncFunc
-    }};
-}
 
 /// Implementation of methods for the LynnServer struct.
 impl<'a> LynnServer<'a> {
@@ -178,7 +144,6 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
             clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
@@ -205,7 +170,6 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
             clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
@@ -229,7 +193,6 @@ impl<'a> LynnServer<'a> {
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
             clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            client_channel_maps: ClientChannelMapsStruct(Arc::new(None)),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
@@ -260,7 +223,7 @@ impl<'a> LynnServer<'a> {
         self
     }
 
-    pub(crate) async fn synchronous_router(&mut self) {
+    async fn synchronous_router(&mut self) {
         self.router_map_async.0 = Arc::new(self.router_maps.0.clone());
         self.router_maps.0 = None;
     }
@@ -274,13 +237,13 @@ impl<'a> LynnServer<'a> {
     /// * `process_permit` - The process permit for the client.
     /// * `join_handle` - The join handle for the client's task.
     /// * `last_communicate_time` - The last time the client communicated.
-    pub(crate) async fn add_client(
+    async fn add_client(
         &self,
-        sender: mpsc::Sender<HandlerResult>,
+        sender: mpsc::Sender<Bytes>,
         addr: SocketAddr,
         process_permit: Arc<Semaphore>,
         join_handle: JoinHandle<()>,
-        last_communicate_time: Arc<Mutex<SystemTime>>,
+        last_communicate_time: Arc<RwLock<SystemTime>>,
     ) {
         let mut clients = self.clients.0.write().await;
         let guard = clients.deref_mut();
@@ -293,7 +256,7 @@ impl<'a> LynnServer<'a> {
     /// # Parameters
     ///
     /// * `addr` - The address of the client to remove.
-    pub(crate) async fn remove_client(&mut self, addr: SocketAddr) {
+    async fn remove_client(&mut self, addr: SocketAddr) {
         let mut clients = self.clients.0.write().await;
         let guard = clients.deref_mut();
         if guard.contains_key(&addr) {
@@ -302,7 +265,7 @@ impl<'a> LynnServer<'a> {
     }
 
     /// Checks the heartbeat of connected clients and removes those that have not sent messages for a long time.
-    pub(crate) async fn check_heart(&self) {
+    async fn check_heart(&self) {
         let clients = self.clients.0.clone();
         let server_check_heart_interval =
             self.lynn_config.get_server_check_heart_interval().clone();
@@ -310,61 +273,20 @@ impl<'a> LynnServer<'a> {
             .lynn_config
             .get_server_check_heart_timeout_time()
             .clone();
-        tokio::spawn(async move {
-            let mut interval = interval(Duration::from_secs(server_check_heart_interval));
-            info!(
-                "Server - [check heart] start sucess!!! with [server_check_heart_interval:{}s] [server_check_heart_timeout_time:{}s]",
-                server_check_heart_interval,
-                server_check_heart_timeout_time
-            );
-            loop {
-                interval.tick().await;
-                let mut remove_list = vec![];
-                {
-                    let mut clients_mutex = clients.read().await;
-                    let guard = clients_mutex.deref();
-                    for (addr, lynn_user) in guard.iter() {
-                        let last_communicate_time = lynn_user.last_communicate_time.lock().await;
-                        let time_old = last_communicate_time.deref().clone();
-                        let time_now = SystemTime::now();
-                        match time_old.partial_cmp(&time_now) {
-                            Some(std::cmp::Ordering::Less) => {
-                                match time_now.duration_since(time_old) {
-                                    Ok(duration) => {
-                                        if duration.as_secs() > server_check_heart_timeout_time {
-                                            remove_list.push(addr.clone());
-                                        }
-                                    }
-                                    Err(e) => {
-                                        warn!("unable to compare time,{}", e)
-                                    }
-                                }
-                            }
-                            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
-                            | None => {}
-                        }
-                    }
-                }
-                let mut clients_mutex = clients.write().await;
-                let guard = clients_mutex.deref_mut();
-                for i in remove_list {
-                    if guard.contains_key(&i) {
-                        guard.remove(&i);
-                        info!(
-                            "Clean up addr:{}, that have not sent messages for a long time",
-                            i
-                        )
-                    }
-                }
-                info!("Server check online socket count:{}", guard.len());
-            }
-        });
+        spawn_check_heart(
+            server_check_heart_interval,
+            server_check_heart_timeout_time,
+            clients,
+        );
     }
 
     pub async fn start(mut self: Self) {
         self.synchronous_router().await;
+        self.init_marks().await;
         let server_arc = Arc::new(self);
-        server_arc.run().await;
+        if let Err(e) = server_arc.run().await {
+            error!("{}", e);
+        }
     }
 
     /// Starts the server and begins listening for client connections.
@@ -403,147 +325,22 @@ impl<'a> LynnServer<'a> {
                     let process_permit = Arc::new(Semaphore::new(
                         *self.lynn_config.get_server_single_processs_permit(),
                     ));
-                    let clients_clone = self.clients.0.clone();
-                    let clients_clone_alone = self.clients.0.clone();
+                    let clients = self.clients.0.clone();
                     let router_map_async = self.router_map_async.0.clone();
-                    let thread_pool_task_body_sender_clone =
+                    let thread_pool_task_body_sender =
                         self.lynn_thread_pool.task_body_sender.0.clone();
                     let message_header_mark = self.lynn_config.get_message_header_mark().clone();
                     let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
-                    let message_header_mark_clone = message_header_mark.clone();
-                    let message_tail_mark_clone = message_tail_mark.clone();
-                    tokio::spawn(async move {
-                        // Creates a channel for sending data to the client.
-                        let (tx, mut rx) =
-                            mpsc::channel::<HandlerResult>(DEFAULT_SYSTEM_CHANNEL_SIZE);
-                        let last_communicate_time = Arc::new(Mutex::new(SystemTime::now()));
-                        let addr = addr.clone();
-                        let process_permit_clone = process_permit.clone();
-                        let last_communicate_time_clone = last_communicate_time.clone();
-                        // Spawns a new asynchronous task to handle each client connection.
-                        let join_handle = tokio::spawn(async move {
-                            let stream = socket; // 获取TcpStream
-                            let (mut read_half, mut write_half) = split(stream);
-                            let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
-                            let mut big_buf =
-                                BigBufReader::new(message_header_mark, message_tail_mark);
-                            let addr = addr;
-                            // Write data to the client in a loop.
-                            let join_handle = tokio::spawn(async move {
-                                while let Some(mut handler_result) = rx.recv().await {
-                                    if !handler_result.is_with_mark() {
-                                        handler_result.set_marks(
-                                            message_header_mark_clone.clone(),
-                                            message_tail_mark_clone.clone(),
-                                        );
-                                    }
-                                    if let Some(response_data) = handler_result.get_response_data()
-                                    {
-                                        if let Err(e) = write_half.write_all(&response_data).await {
-                                            error!("Failed to write to socket: {}", e);
-                                            continue;
-                                        }
-                                    }
-                                }
-                            });
-                            // Reads data sent by the client in a loop.
-                            loop {
-                                let result = read_half.read(&mut buf).await;
-                                match result {
-                                    Ok(n) if n <= 0 => continue,
-                                    Ok(n) => {
-                                        let last_communicate_time = last_communicate_time.clone();
-                                        tokio::spawn(async move {
-                                            let time_now = SystemTime::now();
-                                            let mut mutex = last_communicate_time.lock().await;
-                                            let guard = mutex.deref_mut();
-                                            let time_old = guard.clone();
-                                            match time_old.partial_cmp(&time_now) {
-                                                Some(std::cmp::Ordering::Less) => {
-                                                    *guard = time_now;
-                                                }
-                                                Some(
-                                                    std::cmp::Ordering::Equal
-                                                    | std::cmp::Ordering::Greater,
-                                                )
-                                                | None => {}
-                                            }
-                                        });
-                                        big_buf.extend_from_slice(&buf[..n]);
-                                        while big_buf.is_complete() {
-                                            let mut input_buf_vo =
-                                                InputBufVO::new(big_buf.get_data(), addr);
-                                            if let Some(constructor_id) =
-                                                input_buf_vo.get_constructor_id()
-                                            {
-                                                if constructor_id == 2 {
-                                                    continue;
-                                                } else if constructor_id == 1 {
-                                                    if let Some(method_id) =
-                                                        input_buf_vo.get_method_id()
-                                                    {
-                                                        let guard = router_map_async.deref();
-                                                        if let Some(map) = guard {
-                                                            if map.contains_key(&method_id) {
-                                                                let a =
-                                                                    map.get(&method_id).unwrap();
-                                                                input_dto_build(
-                                                                    addr,
-                                                                    input_buf_vo,
-                                                                    process_permit.clone(),
-                                                                    clients_clone.clone(),
-                                                                    a.clone(),
-                                                                    thread_pool_task_body_sender_clone
-                                                                        .clone(),
-                                                                )
-                                                                .await;
-                                                            } else {
-                                                                warn!(
-                                                                    "router_map_async no method match,{}",
-                                                                    method_id
-                                                                );
-                                                            }
-                                                        } else {
-                                                            warn!("server router is none");
-                                                        }
-                                                    } else {
-                                                        warn!("router_map_async input_buf_vo no method_id");
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to read from socket: {}", e);
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Removes the client from the HashMap after the connection is closed.
-                            {
-                                let mut clients = clients_clone.write().await;
-                                let guard = clients.deref_mut();
-                                if guard.contains_key(&addr) {
-                                    guard.remove(&addr);
-                                }
-                                join_handle.abort();
-                            }
-                        });
-                        // Saves the client's ID and send channel to the HashMap.
-                        {
-                            let clients_clone = clients_clone_alone.clone();
-                            let mut clients = clients_clone.write().await;
-                            let guard = clients.deref_mut();
-                            let lynn_user = LynnUser::new(
-                                tx.clone(),
-                                process_permit_clone,
-                                join_handle,
-                                last_communicate_time_clone,
-                            );
-                            guard.insert(addr, lynn_user);
-                        }
-                    });
+                    spawn_socket_server(
+                        addr,
+                        process_permit,
+                        message_header_mark,
+                        message_tail_mark,
+                        socket,
+                        router_map_async,
+                        clients,
+                        thread_pool_task_body_sender,
+                    );
                 } else {
                     let _ = socket.shutdown().await;
                     warn!("Server socket's count is more than MAX_CONNECTIONS ,can not accept new client:{}",addr);
@@ -556,8 +353,13 @@ impl<'a> LynnServer<'a> {
         }
     }
 
+    async fn init_marks(&self) {
+        SERVER_MESSAGE_HEADER_MARK.get_or_init(|| *self.lynn_config.get_message_header_mark());
+        SERVER_MESSAGE_TAIL_MARK.get_or_init(|| *self.lynn_config.get_message_tail_mark());
+    }
+
     /// Logs server information.
-    pub(crate) async fn log_server(&self) {
+    async fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::DEBUG)
             .finish();
