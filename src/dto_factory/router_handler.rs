@@ -1,5 +1,7 @@
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc};
 
+use bytes::{Buf, Bytes, BytesMut};
+
 use crate::const_config::{
     DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, SERVER_MESSAGE_HEADER_MARK,
     SERVER_MESSAGE_TAIL_MARK,
@@ -18,7 +20,7 @@ pub struct HandlerResult {
     /// A boolean indicating whether the message is a heartbeat message.
     is_heart: bool,
     // Optional result data, containing a u64 number and a byte vector.
-    result_data: Option<(u16, Vec<u8>)>,
+    result_data: Option<(u16, Bytes)>,
     // Optional vector of socket addresses.
     addrs: Option<Vec<SocketAddr>>,
     /// Optional message header mark, used to identify the start of a message.
@@ -43,7 +45,7 @@ impl HandlerResult {
     #[cfg(feature = "server")]
     pub fn new_with_send(
         method_id: u16,
-        response_data: Vec<u8>,
+        response_data: Bytes,
         target_addrs: Vec<SocketAddr>,
     ) -> Self {
         Self {
@@ -57,7 +59,7 @@ impl HandlerResult {
     }
 
     #[cfg(feature = "client")]
-    pub fn new_with_send_to_server(method_id: u16, response_data: Vec<u8>) -> Self {
+    pub fn new_with_send_to_server(method_id: u16, response_data: Bytes) -> Self {
         Self {
             is_send: true,
             is_heart: false,
@@ -73,7 +75,7 @@ impl HandlerResult {
         Self {
             is_send: true,
             is_heart: true,
-            result_data: Some((0_u16, Vec::new())),
+            result_data: Some((0_u16, Bytes::new())),
             addrs: None,
             message_header_mark: None,
             message_tail_mark: None,
@@ -128,15 +130,15 @@ impl HandlerResult {
     /// # Returns
     ///
     /// The response data as an optional byte vector.
-    pub(crate) fn get_response_data(&self) -> Option<Vec<u8>> {
+    pub(crate) fn get_response_data(&self) -> Option<Bytes> {
         match self.result_data.clone() {
             Some((method_id, bytes)) => {
-                let mut vec = Vec::new();
+                let mut bytes_mut = BytesMut::new();
 
                 if let Some(mark) = self.message_header_mark {
-                    vec.extend_from_slice(&mark.to_be_bytes());
+                    bytes_mut.extend_from_slice(&mark.to_be_bytes());
                 } else {
-                    vec.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_be_bytes());
+                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_be_bytes());
                 }
 
                 let mut msg_len = 0_u64;
@@ -153,19 +155,19 @@ impl HandlerResult {
                     + bytes_body_len as u64
                     + msg_tail_len;
 
-                vec.extend_from_slice(&msg_len.to_be_bytes());
+                bytes_mut.extend_from_slice(&msg_len.to_be_bytes());
 
-                vec.extend_from_slice(&constructor_id);
+                bytes_mut.extend_from_slice(&constructor_id);
 
-                vec.extend_from_slice(&method_id_bytes);
+                bytes_mut.extend_from_slice(&method_id_bytes);
 
-                vec.extend_from_slice(&bytes);
+                bytes_mut.extend_from_slice(&bytes);
                 if let Some(mark) = self.message_tail_mark {
-                    vec.extend_from_slice(&mark.to_be_bytes());
+                    bytes_mut.extend_from_slice(&mark.to_be_bytes());
                 } else {
-                    vec.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_be_bytes());
+                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_be_bytes());
                 }
-                Some(vec)
+                Some(bytes_mut.copy_to_bytes(bytes_mut.len()))
             }
             None => None,
         }

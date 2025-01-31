@@ -1,11 +1,11 @@
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
 
 /// A struct for reading large buffers.
 pub(crate) struct BigBufReader {
     /// The data buffer.
     data: BytesMut,
     /// The remaining data buffer.
-    remaining_data: Option<Vec<u8>>,
+    remaining_data: Option<BytesMut>,
     /// The target length of the data buffer.
     target_len: Option<usize>,
     /// The message header mark.
@@ -127,10 +127,12 @@ impl BigBufReader {
     /// # Returns
     ///
     /// The data from the buffer.
-    pub(crate) fn get_data(&mut self) -> Vec<u8> {
-        let result = self.data[10..self.target_len.unwrap() + 8].to_vec();
+    pub(crate) fn get_data(&mut self) -> BytesMut {
+        let result = &self.data[10..self.target_len.unwrap() + 8];
+        let mut bytes = BytesMut::new();
+        bytes.extend_from_slice(result);
         self.check_data();
-        result
+        bytes
     }
 
     /// Extends the buffer with the given slice.
@@ -148,7 +150,7 @@ impl BigBufReader {
                 self.data.extend_from_slice(&buf[0..next_len.unwrap()]);
                 let bytes_mut = &buf[next_len.unwrap()..buf_len];
                 if self.remaining_data.is_none() {
-                    self.remaining_data = Some(bytes_mut.to_vec());
+                    self.remaining_data = Some(BytesMut::from(bytes_mut));
                 } else {
                     if let Some(source_bytes_mut) = &self.remaining_data {
                         let mut data = source_bytes_mut.clone();
@@ -182,7 +184,7 @@ impl BigBufReader {
                 }
             }
         } else {
-            self.remaining_data = Some(buf.to_vec());
+            self.remaining_data = Some(BytesMut::from(buf));
         }
     }
 }

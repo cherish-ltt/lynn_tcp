@@ -6,6 +6,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use bytes::Bytes;
 use tokio::{
     io::{split, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -93,7 +94,7 @@ pub(super) fn spawn_socket_server(
 ) {
     tokio::spawn(async move {
         // Creates a channel for sending data to the client.
-        let (tx, mut rx) = mpsc::channel::<Vec<u8>>(DEFAULT_SYSTEM_CHANNEL_SIZE);
+        let (tx, mut rx) = mpsc::channel::<Bytes>(DEFAULT_SYSTEM_CHANNEL_SIZE);
         let last_communicate_time = Arc::new(RwLock::new(SystemTime::now()));
         let process_permit_clone = process_permit.clone();
         let last_communicate_time_clone = last_communicate_time.clone();

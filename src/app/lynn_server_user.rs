@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::SystemTime};
 
+use bytes::Bytes;
 use tokio::{
     sync::{mpsc, RwLock, Semaphore},
     task::JoinHandle,
@@ -11,7 +12,7 @@ use tokio::{
 /// process permit, last communicate time, and associated thread.
 pub(crate) struct LynnUser {
     /// The sender channel used to send data to the client.
-    sender: mpsc::Sender<Vec<u8>>,
+    sender: mpsc::Sender<Bytes>,
     /// An optional user ID.
     user_id: Option<u64>,
     /// The process permit for the user.
@@ -37,7 +38,7 @@ impl LynnUser {
     ///
     /// A new instance of LynnUser.
     pub(crate) fn new(
-        sender: mpsc::Sender<Vec<u8>>,
+        sender: mpsc::Sender<Bytes>,
         process_permit: Arc<Semaphore>,
         join_handle: JoinHandle<()>,
         last_communicate_time: Arc<RwLock<SystemTime>>,
@@ -69,7 +70,7 @@ impl LynnUser {
         self.last_communicate_time.clone()
     }
 
-    pub(crate) async fn send_response(&self, response: Vec<u8>) {
+    pub(crate) async fn send_response(&self, response: Bytes) {
         self.sender.send(response).await;
     }
 }

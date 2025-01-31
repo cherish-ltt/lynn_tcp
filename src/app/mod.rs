@@ -11,6 +11,7 @@ use std::{
     time::SystemTime,
 };
 
+use bytes::Bytes;
 use common_api::{spawn_check_heart, spawn_socket_server};
 use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
 use lynn_server_user::LynnUser;
@@ -238,7 +239,7 @@ impl<'a> LynnServer<'a> {
     /// * `last_communicate_time` - The last time the client communicated.
     async fn add_client(
         &self,
-        sender: mpsc::Sender<Vec<u8>>,
+        sender: mpsc::Sender<Bytes>,
         addr: SocketAddr,
         process_permit: Arc<Semaphore>,
         join_handle: JoinHandle<()>,
