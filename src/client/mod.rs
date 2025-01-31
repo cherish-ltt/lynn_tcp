@@ -126,11 +126,7 @@ impl<'a> LynnClient<'a> {
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let retry_count = 3;
         let timeout = Duration::from_secs(3);
-        let ip_v4 = self
-            .lynn_client_config
-            .get_server_ipv4()
-            .clone()
-            .to_string();
+        let ip_v4 = self.lynn_client_config.get_server_ipv4().to_string();
         let channel_size = self
             .lynn_client_config
             .get_client_single_channel_size()

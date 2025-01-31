@@ -13,7 +13,7 @@ impl SystemParamState for InputBufVO {
         InputBufVO::new_none()
     }
 
-    fn get_param(state: &Self, context: &HandlerContext) -> Self::Item {
+    fn get_param(_state: &Self, context: &HandlerContext) -> Self::Item {
         context.input_buf_vo.clone()
     }
 }
@@ -29,7 +29,7 @@ impl SystemParamState for ClientsContext {
         ClientsContext::new_none()
     }
 
-    fn get_param(state: &Self, context: &HandlerContext) -> Self::Item {
+    fn get_param(_state: &Self, context: &HandlerContext) -> Self::Item {
         context.clients_context.clone()
     }
 }

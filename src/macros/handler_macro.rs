@@ -2,7 +2,7 @@ use std::{future::Future, pin::Pin};
 
 use crate::{
     handler::{HandlerContext, SystemParam, SystemParamFunction, SystemParamState},
-    lynn_tcp_dependents::{HandlerResult, InputBufVO},
+    lynn_tcp_dependents::HandlerResult,
 };
 
 macro_rules! impl_system_param_function {

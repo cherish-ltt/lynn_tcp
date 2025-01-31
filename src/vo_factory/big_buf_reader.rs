@@ -1,5 +1,4 @@
 use bytes::BytesMut;
-use tracing::info;
 
 /// A struct for reading large buffers.
 pub(crate) struct BigBufReader {

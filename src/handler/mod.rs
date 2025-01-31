@@ -1,6 +1,6 @@
 mod impl_for_context;
 
-use std::{future::Future, marker::PhantomData, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{future::Future, marker::PhantomData, net::SocketAddr, pin::Pin};
 
 use crate::{
     app::ClientsStruct,
@@ -23,6 +23,7 @@ impl HandlerContext {
 }
 
 #[derive(Clone)]
+#[cfg(feature = "server")]
 pub struct ClientsContext {
     clients: Option<ClientsStruct>,
 }
@@ -38,6 +39,7 @@ impl ClientsContext {
         Self { clients: None }
     }
 
+    #[cfg(feature = "server")]
     pub async fn get_all_clients_addrs(&self) -> Vec<SocketAddr> {
         let mut result = Vec::new();
         if let Some(clients) = &self.clients {
@@ -71,7 +73,7 @@ pub(crate) trait SystemParam: Send + Sync + 'static {
     type State: SystemParamState<Item = Self>;
 }
 
-pub trait SystemParamState: Send + Sync + 'static {
+pub(crate) trait SystemParamState: Send + Sync + 'static {
     type Item: SystemParam<State = Self>;
 
     fn init() -> Self;
@@ -80,7 +82,7 @@ pub trait SystemParamState: Send + Sync + 'static {
 }
 
 #[derive(Clone)]
-pub struct FunctionSystem<F, Param>
+pub(crate) struct FunctionSystem<F, Param>
 where
     Param: SystemParam + 'static,
     F: SystemParamFunction<Param> + 'static,
@@ -90,7 +92,7 @@ where
     _maker: PhantomData<Param>,
 }
 
-pub trait SystemParamFunction<Param>: Send + Sync + 'static {
+pub(crate) trait SystemParamFunction<Param>: Send + Sync + 'static {
     fn run(&self, params: Param) -> Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>>;
 }
 

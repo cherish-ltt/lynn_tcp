@@ -1,10 +1,10 @@
 use input_dto::{IHandlerCombinedTrait, MsgSelect};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::{RwLock, Semaphore};
-use tracing::{debug, warn};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::sync::Semaphore;
+use tracing::warn;
 
 use crate::{
-    app::{lynn_user_api::LynnUser, AsyncFunc, ClientsStruct, ClientsStructType, TaskBody},
+    app::{AsyncFunc, ClientsStruct, ClientsStructType, TaskBody},
     handler::{ClientsContext, HandlerContext},
     vo_factory::input_vo::InputBufVO,
 };
@@ -15,7 +15,6 @@ mod router_handler;
 pub mod input_dto {
     pub(crate) use super::msg_select::*;
     pub(crate) use super::router_handler::check_handler_result;
-    pub(crate) use super::router_handler::HandlerData;
     pub use super::router_handler::HandlerResult;
     pub(crate) use super::router_handler::IHandlerCombinedTrait;
 }
@@ -53,6 +52,7 @@ pub(crate) async fn input_dto_build(
     });
 }
 
+#[inline]
 async fn spawn_handler(
     mut result: MsgSelect,
     clients: ClientsStructType,

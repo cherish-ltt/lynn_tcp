@@ -1,7 +1,7 @@
-#![allow(unused)]
-#![allow(private_interfaces)]
-#![allow(private_bounds)]
-#![allow(deprecated)]
+// #![allow(unused)]
+// #![allow(private_interfaces)]
+// #![allow(private_bounds)]
+// #![allow(deprecated)]
 #![allow(non_snake_case)]
 
 /// The application module, containing the server configuration API and server implementation.
@@ -12,13 +12,14 @@ mod client;
 mod const_config;
 /// The DTO factory module, responsible for creating data transfer objects.
 mod dto_factory;
+/// The handler module, containing the implementation of request handlers.
 mod handler;
+/// The macros module, containing custom macros used throughout the application.
 mod macros;
-/// The service module, containing the application's business logic.
-mod service;
 /// The VO factory module, responsible for creating value objects.
 mod vo_factory;
 
+pub extern crate bytes;
 pub extern crate tokio;
 pub extern crate tracing;
 pub extern crate tracing_subscriber;
@@ -32,6 +33,7 @@ pub mod lynn_server {
     pub use super::app::lynn_config_api::LynnServerConfigBuilder;
     /// The server implementation, handling incoming connections and requests.
     pub use super::app::LynnServer;
+    /// The `ClientsContext` struct is used to manage the state and context of connected clients.
     pub use super::handler::ClientsContext;
 }
 

@@ -1,11 +1,9 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use crate::{app::TaskBody, handler::HandlerContext, vo_factory::input_vo::InputBufVO};
+use crate::{app::TaskBody, handler::HandlerContext};
 
 use super::{
-    input_dto::IHandlerCombinedTrait,
-    router_handler::{HandlerData, IHandlerData, IHandlerMethod},
-    AsyncFunc, ClientsStructType,
+    input_dto::IHandlerCombinedTrait, router_handler::IHandlerMethod, AsyncFunc, ClientsStructType,
 };
 
 /// A struct representing a message selection.
@@ -65,19 +63,6 @@ impl IHandlerCombinedTrait for MsgSelect {
     }
 }
 
-impl IHandlerData for MsgSelect {
-    /// Gets the handler data for the message selection.
-    ///
-    /// This function returns the handler data for the message selection.
-    ///
-    /// # Returns
-    ///
-    /// The handler data for the message selection.
-    fn get_data(&self) -> super::router_handler::HandlerData {
-        HandlerData::new_without_data()
-    }
-}
-
 impl IHandlerMethod for MsgSelect {
     /// Handles the message selection.
     ///
@@ -104,6 +89,6 @@ impl IHandlerMethod for MsgSelect {
             self.handler_context.clone(),
             clients,
         );
-        thread_pool.send(task_body).await;
+        let _ = thread_pool.send(task_body).await;
     }
 }
