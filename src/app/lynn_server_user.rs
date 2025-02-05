@@ -70,8 +70,8 @@ impl LynnUser {
         self.last_communicate_time.clone()
     }
 
-    pub(crate) async fn send_response(&self, response: Bytes) {
-        self.sender.send(response).await;
+    pub(crate) async fn send_response(&self, response: &Bytes) {
+        self.sender.send(response.clone()).await;
     }
 }
 

@@ -144,13 +144,16 @@ impl<'a> LynnClient<'a> {
                             { ip_v4 }
                         );
                         return Ok(());
-                    } else {
-                        warn!("connect to server failed - TcpStream e: {:?}", stream);
+                    } else if let Err(e) = stream {
+                        warn!(
+                            "connect to server failed - TcpStream e: {:?}",
+                            e.to_string()
+                        );
                         continue;
                     }
                 }
                 Err(e) => {
-                    warn!("connect to server failed - timeout e: {:?}", e);
+                    warn!("connect to server failed - timeout e: {:?}", e.to_string());
                     continue;
                 }
             }
@@ -161,14 +164,14 @@ impl<'a> LynnClient<'a> {
     /// Logs the server information.
     pub(crate) async fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
-            .with_max_level(Level::DEBUG)
+            .with_max_level(Level::INFO)
             .finish();
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
                 info!("Client - [log server] start sucess!!!")
             }
             Err(e) => {
-                warn!("set_global_default failed - e: {:?}", e)
+                warn!("set_global_default failed - e: {:?}", e.to_string())
             }
         }
     }

@@ -11,7 +11,7 @@ use tokio::{
     io::{split, AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
     sync::{mpsc, RwLock, Semaphore},
-    time::interval,
+    time::{self, interval},
 };
 use tracing::{error, info, warn};
 
@@ -62,7 +62,7 @@ pub(super) fn spawn_check_heart(
                                 }
                             }
                             Err(e) => {
-                                warn!("unable to compare time,{}", e)
+                                warn!("unable to compare time,{}", e.to_string())
                             }
                         },
                         Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) | None => {}
@@ -177,7 +177,7 @@ pub(super) fn spawn_socket_server(
                         }
                     }
                     Err(e) => {
-                        error!("Failed to read from socket: {}", e);
+                        error!("Failed to read from socket: {}", e.to_string());
                         break;
                     }
                 }
@@ -232,13 +232,17 @@ pub(crate) async fn check_handler_result(
                     );
                 }
                 let response = response.unwrap();
-                let mutex = clients.read().await;
-                let guard = mutex.deref();
-                if let Some(addrs) = handler_result.get_addrs() {
-                    for socket_addr in addrs {
-                        if guard.contains_key(&socket_addr) {
-                            if let Some(socket) = guard.get(&socket_addr) {
-                                socket.send_response(response.clone()).await;
+                {
+                    if let Some(addrs) = handler_result.get_addrs() {
+                        if let Some(delay_socket) = send_response(&response, &addrs, &clients).await
+                        {
+                            time::sleep(Duration::from_secs(1));
+                            if let Some(delay_socket) =
+                                send_response(&response, &delay_socket, &clients).await
+                            {
+                                delay_socket.iter().for_each(|addr|{
+                                    warn!("Failed to find the client correctly, message sending is invalid , target-addr:{}",addr);
+                                });
                             }
                         }
                     }
@@ -246,6 +250,33 @@ pub(crate) async fn check_handler_result(
             }
         }
     });
+}
+
+#[inline(always)]
+async fn send_response(
+    response: &Bytes,
+    addrs: &Vec<SocketAddr>,
+    clients: &ClientsStructType,
+) -> Option<Vec<SocketAddr>> {
+    {
+        let mut delay_socket = Vec::new();
+        let mutex = clients.read().await;
+        let guard = mutex.deref();
+        for socket_addr in addrs {
+            if guard.contains_key(socket_addr) {
+                if let Some(socket) = guard.get(socket_addr) {
+                    socket.send_response(response).await;
+                }
+            } else {
+                delay_socket.push(socket_addr.clone());
+            }
+        }
+        if !delay_socket.is_empty() {
+            Some(delay_socket)
+        } else {
+            None
+        }
+    }
 }
 
 #[inline(always)]

@@ -2,6 +2,17 @@
 
 ### v1.1.x - release
 
+#### v1.1.2 - release
+
+1.fix
+
+- Link management(DELAYED SEND)
+- Log output adjustment
+
+2.docs
+
+- Supplement and modify doc
+
 #### v1.1.1 - release
 
 1.perf

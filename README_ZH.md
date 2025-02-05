@@ -1,6 +1,6 @@
 ## Lynn_tcp
 
-[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp)  [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE) [![doc](https://docs.rs/axum/badge.svg)](https://crates.io/crates/lynn_tcp)
+[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp)  [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE) [![doc](https://docs.rs/axum/badge.svg)](https://docs.rs/lynn_tcp/latest/lynn_tcp/) [![Downloads](https://img.shields.io/crates/d/lynn_tcp.svg)](https://crates.io/crates/lynn_tcp)
 
 `Lynn_tcp` 是一个轻量级的tcp服务器框架
 
