@@ -265,7 +265,7 @@ async fn send_response(
         for socket_addr in addrs {
             if guard.contains_key(socket_addr) {
                 if let Some(socket) = guard.get(socket_addr) {
-                    socket.send_response(response.clone()).await;
+                    socket.send_response(response).await;
                 }
             } else {
                 delay_socket.push(socket_addr.clone());
