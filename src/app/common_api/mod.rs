@@ -62,7 +62,7 @@ pub(super) fn spawn_check_heart(
                                 }
                             }
                             Err(e) => {
-                                warn!("unable to compare time,{}", e)
+                                warn!("unable to compare time,{}", e.to_string())
                             }
                         },
                         Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) | None => {}
@@ -177,7 +177,7 @@ pub(super) fn spawn_socket_server(
                         }
                     }
                     Err(e) => {
-                        error!("Failed to read from socket: {}", e);
+                        error!("Failed to read from socket: {}", e.to_string());
                         break;
                     }
                 }

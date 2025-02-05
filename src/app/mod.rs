@@ -347,7 +347,10 @@ impl<'a> LynnServer<'a> {
                 }
             } else {
                 if let Err(e) = clinet_result {
-                    warn!("Failed to accept connection , server run next, e :{}", e);
+                    warn!(
+                        "Failed to accept connection , server run next, e :{}",
+                        e.to_string()
+                    );
                 }
             }
         }
@@ -361,14 +364,14 @@ impl<'a> LynnServer<'a> {
     /// Logs server information.
     async fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
-            .with_max_level(Level::DEBUG)
+            .with_max_level(Level::WARN)
             .finish();
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
                 info!("Server - [log server] start sucess!!!")
             }
             Err(e) => {
-                warn!("set_global_default failed - e: {:?}", e)
+                warn!("set_global_default failed - e: {:?}", e.to_string())
             }
         }
     }
