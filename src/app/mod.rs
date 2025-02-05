@@ -364,7 +364,7 @@ impl<'a> LynnServer<'a> {
     /// Logs server information.
     async fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
-            .with_max_level(Level::WARN)
+            .with_max_level(Level::INFO)
             .finish();
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
