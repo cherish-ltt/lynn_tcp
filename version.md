@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.3 - release
+
+1.fix
+
+- Heartbeat update mechanism:Under the previous heartbeat update mechanism, msg that did not match the tag would also be treated as the correct client. Now, only standard heartbeats are received to update the heartbeat, otherwise the client will be removed in the next heartbeat detection
+
 #### v1.1.2 - release
 
 1.fix

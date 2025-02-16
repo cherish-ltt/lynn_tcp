@@ -125,25 +125,25 @@ pub(super) fn spawn_socket_server(
                 match result {
                     Ok(n) if n <= 0 => continue,
                     Ok(n) => {
-                        let last_communicate_time = last_communicate_time.clone();
-                        tokio::spawn(async move {
-                            let time_now = SystemTime::now();
-                            let mut mutex = last_communicate_time.write().await;
-                            let guard = mutex.deref_mut();
-                            let time_old = guard.clone();
-                            match time_old.partial_cmp(&time_now) {
-                                Some(std::cmp::Ordering::Less) => {
-                                    *guard = time_now;
-                                }
-                                Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
-                                | None => {}
-                            }
-                        });
                         big_buf.extend_from_slice(&buf[..n]);
                         while big_buf.is_complete() {
                             let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
                             if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
                                 if constructor_id == 2 {
+                                    let last_communicate_time = last_communicate_time.clone();
+                                    tokio::spawn(async move {
+                                        let time_now = SystemTime::now();
+                                        let mut mutex = last_communicate_time.write().await;
+                                        let guard = mutex.deref_mut();
+                                        let time_old = guard.clone();
+                                        match time_old.partial_cmp(&time_now) {
+                                            Some(std::cmp::Ordering::Less) => {
+                                                *guard = time_now;
+                                            }
+                                            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+                                            | None => {}
+                                        }
+                                    });
                                     continue;
                                 } else if constructor_id == 1 {
                                     if let Some(method_id) = input_buf_vo.get_method_id() {
