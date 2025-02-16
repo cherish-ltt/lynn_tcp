@@ -31,17 +31,19 @@ pub(super) fn spawn_handle(
     let join_handle = tokio::spawn(async move {
         let (mut read_half, mut write_half) = tokio::io::split(stream);
         tokio::spawn(async move {
-            while let Some(mut handler_result) = rx_write.recv().await {
-                if !handler_result.is_with_mark() {
-                    handler_result
-                        .set_marks(message_header_mark.clone(), message_tail_mark.clone());
-                }
-                if let Some(response) = handler_result.get_response_data() {
-                    if let Err(e) = write_half.write_all(&response).await {
-                        error!("write to server failed - e: {:?}", e);
+            loop {
+                if let Some(mut handler_result) = rx_write.recv().await {
+                    if !handler_result.is_with_mark() {
+                        handler_result
+                            .set_marks(message_header_mark.clone(), message_tail_mark.clone());
                     }
-                } else {
-                    warn!("nothing to send");
+                    if let Some(response) = handler_result.get_response_data() {
+                        if let Err(e) = write_half.write_all(&response).await {
+                            error!("write to server failed - e: {:?}", e);
+                        }
+                    } else {
+                        warn!("nothing to send");
+                    }
                 }
             }
         });

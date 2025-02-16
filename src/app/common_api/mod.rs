@@ -112,10 +112,12 @@ pub(super) fn spawn_socket_server(
             let addr = addr;
             // Write data to the client in a loop.
             let join_handle = tokio::spawn(async move {
-                while let Some(response) = rx.recv().await {
-                    if let Err(e) = write_half.write_all(&response).await {
-                        error!("Failed to write to socket: {}", e);
-                        continue;
+                loop {
+                    if let Some(response) = rx.recv().await {
+                        if let Err(e) = write_half.write_all(&response).await {
+                            error!("Failed to write to socket: {}", e);
+                            continue;
+                        }
                     }
                 }
             });
@@ -140,7 +142,10 @@ pub(super) fn spawn_socket_server(
                                             Some(std::cmp::Ordering::Less) => {
                                                 *guard = time_now;
                                             }
-                                            Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+                                            Some(
+                                                std::cmp::Ordering::Equal
+                                                | std::cmp::Ordering::Greater,
+                                            )
                                             | None => {}
                                         }
                                     });
