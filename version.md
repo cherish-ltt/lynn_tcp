@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.5 - release
+
+1.perf
+
+- Big-Endian=>Little-Endian(Use popular architectures (x86/x64, ARM) for Little-Endian instead of using network standard Big-Endian to achieve performance improvements)
+
 #### v1.1.4 - release
 
 1.fix

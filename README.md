@@ -36,21 +36,21 @@ Use `cargo add lynn_tcp` or:
 
 ```rust
 [dependencies]
-lynn_tcp = "1.1.4"
+lynn_tcp = "1.1.5"
 ```
 
 **server feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.4" , features = "server" }
+lynn_tcp = { version = "1.1.5" , features = "server" }
 ```
 
 **client feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.4" , features = "client" }
+lynn_tcp = { version = "1.1.5" , features = "client" }
 ```
 
 #### Server

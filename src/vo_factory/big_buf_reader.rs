@@ -111,7 +111,7 @@ impl BigBufReader {
             if !self.is_empty()
                 && self.data.len() >= 10 + target_len.try_into().unwrap_or(0)
                 && self.data.len() >= 12
-                && u16::from_be_bytes([
+                && u16::from_le_bytes([
                     self.data[10 + target_len - 2],
                     self.data[10 + target_len - 1],
                 ]) == self.message_tail_mark
@@ -163,10 +163,10 @@ impl BigBufReader {
                 let data_len = self.data.len();
                 if data_len >= 2 {
                     let header_mark =
-                        u16::from_be_bytes([self.data[0].clone(), self.data[1].clone()]);
+                        u16::from_le_bytes([self.data[0].clone(), self.data[1].clone()]);
                     if header_mark == self.message_header_mark {
                         if data_len >= 10 {
-                            let msg_len = u64::from_be_bytes([
+                            let msg_len = u64::from_le_bytes([
                                 self.data[2].clone(),
                                 self.data[3].clone(),
                                 self.data[4].clone(),
