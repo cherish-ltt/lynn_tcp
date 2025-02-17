@@ -108,7 +108,7 @@ impl InputBufVOTrait for InputBufVO {
             let bytes = &self.data[0..1];
             match bytes.try_into() {
                 Ok(value) => {
-                    return Some(u8::from_be_bytes(value));
+                    return Some(u8::from_le_bytes(value));
                 }
                 Err(_) => {
                     return None;
@@ -134,7 +134,7 @@ impl InputBufVOTrait for InputBufVO {
             let bytes = &self.data[1..3];
             match bytes.try_into() {
                 Ok(value) => {
-                    return Some(u16::from_be_bytes(value));
+                    return Some(u16::from_le_bytes(value));
                 }
                 Err(_) => {
                     return None;
@@ -161,7 +161,7 @@ impl InputBufVOTrait for InputBufVO {
             match bytes.try_into() {
                 Ok(value) => {
                     self.index = self.index + 8;
-                    return Some(u64::from_be_bytes(value));
+                    return Some(u64::from_le_bytes(value));
                 }
                 Err(_) => {
                     return None;
@@ -188,7 +188,7 @@ impl InputBufVOTrait for InputBufVO {
             match bytes.try_into() {
                 Ok(value) => {
                     self.index = self.index + 1;
-                    return Some(u8::from_be_bytes(value));
+                    return Some(u8::from_le_bytes(value));
                 }
                 Err(_) => {
                     return None;

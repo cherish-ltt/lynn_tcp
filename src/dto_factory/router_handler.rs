@@ -134,18 +134,18 @@ impl HandlerResult {
                 let mut bytes_mut = BytesMut::new();
 
                 if let Some(mark) = self.message_header_mark {
-                    bytes_mut.extend_from_slice(&mark.to_be_bytes());
+                    bytes_mut.extend_from_slice(&mark.to_le_bytes());
                 } else {
-                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_be_bytes());
+                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_le_bytes());
                 }
 
                 let mut msg_len = 0_u64;
                 let constructor_id = if self.is_heart {
-                    2_u8.to_be_bytes()
+                    2_u8.to_le_bytes()
                 } else {
-                    1_u8.to_be_bytes()
+                    1_u8.to_le_bytes()
                 };
-                let method_id_bytes = method_id.to_be_bytes();
+                let method_id_bytes = method_id.to_le_bytes();
                 let bytes_body_len = bytes.len();
                 let msg_tail_len = 2_u64;
                 msg_len = constructor_id.len() as u64
@@ -153,7 +153,7 @@ impl HandlerResult {
                     + bytes_body_len as u64
                     + msg_tail_len;
 
-                bytes_mut.extend_from_slice(&msg_len.to_be_bytes());
+                bytes_mut.extend_from_slice(&msg_len.to_le_bytes());
 
                 bytes_mut.extend_from_slice(&constructor_id);
 
@@ -161,9 +161,9 @@ impl HandlerResult {
 
                 bytes_mut.extend_from_slice(&bytes);
                 if let Some(mark) = self.message_tail_mark {
-                    bytes_mut.extend_from_slice(&mark.to_be_bytes());
+                    bytes_mut.extend_from_slice(&mark.to_le_bytes());
                 } else {
-                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_be_bytes());
+                    bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_le_bytes());
                 }
                 Some(bytes_mut.copy_to_bytes(bytes_mut.len()))
             }
