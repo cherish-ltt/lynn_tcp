@@ -1,5 +1,5 @@
 use crate::const_config::{
-    DEFAULT_CHANNEL_SIZE, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME,
+    DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME,
     DEFAULT_IPV4, DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_RECEIVE_BYTES_SIZE,
     DEFAULT_MAX_THREADPOOL_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
     DEFAULT_PROCESS_PERMIT_SIZE,
@@ -13,8 +13,6 @@ use crate::const_config::{
 pub struct LynnServerConfig<'a> {
     // The IPv4 address of the server.
     server_ipv4: &'a str,
-    // The size of a single channel.
-    server_single_channel_size: &'a usize,
     // The maximum number of connections for the server.
     server_max_connections: Option<&'a usize>,
     // The maximum number of threads for the server.
@@ -55,7 +53,6 @@ impl<'a> LynnServerConfig<'a> {
     /// A new LynnServerConfig instance.
     fn new(
         server_ipv4: &'a str,
-        server_single_channel_size: &'a usize,
         server_max_connections: Option<&'a usize>,
         server_max_threadpool_size: &'a usize,
         server_max_receive_bytes_reader_size: &'a usize,
@@ -70,7 +67,6 @@ impl<'a> LynnServerConfig<'a> {
             server_max_connections,
             server_max_threadpool_size,
             server_max_receive_bytes_reader_size,
-            server_single_channel_size,
             server_single_processs_permit,
             server_check_heart_interval,
             server_check_heart_timeout_time,
@@ -90,7 +86,6 @@ impl<'a> LynnServerConfig<'a> {
             server_max_connections: Some(&DEFAULT_MAX_CONNECTIONS),
             server_max_threadpool_size: &DEFAULT_MAX_THREADPOOL_SIZE,
             server_max_receive_bytes_reader_size: &DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-            server_single_channel_size: &DEFAULT_CHANNEL_SIZE,
             server_single_processs_permit: &DEFAULT_PROCESS_PERMIT_SIZE,
             server_check_heart_interval: &DEFAULT_CHECK_HEART_INTERVAL,
             server_check_heart_timeout_time: &DEFAULT_CHECK_HEART_TIMEOUT_TIME,
@@ -106,15 +101,6 @@ impl<'a> LynnServerConfig<'a> {
     /// The IPv4 address of the server.
     pub(crate) fn get_server_ipv4(&self) -> &str {
         &self.server_ipv4
-    }
-
-    /// Gets the size of a single channel.
-    ///
-    /// # Returns
-    ///
-    /// The size of a single channel.
-    pub(crate) fn get_server_single_channel_size(&self) -> &usize {
-        &self.server_single_channel_size
     }
 
     /// Gets the permit size for a single process.
@@ -224,23 +210,6 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Self {
         self.lynn_config.server_ipv4 = server_ipv4;
-        self
-    }
-
-    /// Sets the size of a single channel.
-    ///
-    /// # Parameters
-    ///
-    /// * `server_single_channel_size` - The size of a single channel.
-    ///
-    /// # Returns
-    ///
-    /// The updated `LynnServerConfigBuilder` instance.
-    pub fn with_server_single_channel_size(
-        mut self,
-        server_single_channel_size: &'a usize,
-    ) -> Self {
-        self.lynn_config.server_single_channel_size = server_single_channel_size;
         self
     }
 
