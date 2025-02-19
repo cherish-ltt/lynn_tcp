@@ -2,6 +2,14 @@
 
 ### v1.1.x - release
 
+#### v1.1.6 - release
+
+1.perf
+
+- Delete useless code
+
+- Update channel_stize=>64
+
 #### v1.1.5 - release
 
 1.perf
