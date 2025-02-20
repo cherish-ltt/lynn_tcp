@@ -5,7 +5,7 @@ mod server_thread_pool;
 
 use std::{
     collections::HashMap,
-    net::SocketAddr,
+    net::{SocketAddr, ToSocketAddrs},
     ops::{Deref, DerefMut},
     sync::Arc,
     time::SystemTime,
@@ -80,7 +80,7 @@ pub mod lynn_config_api {
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let _ = LynnServer::new_with_config(
 ///         LynnServerConfigBuilder::new()
-///             .with_server_ipv4("0.0.0.0:9177")
+///             .with_addr("0.0.0.0:9177")
 ///             .with_server_max_connections(Some(&200))
 ///             .with_server_max_threadpool_size(&10)
 ///             // ...more
@@ -162,10 +162,38 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// A new instance of `LynnServer`.
+    #[deprecated(note = "use `new_with_addr`", since = "1.1.7")]
     pub async fn new_with_ipv4(ipv4: &'a str) -> Self {
         let lynn_config = LynnServerConfigBuilder::new()
             .with_server_ipv4(ipv4)
             .build();
+        let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
+        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
+        let app = Self {
+            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
+            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
+            router_maps: RouterMapsStruct(None),
+            lynn_config,
+            lynn_thread_pool: thread_pool,
+        };
+        app.log_server().await;
+        app
+    }
+
+    /// Creates a new instance of `LynnServer` with a specified address.
+    ///
+    /// # Parameters
+    ///
+    /// * `addr` - The address to bind the server to(IPV4,IPV6).
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `LynnServer`.
+    pub async fn new_with_addr<T>(addr: T) -> Self
+    where
+        T: ToSocketAddrs,
+    {
+        let lynn_config = LynnServerConfigBuilder::new().with_addr(addr).build();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {

@@ -1,8 +1,8 @@
 #![allow(unused)]
 #![allow(private_interfaces)]
 #![allow(private_bounds)]
-#![allow(deprecated)]
 #![allow(non_snake_case)]
+//#![allow(deprecated)]
 //! # Lynn_tcp
 //! `Lynn_tcp` is a lightweight TCP server framework
 //! ## Keywords
@@ -62,7 +62,7 @@
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let _ = LynnServer::new_with_config(
 //!         LynnServerConfigBuilder::new()
-//!             .with_server_ipv4("0.0.0.0:9177")
+//!             .with_addr("0.0.0.0:9177")
 //!             .with_server_max_connections(Some(&200))
 //!             .with_server_max_threadpool_size(&10)
 //!             // ...more

@@ -36,21 +36,21 @@ Use `cargo add lynn_tcp` or:
 
 ```rust
 [dependencies]
-lynn_tcp = "1.1.6"
+lynn_tcp = "1.1.7"
 ```
 
 **server feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.6" , features = "server" }
+lynn_tcp = { version = "1.1.7" , features = "server" }
 ```
 
 **client feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.6" , features = "client" }
+lynn_tcp = { version = "1.1.7" , features = "client" }
 ```
 
 #### Server
@@ -94,7 +94,7 @@ use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = LynnServer::new_with_config(
         LynnServerConfigBuilder::new()
-            .with_server_ipv4("0.0.0.0:9177")
+            .with_addr("0.0.0.0:9177")
             .with_server_max_connections(Some(&200))
             .with_server_max_threadpool_size(&10)
             // ...more

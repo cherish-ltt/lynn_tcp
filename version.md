@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.7 - release
+
+1.feat
+
+- Supports IPv4 and IPv6 (Server and Client)
+
 #### v1.1.6 - release
 
 1.perf

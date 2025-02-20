@@ -1,8 +1,9 @@
+use std::net::{SocketAddr, ToSocketAddrs};
+
 use crate::const_config::{
-    DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME,
-    DEFAULT_IPV4, DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-    DEFAULT_MAX_THREADPOOL_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
-    DEFAULT_PROCESS_PERMIT_SIZE,
+    DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME, DEFAULT_IPV4,
+    DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MAX_THREADPOOL_SIZE,
+    DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE,
 };
 
 /// Represents the configuration for the Lynn server.
@@ -11,8 +12,8 @@ use crate::const_config::{
 /// such as the IP address, channel size, maximum connections, thread pool size, etc.
 #[cfg(feature = "server")]
 pub struct LynnServerConfig<'a> {
-    // The IPv4 address of the server.
-    server_ipv4: &'a str,
+    // The address of the server.
+    server_addr: SocketAddr,
     // The maximum number of connections for the server.
     server_max_connections: Option<&'a usize>,
     // The maximum number of threads for the server.
@@ -51,8 +52,8 @@ impl<'a> LynnServerConfig<'a> {
     /// # Returns
     ///
     /// A new LynnServerConfig instance.
-    fn new(
-        server_ipv4: &'a str,
+    fn new<T>(
+        server_addr: T,
         server_max_connections: Option<&'a usize>,
         server_max_threadpool_size: &'a usize,
         server_max_receive_bytes_reader_size: &'a usize,
@@ -61,9 +62,13 @@ impl<'a> LynnServerConfig<'a> {
         server_check_heart_timeout_time: &'a u64,
         message_header_mark: &'a u16,
         message_tail_mark: &'a u16,
-    ) -> Self {
+    ) -> Self
+    where
+        T: ToSocketAddrs,
+    {
+        let server_addr = server_addr.to_socket_addrs().unwrap().next().unwrap();
         Self {
-            server_ipv4,
+            server_addr,
             server_max_connections,
             server_max_threadpool_size,
             server_max_receive_bytes_reader_size,
@@ -82,7 +87,7 @@ impl<'a> LynnServerConfig<'a> {
     /// A default LynnServerConfig instance.
     pub(crate) fn default() -> Self {
         Self {
-            server_ipv4: DEFAULT_IPV4,
+            server_addr: *DEFAULT_ADDR,
             server_max_connections: Some(&DEFAULT_MAX_CONNECTIONS),
             server_max_threadpool_size: &DEFAULT_MAX_THREADPOOL_SIZE,
             server_max_receive_bytes_reader_size: &DEFAULT_MAX_RECEIVE_BYTES_SIZE,
@@ -99,8 +104,8 @@ impl<'a> LynnServerConfig<'a> {
     /// # Returns
     ///
     /// The IPv4 address of the server.
-    pub(crate) fn get_server_ipv4(&self) -> &str {
-        &self.server_ipv4
+    pub(crate) fn get_server_ipv4(&self) -> String {
+        self.server_addr.to_string()
     }
 
     /// Gets the permit size for a single process.
@@ -208,8 +213,18 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// # Returns
     ///
     /// The updated `LynnServerConfigBuilder` instance.
+    #[deprecated(note = "use `with_addr`", since = "1.1.7")]
     pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Self {
-        self.lynn_config.server_ipv4 = server_ipv4;
+        let mut addr = server_ipv4.to_socket_addrs().unwrap();
+        self.lynn_config.server_addr = addr.next().unwrap();
+        self
+    }
+
+    pub fn with_addr<T>(mut self, addr: T) -> Self
+    where
+        T: ToSocketAddrs,
+    {
+        self.lynn_config.server_addr = addr.to_socket_addrs().unwrap().next().unwrap();
         self
     }
 
