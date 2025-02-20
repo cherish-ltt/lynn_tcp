@@ -1,5 +1,7 @@
-use std::{net::SocketAddr, sync::{LazyLock, OnceLock}};
-
+use std::{
+    net::SocketAddr,
+    sync::{LazyLock, OnceLock},
+};
 
 pub(crate) const DEFAULT_ADDR: LazyLock<SocketAddr> = LazyLock::new(|| {
     let addr = DEFAULT_IPV4.parse::<SocketAddr>().unwrap();

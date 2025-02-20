@@ -1,7 +1,7 @@
 mod common_api;
 mod lynn_client_config;
 
-use std::time::Duration;
+use std::{net::ToSocketAddrs, time::Duration};
 
 use common_api::{spawn_check_heart, spawn_handle};
 use lynn_client_config::{LynnClientConfig, LynnClientConfigBuilder};
@@ -82,10 +82,36 @@ impl<'a> LynnClient<'a> {
     /// # Returns
     ///
     /// A new `LynnClient` instance.
+    #[deprecated(since = "1.1.7", note = "use `new_with_addr` instead")]
     pub async fn new_with_ipv4(server_ipv4: &'a str) -> Self {
         let client = Self {
             lynn_client_config: LynnClientConfigBuilder::new()
                 .with_server_ipv4(server_ipv4)
+                .build(),
+            connection_join_handle: None,
+            tx_write: None,
+            rx_read: None,
+        };
+        client.log_server().await;
+        client
+    }
+
+    /// Creates a new `LynnClient` instance with the given address.
+    ///
+    /// # Parameters
+    ///
+    /// - `server_addr`: The address of the server (IPV4,IPV6).
+    ///
+    /// # Returns
+    ///
+    /// A new `LynnClient` instance.
+    pub async fn new_with_addr<T>(server_addr: T) -> Self
+    where
+        T: ToSocketAddrs,
+    {
+        let client = Self {
+            lynn_client_config: LynnClientConfigBuilder::new()
+                .with_server_addr(server_addr)
                 .build(),
             connection_join_handle: None,
             tx_write: None,

@@ -1,7 +1,9 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 
 use crate::const_config::{
-    DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME, DEFAULT_IPV4, DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MAX_THREADPOOL_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE
+    DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME, DEFAULT_IPV4,
+    DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MAX_THREADPOOL_SIZE,
+    DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE,
 };
 
 /// Represents the configuration for the Lynn server.
@@ -11,7 +13,7 @@ use crate::const_config::{
 #[cfg(feature = "server")]
 pub struct LynnServerConfig<'a> {
     // The address of the server.
-    server_addr:SocketAddr,
+    server_addr: SocketAddr,
     // The maximum number of connections for the server.
     server_max_connections: Option<&'a usize>,
     // The maximum number of threads for the server.
@@ -60,11 +62,11 @@ impl<'a> LynnServerConfig<'a> {
         server_check_heart_timeout_time: &'a u64,
         message_header_mark: &'a u16,
         message_tail_mark: &'a u16,
-    ) -> Self 
-    where 
-        T:ToSocketAddrs
+    ) -> Self
+    where
+        T: ToSocketAddrs,
     {
-        let server_addr =server_addr.to_socket_addrs().unwrap().next().unwrap();
+        let server_addr = server_addr.to_socket_addrs().unwrap().next().unwrap();
         Self {
             server_addr,
             server_max_connections,
@@ -211,16 +213,16 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// # Returns
     ///
     /// The updated `LynnServerConfigBuilder` instance.
-    #[deprecated(note="use `with_addr`",since="1.1.7")]
+    #[deprecated(note = "use `with_addr`", since = "1.1.7")]
     pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Self {
         let mut addr = server_ipv4.to_socket_addrs().unwrap();
         self.lynn_config.server_addr = addr.next().unwrap();
         self
     }
 
-    pub fn with_addr<T>(mut self, addr: T) -> Self 
-    where 
-        T: ToSocketAddrs
+    pub fn with_addr<T>(mut self, addr: T) -> Self
+    where
+        T: ToSocketAddrs,
     {
         self.lynn_config.server_addr = addr.to_socket_addrs().unwrap().next().unwrap();
         self

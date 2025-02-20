@@ -162,7 +162,7 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// A new instance of `LynnServer`.
-    #[deprecated(note="use `new_with_addr`",since="1.1.7")]
+    #[deprecated(note = "use `new_with_addr`", since = "1.1.7")]
     pub async fn new_with_ipv4(ipv4: &'a str) -> Self {
         let lynn_config = LynnServerConfigBuilder::new()
             .with_server_ipv4(ipv4)
@@ -180,13 +180,11 @@ impl<'a> LynnServer<'a> {
         app
     }
 
-    pub async fn new_with_addr<T>(addr: T) -> Self 
-    where 
-        T:ToSocketAddrs
+    pub async fn new_with_addr<T>(addr: T) -> Self
+    where
+        T: ToSocketAddrs,
     {
-        let lynn_config = LynnServerConfigBuilder::new()
-            .with_addr(addr)
-            .build();
+        let lynn_config = LynnServerConfigBuilder::new().with_addr(addr).build();
         let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
         let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
