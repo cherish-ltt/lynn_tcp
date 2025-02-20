@@ -180,6 +180,15 @@ impl<'a> LynnServer<'a> {
         app
     }
 
+    /// Creates a new instance of `LynnServer` with a specified address.
+    ///
+    /// # Parameters
+    ///
+    /// * `addr` - The address to bind the server to(IPV4,IPV6).
+    ///
+    /// # Returns
+    ///
+    /// A new instance of `LynnServer`.
     pub async fn new_with_addr<T>(addr: T) -> Self
     where
         T: ToSocketAddrs,
