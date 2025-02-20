@@ -31,7 +31,7 @@ pub mod client_config {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let client = LynnClient::new_with_ipv4("127.0.0.1:9177")
+///     let client = LynnClient::new_with_addr("127.0.0.1:9177")
 ///             .await
 ///             .start()
 ///             .await;
