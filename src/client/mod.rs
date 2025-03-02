@@ -69,7 +69,6 @@ impl<'a> LynnClient<'a> {
             tx_write: None,
             rx_read: None,
         };
-        client.log_server().await;
         client
     }
 
@@ -92,7 +91,6 @@ impl<'a> LynnClient<'a> {
             tx_write: None,
             rx_read: None,
         };
-        client.log_server().await;
         client
     }
 
@@ -117,7 +115,6 @@ impl<'a> LynnClient<'a> {
             tx_write: None,
             rx_read: None,
         };
-        client.log_server().await;
         client
     }
 
@@ -188,7 +185,9 @@ impl<'a> LynnClient<'a> {
     }
 
     /// Logs the server information.
-    pub(crate) async fn log_server(&self) {
+    /// since v1.1.8 Users need to manually activate it
+    #[cfg(feature = "client")]
+    pub fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::INFO)
             .finish();

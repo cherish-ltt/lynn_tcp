@@ -149,7 +149,6 @@ impl<'a> LynnServer<'a> {
             lynn_config,
             lynn_thread_pool: thread_pool,
         };
-        app.log_server().await;
         app
     }
 
@@ -176,7 +175,6 @@ impl<'a> LynnServer<'a> {
             lynn_config,
             lynn_thread_pool: thread_pool,
         };
-        app.log_server().await;
         app
     }
 
@@ -203,7 +201,6 @@ impl<'a> LynnServer<'a> {
             lynn_config,
             lynn_thread_pool: thread_pool,
         };
-        app.log_server().await;
         app
     }
 
@@ -226,7 +223,6 @@ impl<'a> LynnServer<'a> {
             lynn_config,
             lynn_thread_pool: thread_pool,
         };
-        app.log_server().await;
         app
     }
 
@@ -390,7 +386,9 @@ impl<'a> LynnServer<'a> {
     }
 
     /// Logs server information.
-    async fn log_server(&self) {
+    /// since v1.1.8 Users need to manually activate it
+    #[cfg(feature = "server")]
+    pub fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::INFO)
             .finish();
