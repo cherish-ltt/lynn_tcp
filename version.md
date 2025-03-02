@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.8 - release
+
+1.perf
+
+- logserver(Server and Clinet) Now users need to manually initialize the logs
+
 #### v1.1.7 - release
 
 1.feat

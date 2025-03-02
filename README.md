@@ -36,21 +36,21 @@ Use `cargo add lynn_tcp` or:
 
 ```rust
 [dependencies]
-lynn_tcp = "1.1.7"
+lynn_tcp = "1.1.8"
 ```
 
 **server feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.7" , features = "server" }
+lynn_tcp = { version = "1.1.8" , features = "server" }
 ```
 
 **client feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "1.1.7" , features = "client" }
+lynn_tcp = { version = "1.1.8" , features = "client" }
 ```
 
 #### Server
@@ -60,6 +60,8 @@ use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing or use app.logserver()
+    tracing_subscriber::fmt::init();
     let _ = LynnServer::new()
         .await
         .add_router(1, my_service)
@@ -92,6 +94,8 @@ use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing or use app.logserver()
+    tracing_subscriber::fmt::init();
     let _ = LynnServer::new_with_config(
         LynnServerConfigBuilder::new()
             .with_addr("0.0.0.0:9177")
@@ -138,7 +142,9 @@ use lynn_tcp::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = LynnClient::new_with_ipv4("127.0.0.1:9177")
+    // Initialize tracing or use app.logserver()
+    tracing_subscriber::fmt::init();
+    let client = LynnClient::new_with_addr("127.0.0.1:9177")
             .await
             .start()
             .await;

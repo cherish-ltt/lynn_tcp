@@ -31,7 +31,9 @@ pub mod client_config {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let client = LynnClient::new_with_ipv4("127.0.0.1:9177")
+///     // Initialize tracing or use app.logserver()
+///     tracing_subscriber::fmt::init();
+///     let client = LynnClient::new_with_addr("127.0.0.1:9177")
 ///             .await
 ///             .start()
 ///             .await;
@@ -69,7 +71,6 @@ impl<'a> LynnClient<'a> {
             tx_write: None,
             rx_read: None,
         };
-        client.log_server().await;
         client
     }
 
@@ -92,7 +93,6 @@ impl<'a> LynnClient<'a> {
             tx_write: None,
             rx_read: None,
         };
-        client.log_server().await;
         client
     }
 
@@ -117,7 +117,6 @@ impl<'a> LynnClient<'a> {
             tx_write: None,
             rx_read: None,
         };
-        client.log_server().await;
         client
     }
 
@@ -188,7 +187,9 @@ impl<'a> LynnClient<'a> {
     }
 
     /// Logs the server information.
-    pub(crate) async fn log_server(&self) {
+    /// since v1.1.8 Users need to manually activate it
+    #[cfg(feature = "client")]
+    pub fn log_server(&self) {
         let subscriber = fmt::Subscriber::builder()
             .with_max_level(Level::INFO)
             .finish();

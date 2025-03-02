@@ -1,8 +1,8 @@
 [package]
 name = "lynn_tcp"
-version = "1.1.7"
-edition = "2021"
-rust-version = "1.83"
+version = "1.1.8"
+edition = "2024"
+rust-version = "1.85"
 authors = ["lynn_tcp Contributors"]
 license = "MIT"
 readme = "README.md"
