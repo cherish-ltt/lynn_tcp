@@ -31,6 +31,8 @@ pub mod client_config {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // Initialize tracing or use app.logserver()
+///     tracing_subscriber::fmt::init();
 ///     let client = LynnClient::new_with_addr("127.0.0.1:9177")
 ///             .await
 ///             .start()

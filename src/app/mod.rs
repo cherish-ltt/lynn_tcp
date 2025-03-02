@@ -47,6 +47,8 @@ pub mod lynn_config_api {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // Initialize tracing or use app.logserver()
+///     tracing_subscriber::fmt::init();
 ///     let _ = LynnServer::new()
 ///         .await
 ///         .add_router(1, my_service)
@@ -78,6 +80,8 @@ pub mod lynn_config_api {
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     // Initialize tracing or use app.logserver()
+///     tracing_subscriber::fmt::init();
 ///     let _ = LynnServer::new_with_config(
 ///         LynnServerConfigBuilder::new()
 ///             .with_addr("0.0.0.0:9177")
