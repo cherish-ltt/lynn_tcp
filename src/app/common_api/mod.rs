@@ -8,9 +8,9 @@ use std::{
 
 use bytes::Bytes;
 use tokio::{
-    io::{split, AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, split},
     net::TcpStream,
-    sync::{mpsc, RwLock, Semaphore},
+    sync::{RwLock, Semaphore, mpsc},
     time::{self, interval},
 };
 use tracing::{error, info, warn};
@@ -26,7 +26,7 @@ use crate::{
     vo_factory::big_buf::BigBufReader,
 };
 
-use super::{lynn_server_user::LynnUser, AsyncFunc, ClientsStruct, ClientsStructType, TaskBody};
+use super::{AsyncFunc, ClientsStruct, ClientsStructType, TaskBody, lynn_server_user::LynnUser};
 
 use crate::vo_factory::InputBufVOTrait;
 
@@ -40,8 +40,7 @@ pub(super) fn spawn_check_heart(
         let mut interval = interval(Duration::from_secs(server_check_heart_interval));
         info!(
             "Server - [check heart] start sucess!!! with [server_check_heart_interval:{}s] [server_check_heart_timeout_time:{}s]",
-            server_check_heart_interval,
-            server_check_heart_timeout_time
+            server_check_heart_interval, server_check_heart_timeout_time
         );
         loop {
             interval.tick().await;
@@ -111,21 +110,27 @@ pub(super) fn spawn_socket_server(
             let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
             let addr = addr;
             // Write data to the client in a loop.
-            let join_handle = tokio::spawn(async move {
-                loop {
-                    if let Some(response) = rx.recv().await {
-                        if let Err(e) = write_half.write_all(&response).await {
-                            error!("Failed to write to socket: {}", e);
-                            continue;
+            let join_handle: tokio::task::JoinHandle<tokio::io::WriteHalf<TcpStream>> =
+                tokio::spawn(async move {
+                    loop {
+                        if !rx.is_closed() {
+                            if let Some(response) = rx.recv().await {
+                                if let Err(e) = write_half.write_all(&response).await {
+                                    error!("Failed to write to socket: {}", e);
+                                    continue;
+                                }
+                            }
+                        } else {
+                            break;
                         }
                     }
-                }
-            });
+                    return write_half;
+                });
             // Reads data sent by the client in a loop.
             loop {
                 let result = read_half.read(&mut buf).await;
                 match result {
-                    Ok(n) if n <= 0 => continue,
+                    Ok(n) if n <= 0 => break,
                     Ok(n) => {
                         big_buf.extend_from_slice(&buf[..n]);
                         while big_buf.is_complete() {
@@ -188,6 +193,13 @@ pub(super) fn spawn_socket_server(
                 }
             }
 
+            if let Ok(write_half) = join_handle.await {
+                if read_half.is_pair_of(&write_half) {
+                    let mut socket = read_half.unsplit(write_half);
+                    socket.shutdown();
+                }
+            }
+
             // Removes the client from the HashMap after the connection is closed.
             {
                 let mut clients_mutex = clients.write().await;
@@ -195,7 +207,6 @@ pub(super) fn spawn_socket_server(
                 if guard.contains_key(&addr) {
                     guard.remove(&addr);
                 }
-                join_handle.abort();
             }
         });
         // Saves the client's ID and send channel to the HashMap.

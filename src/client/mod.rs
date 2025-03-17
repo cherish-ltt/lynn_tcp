@@ -6,7 +6,7 @@ use std::{net::ToSocketAddrs, time::Duration};
 use common_api::{spawn_check_heart, spawn_handle};
 use lynn_client_config::{LynnClientConfig, LynnClientConfigBuilder};
 use tokio::{net::TcpStream, sync::mpsc, task::JoinHandle, time};
-use tracing::{error, info, warn, Level};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
 use crate::lynn_tcp_dependents::{HandlerResult, InputBufVO};

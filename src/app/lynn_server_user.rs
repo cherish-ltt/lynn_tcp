@@ -2,7 +2,7 @@ use std::{sync::Arc, time::SystemTime};
 
 use bytes::Bytes;
 use tokio::{
-    sync::{mpsc, RwLock, Semaphore},
+    sync::{RwLock, Semaphore, mpsc},
     task::JoinHandle,
 };
 
