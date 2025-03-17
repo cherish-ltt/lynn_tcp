@@ -19,10 +19,10 @@ use server_thread_pool::LynnServerThreadPool;
 use tokio::{
     io::AsyncWriteExt,
     net::TcpListener,
-    sync::{mpsc, RwLock, Semaphore},
+    sync::{RwLock, Semaphore, mpsc},
     task::JoinHandle,
 };
-use tracing::{error, info, warn, Level};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
 use crate::{
@@ -371,7 +371,10 @@ impl<'a> LynnServer<'a> {
                     );
                 } else {
                     let _ = socket.shutdown().await;
-                    warn!("Server socket's count is more than MAX_CONNECTIONS ,can not accept new client:{}",addr);
+                    warn!(
+                        "Server socket's count is more than MAX_CONNECTIONS ,can not accept new client:{}",
+                        addr
+                    );
                 }
             } else {
                 if let Err(e) = clinet_result {

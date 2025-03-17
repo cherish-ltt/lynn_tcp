@@ -140,12 +140,12 @@ pub extern crate tracing_subscriber;
 /// The server module, containing the server configuration API and server implementation.
 #[cfg(feature = "server")]
 pub mod lynn_server {
+    /// The server implementation, handling incoming connections and requests.
+    pub use super::app::LynnServer;
     /// The server configuration API, providing methods to configure the server.
     pub use super::app::lynn_config_api::LynnServerConfig;
     /// The server configuration builder, providing a fluent interface to build server configurations.
     pub use super::app::lynn_config_api::LynnServerConfigBuilder;
-    /// The server implementation, handling incoming connections and requests.
-    pub use super::app::LynnServer;
     /// The `ClientsContext` struct is used to manage the state and context of connected clients.
     pub use super::handler::ClientsContext;
 }
@@ -155,19 +155,19 @@ pub mod lynn_server {
 pub mod lynn_tcp_dependents {
     /// The handler result type, used to represent the result of a request handler.
     pub use super::dto_factory::input_dto::HandlerResult;
-    /// The input buffer value object, representing the input data received by the server or client.
-    pub use super::vo_factory::input_vo::InputBufVO;
     /// The input buffer value object trait, defining the behavior of input buffer value objects.
     pub use super::vo_factory::InputBufVOTrait;
+    /// The input buffer value object, representing the input data received by the server or client.
+    pub use super::vo_factory::input_vo::InputBufVO;
 }
 
 /// The client module, containing the client configuration and client implementation.
 #[cfg(feature = "client")]
 pub mod lynn_client {
+    /// The client implementation, handling outgoing connections and requests.
+    pub use super::client::LynnClient;
     /// The client configuration API, providing methods to configure the client.
     pub use super::client::client_config::LynnClientConfig;
     /// The client configuration builder, providing a fluent interface to build client configurations.
     pub use super::client::client_config::LynnClientConfigBuilder;
-    /// The client implementation, handling outgoing connections and requests.
-    pub use super::client::LynnClient;
 }

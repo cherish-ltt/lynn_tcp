@@ -58,12 +58,16 @@ impl LynnServerThreadPool {
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
-                    if let Some((task, context, clients)) = rx.recv().await {
-                        //let result = task(input_buf_vo).await;
-                        let result = task.handler(context).await;
-                        if let Err(e) = tx_result.send((result, clients)).await {
-                            error!("Failed to send result to result channel: {}", e);
+                    if !rx.is_closed() {
+                        if let Some((task, context, clients)) = rx.recv().await {
+                            //let result = task(input_buf_vo).await;
+                            let result = task.handler(context).await;
+                            if let Err(e) = tx_result.send((result, clients)).await {
+                                error!("Failed to send result to result channel: {}", e);
+                            }
                         }
+                    } else {
+                        break;
                     }
                 }
             });
@@ -76,17 +80,21 @@ impl LynnServerThreadPool {
             let thread_len = thread_task_body_rx_vec.len();
             let mut task_body_rx = task_body_rx;
             loop {
-                if let Some(task_body) = task_body_rx.recv().await {
-                    let thread_index = index % thread_len;
-                    index += 1;
-                    if let Some(tx) = thread_task_body_rx_vec.get_mut(thread_index) {
-                        if let Err(e) = tx.send(task_body).await {
-                            error!("Failed to send task to thread-{}: {}", thread_index, e);
+                if !task_body_rx.is_closed() {
+                    if let Some(task_body) = task_body_rx.recv().await {
+                        let thread_index = index % thread_len;
+                        index += 1;
+                        if let Some(tx) = thread_task_body_rx_vec.get_mut(thread_index) {
+                            if let Err(e) = tx.send(task_body).await {
+                                error!("Failed to send task to thread-{}: {}", thread_index, e);
+                            }
+                        }
+                        if index >= thread_len {
+                            index = 0;
                         }
                     }
-                    if index >= thread_len {
-                        index = 0;
-                    }
+                } else {
+                    break;
                 }
             }
         });
@@ -117,8 +125,12 @@ impl LynnServerThreadPool {
         tokio::spawn(async move {
             info!("Server - [thread-result-listening] is listening success!!!");
             loop {
-                if let Some((result, clients)) = rx.recv().await {
-                    check_handler_result(result, clients).await;
+                if !rx.is_closed() {
+                    if let Some((result, clients)) = rx.recv().await {
+                        check_handler_result(result, clients).await;
+                    }
+                } else {
+                    break;
                 }
             }
         });

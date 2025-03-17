@@ -30,29 +30,34 @@ pub(super) fn spawn_handle(
     let (tx_write, mut rx_write) = mpsc::channel::<HandlerResult>(channel_size);
     let join_handle = tokio::spawn(async move {
         let (mut read_half, mut write_half) = tokio::io::split(stream);
-        tokio::spawn(async move {
+        let write_handle: JoinHandle<tokio::io::WriteHalf<TcpStream>> = tokio::spawn(async move {
             loop {
-                if let Some(mut handler_result) = rx_write.recv().await {
-                    if !handler_result.is_with_mark() {
-                        handler_result
-                            .set_marks(message_header_mark.clone(), message_tail_mark.clone());
-                    }
-                    if let Some(response) = handler_result.get_response_data() {
-                        if let Err(e) = write_half.write_all(&response).await {
-                            error!("write to server failed - e: {:?}", e);
+                if !rx_write.is_closed() {
+                    if let Some(mut handler_result) = rx_write.recv().await {
+                        if !handler_result.is_with_mark() {
+                            handler_result
+                                .set_marks(message_header_mark.clone(), message_tail_mark.clone());
                         }
-                    } else {
-                        warn!("nothing to send");
+                        if let Some(response) = handler_result.get_response_data() {
+                            if let Err(e) = write_half.write_all(&response).await {
+                                error!("write to server failed - e: {:?}", e);
+                            }
+                        } else {
+                            warn!("nothing to send");
+                        }
                     }
+                } else {
+                    break;
                 }
             }
+            return write_half;
         });
         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
         let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
         loop {
             match read_half.read(&mut buf).await {
                 Ok(n) if n <= 0 => {
-                    continue;
+                    break;
                 }
                 Ok(n) => {
                     big_buf.extend_from_slice(&buf[..n]);
@@ -66,6 +71,12 @@ pub(super) fn spawn_handle(
                 Err(e) => {
                     error!("read from server failed : {}", e);
                 }
+            }
+        }
+        if let Ok(wirte_half) = write_handle.await {
+            if read_half.is_pair_of(&wirte_half) {
+                let mut socket = read_half.unsplit(wirte_half);
+                socket.shutdown();
             }
         }
     });
@@ -82,11 +93,15 @@ pub(super) fn spawn_check_heart(interval_time: u64, sender: mpsc::Sender<Handler
         let mut interval = interval(Duration::from_secs(interval_time));
         loop {
             interval.tick().await;
-            if let Err(e) = sender
-                .send(HandlerResult::new_with_send_heart_to_server())
-                .await
-            {
-                error!("send to server failed - e: {:?}", e)
+            if !sender.is_closed() {
+                if let Err(e) = sender
+                    .send(HandlerResult::new_with_send_heart_to_server())
+                    .await
+                {
+                    error!("send to server failed - e: {:?}", e)
+                }
+            } else {
+                break;
             }
         }
     });
