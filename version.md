@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.9 - release
+
+1.fix
+
+- lifecycle management(The previous lifecycle management was disrupted during the upgrade from v1.1.3 to v1.1.4, so we discontinued v1.1.4 to v1.1.8 and fixed the issue in v1.1.9. Currently, Rust still manages most of the lifecycle automatically, and we only manually closed some critical nodes)
+
 #### v1.1.8 - release
 
 1.perf
