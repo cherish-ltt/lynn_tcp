@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.10 - release
+
+1.perf
+
+- update rust version to 1.87.0
+
 #### v1.1.9 - release
 
 1.fix

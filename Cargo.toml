@@ -1,8 +1,8 @@
 [package]
 name = "lynn_tcp"
-version = "1.1.9"
+version = "1.1.10"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 authors = ["lynn_tcp Contributors"]
 license = "MIT"
 readme = "README.md"
@@ -13,7 +13,7 @@ keywords = ["tcp" , "tcp-server" , "tcp-client" , "network"]
 
 [dependencies]
 bytes = "=1.10.1"
-tokio = { version = "=1.44.1", features = ["macros","net","sync","rt-multi-thread","time","io-util"] }
+tokio = { version = "=1.45.1", features = ["macros","net","sync","rt-multi-thread","time","io-util"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
