@@ -6,7 +6,7 @@
 
 1.perf
 
-- Update thread pool load balancing method, switch from simple rotation training to job stealing algorithm
+- Update thread pool load balancing method, switch from simple rotation training to job stealing algorithm (Tested delay reduced by approximately 20%)
 
 2.feat
 
