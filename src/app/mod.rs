@@ -13,6 +13,7 @@ use std::{
 
 use bytes::Bytes;
 use common_api::{spawn_check_heart, spawn_socket_server};
+use crossbeam_deque::Injector;
 use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
 use lynn_server_user::LynnUser;
 use server_thread_pool::LynnServerThreadPool;
@@ -133,7 +134,9 @@ struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
 struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 
 pub(crate) type AsyncFunc = Box<dyn IHandler>;
-pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
+type TaskBodyOutChannel = (Arc<AsyncFunc>, HandlerContext, ClientsStructType);
+pub(crate) type TaskBody = Arc<Injector<TaskBodyOutChannel>>;
+// pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
 
 /// Implementation of methods for the LynnServer struct.
 impl<'a> LynnServer<'a> {

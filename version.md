@@ -2,6 +2,18 @@
 
 ### v1.1.x - release
 
+#### v1.1.12 - plan
+
+1.feat
+
+- Thread pool panic automatically restarts
+
+#### v1.1.11 - release
+
+1.perf
+
+- Update thread pool load balancing method, switch from simple rotation training to job stealing algorithm (Tested delay reduced by approximately 20%)
+
 #### v1.1.10 - release
 
 1.perf

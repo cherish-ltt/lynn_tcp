@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::{panic, sync::Arc, time::Duration};
 
+use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use tokio::{
     sync::mpsc::{self, Receiver},
     task::JoinHandle,
@@ -13,10 +14,7 @@ use crate::{
 
 use super::{AsyncFunc, ClientsStructType, TaskBody};
 
-type Threads = Vec<(
-    mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>,
-    JoinHandle<()>,
-)>;
+type Threads = Vec<(JoinHandle<()>)>;
 
 struct ThreadsStruct(Threads);
 pub(super) struct TaskBodyStruct(pub(super) TaskBody);
@@ -43,65 +41,53 @@ impl LynnServerThreadPool {
     ///
     /// A new instance of `LynnServerThreadPool`.
     pub(crate) async fn new(num_threads: &usize) -> Self {
-        let mut threads = Vec::with_capacity(*num_threads);
+        // Work theft queue
+        let global_queue: Arc<Injector<TaskBodyOutChannel>> = Arc::new(Injector::new());
+        let mut local_queues: Vec<Worker<TaskBodyOutChannel>> = Vec::new();
+        let mut stealers = Vec::new();
+        // Create workers and associate them with stealers
+        for _ in 0..*num_threads {
+            let worker = Worker::new_fifo();
+            stealers.push(worker.stealer());
+            local_queues.push(worker);
+        }
+
+        let mut threads: Vec<JoinHandle<()>> = Vec::with_capacity(*num_threads);
         let (tx_result, rx_result) = mpsc::channel::<(HandlerResult, ClientsStructType)>(
             *num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE,
         );
-        let (task_body_sender, task_body_rx) =
-            mpsc::channel::<TaskBodyOutChannel>(*num_threads * DEFAULT_SYSTEM_CHANNEL_SIZE);
-        let mut thread_task_body_rx_vec = Vec::new();
+
+        let stealers_arc = Arc::new(stealers);
         for i in 1..=*num_threads {
             let tx_result = tx_result.clone();
-            let (tx, mut rx) = mpsc::channel::<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>(
-                DEFAULT_SYSTEM_CHANNEL_SIZE,
-            );
+            let global_queue_clone = global_queue.clone();
+            let local_queues_clone = local_queues.pop().unwrap();
+            let stealers_clone = stealers_arc.clone();
+
             let handle = tokio::spawn(async move {
                 info!("Server - [thread-{}] is listening success!!!", i);
                 loop {
-                    if !rx.is_closed() {
-                        if let Some((task, context, clients)) = rx.recv().await {
-                            //let result = task(input_buf_vo).await;
-                            let result = task.handler(context).await;
-                            if let Err(e) = tx_result.send((result, clients)).await {
-                                error!("Failed to send result to result channel: {}", e);
-                            }
+                    if let Some(result) =
+                        get_task(&local_queues_clone, &global_queue_clone, &stealers_clone)
+                    {
+                        let (task, context, clients) = result;
+                        let result = task.handler(context).await;
+                        if let Err(e) = tx_result.send((result, clients)).await {
+                            error!("Failed to send result to result channel: {}", e);
                         }
                     } else {
-                        break;
+                        // 退避
+                        tokio::time::sleep(Duration::from_millis(100)).await;
                     }
                 }
             });
-            threads.push((tx.clone(), handle));
-            thread_task_body_rx_vec.push(tx);
+            threads.push(handle);
         }
 
-        tokio::spawn(async move {
-            let mut index = 0;
-            let thread_len = thread_task_body_rx_vec.len();
-            let mut task_body_rx = task_body_rx;
-            loop {
-                if !task_body_rx.is_closed() {
-                    if let Some(task_body) = task_body_rx.recv().await {
-                        let thread_index = index % thread_len;
-                        index += 1;
-                        if let Some(tx) = thread_task_body_rx_vec.get_mut(thread_index) {
-                            if let Err(e) = tx.send(task_body).await {
-                                error!("Failed to send task to thread-{}: {}", thread_index, e);
-                            }
-                        }
-                        if index >= thread_len {
-                            index = 0;
-                        }
-                    }
-                } else {
-                    break;
-                }
-            }
-        });
         let lynn_thread_pool = LynnServerThreadPool {
             threads: ThreadsStruct(threads),
             index: 0,
-            task_body_sender: TaskBodyStruct(task_body_sender),
+            task_body_sender: TaskBodyStruct(global_queue.clone()),
         }
         .spawn_handler_result(rx_result)
         .await;
@@ -136,4 +122,27 @@ impl LynnServerThreadPool {
         });
         self
     }
+}
+
+#[inline(always)]
+fn get_task(
+    local: &Worker<TaskBodyOutChannel>,
+    global: &Injector<TaskBodyOutChannel>,
+    stealers: &[Stealer<TaskBodyOutChannel>],
+) -> Option<TaskBodyOutChannel> {
+    // 1. local
+    if let Some(task) = local.pop() {
+        return Some(task);
+    }
+    // 2. global
+    if let Steal::Success(task) = global.steal_batch_and_pop(local) {
+        return Some(task);
+    }
+    // 3. stealers
+    for i in 0..stealers.len() {
+        if let Steal::Success(task) = stealers[i].steal() {
+            return Some(task);
+        }
+    }
+    None
 }

@@ -90,6 +90,6 @@ impl IHandlerMethod for MsgSelect {
             self.handler_context.clone(),
             clients,
         );
-        let _ = thread_pool.send(task_body).await;
+        thread_pool.push(task_body);
     }
 }
