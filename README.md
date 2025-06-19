@@ -16,6 +16,8 @@ English|[简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/README_
 
 - **Lower latency**: Design with read and write separation to achieve lower latency
 
+- **Single Server**: Focused on providing TCP service development for single server
+
 - **Security**: Code written with strong typing and memory safety in Rust
 
   > **tips**: Lynn_tcp is mainly used for <u>message forwarding</u> and <u>long link TCP game servers</u>
@@ -36,21 +38,21 @@ Use `cargo add lynn_tcp` or:
 
 ```rust
 [dependencies]
-lynn_tcp = "=1.1.11"
+lynn_tcp = "=1.1.12"
 ```
 
 **server feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "=1.1.11" , features = "server" }
+lynn_tcp = { version = "=1.1.12" , features = "server" }
 ```
 
 **client feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "=1.1.11" , features = "client" }
+lynn_tcp = { version = "=1.1.12" , features = "client" }
 ```
 
 #### Server
@@ -100,7 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         LynnServerConfigBuilder::new()
             .with_addr("0.0.0.0:9177")
             .with_server_max_connections(Some(&200))
-            .with_server_max_threadpool_size(&10)
+            // Suggestion 300-500
+            .with_server_max_taskpool_size(&300)
             // ...more
             .build(),
     )

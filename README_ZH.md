@@ -14,6 +14,8 @@
 
 - **低延迟,高效率**: 采用读写分离设计，实现更低的延迟
 
+- **单机服务器**: 专注于单机服务器下的tcp业务开发
+
 - **安全稳定**: 用Rust编写的具有强类型和内存安全的代码
 
   > **注意**: Lynn_tcp主要用于<u>消息转发</u>和<u>tcp游戏服务器</u>
@@ -94,7 +96,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         LynnServerConfigBuilder::new()
             .with_server_ipv4("0.0.0.0:9177")
             .with_server_max_connections(Some(&200))
-            .with_server_max_threadpool_size(&10)
+            // Suggestion 300-500
+            .with_server_max_taskpool_size(&300)
             // ...more
             .build(),
     )
