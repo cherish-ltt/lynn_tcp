@@ -8,17 +8,18 @@ use std::{
 
 use bytes::Bytes;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, split},
+    io::{AsyncReadExt, ReadHalf, split},
     net::TcpStream,
-    sync::{RwLock, Semaphore, mpsc},
-    time::{self, interval},
+    sync::{RwLock, Semaphore},
+    time::interval,
 };
 use tracing::{error, info, warn};
 
 use crate::{
+    app::ReactorEventSender,
     const_config::{
         DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
-        DEFAULT_SYSTEM_CHANNEL_SIZE, SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK,
+        SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK,
     },
     dto_factory::input_dto::{IHandlerCombinedTrait, MsgSelect},
     handler::{ClientsContext, HandlerContext},
@@ -26,7 +27,7 @@ use crate::{
     vo_factory::big_buf::BigBufReader,
 };
 
-use super::{AsyncFunc, ClientsStruct, ClientsStructType, TaskBody, lynn_server_user::LynnUser};
+use super::{AsyncFunc, ClientsStruct, ClientsStructType, lynn_server_user::LynnUser};
 
 use crate::vo_factory::InputBufVOTrait;
 
@@ -84,146 +85,6 @@ pub(super) fn spawn_check_heart(
     });
 }
 
-#[inline(always)]
-pub(super) fn spawn_socket_server(
-    addr: SocketAddr,
-    process_permit: Arc<Semaphore>,
-    message_header_mark: u16,
-    message_tail_mark: u16,
-    socket: TcpStream,
-    router_map_async: Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
-    clients: ClientsStructType,
-    thread_pool_task_body_sender: TaskBody,
-) {
-    tokio::spawn(async move {
-        // Creates a channel for sending data to the client.
-        let (tx, mut rx) = mpsc::channel::<Bytes>(DEFAULT_SYSTEM_CHANNEL_SIZE);
-        let last_communicate_time = Arc::new(RwLock::new(SystemTime::now()));
-        let process_permit_clone = process_permit.clone();
-        let last_communicate_time_clone = last_communicate_time.clone();
-        // Spawns a new asynchronous task to handle each client connection.
-        let clients_clone = clients.clone();
-        let join_handle = tokio::spawn(async move {
-            let stream = socket;
-            let (mut read_half, mut write_half) = split(stream);
-            let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
-            let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
-            let addr = addr;
-            // Write data to the client in a loop.
-            let join_handle: tokio::task::JoinHandle<tokio::io::WriteHalf<TcpStream>> =
-                tokio::spawn(async move {
-                    loop {
-                        if !rx.is_closed() {
-                            if let Some(response) = rx.recv().await {
-                                if let Err(e) = write_half.write_all(&response).await {
-                                    error!("Failed to write to socket: {}", e);
-                                    continue;
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    return write_half;
-                });
-            // Reads data sent by the client in a loop.
-            loop {
-                let result = read_half.read(&mut buf).await;
-                match result {
-                    Ok(n) if n <= 0 => break,
-                    Ok(n) => {
-                        big_buf.extend_from_slice(&buf[..n]);
-                        while big_buf.is_complete() {
-                            let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
-                            if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
-                                if constructor_id == 2 {
-                                    let last_communicate_time = last_communicate_time.clone();
-                                    tokio::spawn(async move {
-                                        let time_now = SystemTime::now();
-                                        let mut mutex = last_communicate_time.write().await;
-                                        let guard = mutex.deref_mut();
-                                        let time_old = guard.clone();
-                                        match time_old.partial_cmp(&time_now) {
-                                            Some(std::cmp::Ordering::Less) => {
-                                                *guard = time_now;
-                                            }
-                                            Some(
-                                                std::cmp::Ordering::Equal
-                                                | std::cmp::Ordering::Greater,
-                                            )
-                                            | None => {}
-                                        }
-                                    });
-                                    continue;
-                                } else if constructor_id == 1 {
-                                    if let Some(method_id) = input_buf_vo.get_method_id() {
-                                        let guard = router_map_async.deref();
-                                        if let Some(map) = guard {
-                                            if map.contains_key(&method_id) {
-                                                let a = map.get(&method_id).unwrap();
-                                                input_dto_build(
-                                                    addr,
-                                                    input_buf_vo,
-                                                    process_permit.clone(),
-                                                    clients.clone(),
-                                                    a.clone(),
-                                                    thread_pool_task_body_sender.clone(),
-                                                )
-                                                .await;
-                                            } else {
-                                                warn!(
-                                                    "router_map_async no method match,{}",
-                                                    method_id
-                                                );
-                                            }
-                                        } else {
-                                            warn!("server router is none");
-                                        }
-                                    } else {
-                                        warn!("router_map_async input_buf_vo no method_id");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Failed to read from socket: {}", e.to_string());
-                        break;
-                    }
-                }
-            }
-
-            if let Ok(write_half) = join_handle.await {
-                if read_half.is_pair_of(&write_half) {
-                    let mut socket = read_half.unsplit(write_half);
-                    socket.shutdown();
-                }
-            }
-
-            // Removes the client from the HashMap after the connection is closed.
-            {
-                let mut clients_mutex = clients.write().await;
-                let guard = clients_mutex.deref_mut();
-                if guard.contains_key(&addr) {
-                    guard.remove(&addr);
-                }
-            }
-        });
-        // Saves the client's ID and send channel to the HashMap.
-        {
-            let mut clients_mutex = clients_clone.write().await;
-            let guard = clients_mutex.deref_mut();
-            let lynn_user = LynnUser::new(
-                tx.clone(),
-                process_permit_clone,
-                join_handle,
-                last_communicate_time_clone,
-            );
-            guard.insert(addr, lynn_user);
-        }
-    });
-}
-
 /// A function for checking and sending a HandlerResult instance.
 ///
 /// This function checks the HandlerResult instance and sends it through a channel if the send flag is set to true.
@@ -232,40 +93,36 @@ pub(crate) async fn check_handler_result(
     mut handler_result: HandlerResult,
     clients: ClientsStructType,
 ) {
-    tokio::spawn(async move {
-        // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
-        if handler_result.get_is_send() {
-            let response = handler_result.get_response_data();
-            if response.is_some() && handler_result.get_addrs().is_some() {
-                if !handler_result.is_with_mark() {
-                    handler_result.set_marks(
-                        *SERVER_MESSAGE_HEADER_MARK
-                            .get()
-                            .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
-                        *SERVER_MESSAGE_TAIL_MARK
-                            .get()
-                            .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
-                    );
-                }
-                let response = response.unwrap();
-                {
-                    if let Some(addrs) = handler_result.get_addrs() {
-                        if let Some(delay_socket) = send_response(&response, &addrs, &clients).await
+    // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
+    if handler_result.get_is_send() {
+        let response = handler_result.get_response_data();
+        if response.is_some() && handler_result.get_addrs().is_some() {
+            if !handler_result.is_with_mark() {
+                handler_result.set_marks(
+                    *SERVER_MESSAGE_HEADER_MARK
+                        .get()
+                        .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
+                    *SERVER_MESSAGE_TAIL_MARK
+                        .get()
+                        .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
+                );
+            }
+            let response = response.unwrap();
+            {
+                if let Some(addrs) = handler_result.get_addrs() {
+                    if let Some(delay_socket) = send_response(&response, &addrs, &clients).await {
+                        if let Some(delay_socket) =
+                            send_response(&response, &delay_socket, &clients).await
                         {
-                            time::sleep(Duration::from_secs(1));
-                            if let Some(delay_socket) =
-                                send_response(&response, &delay_socket, &clients).await
-                            {
-                                delay_socket.iter().for_each(|addr|{
+                            delay_socket.iter().for_each(|addr|{
                                     warn!("Failed to find the client correctly, message sending is invalid , target-addr:{}",addr);
                                 });
-                            }
                         }
                     }
                 }
             }
         }
-    });
+    }
 }
 
 #[inline(always)]
@@ -302,7 +159,7 @@ pub(crate) async fn input_dto_build(
     process_permit: Arc<Semaphore>,
     clients: ClientsStructType,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: TaskBody,
+    reactor_event_sender: ReactorEventSender,
 ) {
     tokio::spawn(async move {
         // Attempt to acquire a permit from the semaphore.
@@ -317,7 +174,7 @@ pub(crate) async fn input_dto_build(
                         ClientsContext::new(ClientsStruct(clients.clone())),
                     ),
                 );
-                spawn_handler(result, clients, handler_method, thread_pool).await;
+                spawn_handler(result, clients, handler_method, reactor_event_sender).await;
                 // Release the permit after the handler task is completed.
                 drop(permit);
             }
@@ -334,7 +191,103 @@ async fn spawn_handler(
     mut result: MsgSelect,
     clients: ClientsStructType,
     handler_method: Arc<AsyncFunc>,
-    thread_pool: TaskBody,
+    reactor_event_sender: ReactorEventSender,
 ) {
-    result.execute(clients, handler_method, thread_pool).await;
+    result
+        .execute(clients, handler_method, reactor_event_sender)
+        .await;
+}
+
+#[inline(always)]
+pub(crate) async fn add_client(
+    clients: ClientsStructType,
+    socket: TcpStream,
+    addr: SocketAddr,
+    last_communicate_time: Arc<RwLock<SystemTime>>,
+) -> ReadHalf<TcpStream> {
+    let mut clients_mutex = clients.write().await;
+    let guard = clients_mutex.deref_mut();
+    let (read_half, write_half) = split(socket);
+    let lynn_user = LynnUser::new(write_half, last_communicate_time);
+    guard.insert(addr, lynn_user);
+    read_half
+}
+
+#[inline(always)]
+pub(crate) async fn push_read_half(
+    mut read_half: ReadHalf<TcpStream>,
+    process_permit: Arc<Semaphore>,
+    addr: SocketAddr,
+    clients: ClientsStructType,
+    message_header_mark: u16,
+    message_tail_mark: u16,
+    router_map_async: Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
+    reactor_event_sender: ReactorEventSender,
+    last_communicate_time: Arc<RwLock<SystemTime>>,
+) {
+    tokio::spawn(async move {
+        let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
+        let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
+        loop {
+            let result = read_half.read(&mut buf).await;
+            match result {
+                Ok(n) if n <= 0 => break,
+                Ok(n) => {
+                    big_buf.extend_from_slice(&buf[..n]);
+                    while big_buf.is_complete() {
+                        let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
+                        if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
+                            if constructor_id == 2 {
+                                let last_communicate_time = last_communicate_time.clone();
+                                tokio::spawn(async move {
+                                    let time_now = SystemTime::now();
+                                    let mut mutex = last_communicate_time.write().await;
+                                    let guard = mutex.deref_mut();
+                                    let time_old = guard.clone();
+                                    match time_old.partial_cmp(&time_now) {
+                                        Some(std::cmp::Ordering::Less) => {
+                                            *guard = time_now;
+                                        }
+                                        Some(
+                                            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater,
+                                        )
+                                        | None => {}
+                                    }
+                                });
+                                continue;
+                            } else if constructor_id == 1 {
+                                if let Some(method_id) = input_buf_vo.get_method_id() {
+                                    let guard = router_map_async.deref();
+                                    if let Some(map) = guard {
+                                        if map.contains_key(&method_id) {
+                                            let a = map.get(&method_id).unwrap();
+                                            input_dto_build(
+                                                addr,
+                                                input_buf_vo,
+                                                process_permit.clone(),
+                                                clients.clone(),
+                                                a.clone(),
+                                                reactor_event_sender.clone(),
+                                            )
+                                            .await;
+                                        } else {
+                                            warn!("router_map_async no method match,{}", method_id);
+                                        }
+                                    } else {
+                                        warn!("server router is none");
+                                    }
+                                } else {
+                                    warn!("router_map_async input_buf_vo no method_id");
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to read from socket: {}", e.to_string());
+                    break;
+                }
+            }
+        }
+    });
 }

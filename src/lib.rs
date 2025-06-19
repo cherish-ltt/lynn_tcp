@@ -1,7 +1,7 @@
-#![allow(unused)]
-#![allow(private_interfaces)]
-#![allow(private_bounds)]
-#![allow(non_snake_case)]
+// #![allow(unused)]
+// #![allow(private_interfaces)]
+// #![allow(private_bounds)]
+// #![allow(non_snake_case)]
 //#![allow(deprecated)]
 //! # Lynn_tcp
 //! `Lynn_tcp` is a lightweight TCP server framework
