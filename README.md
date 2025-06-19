@@ -202,6 +202,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 [version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
 
+### Test results
+
+| client concurrency | request counts | Total time | platform      |
+| ------------------ | -------------- | ---------- | ------------- |
+| 10                 | 1              | 5.2ms      | mac-m1pro-16G |
+| 100                | 1              | 5.6ms      | mac-m1pro-16G |
+| 1000               | 1              | 30.1ms     | mac-m1pro-16G |
+| 2000               | 1              | 59.9ms     | mac-m1pro-16G |
+| 10                 | 1000           | 32.3ms     | mac-m1pro-16G |
+| 100                | 1000           | 226.7ms    | mac-m1pro-16G |
+| 1000               | 1000           | 2.41s      | mac-m1pro-16G |
+| 2000               | 1000           | 5.14s      | mac-m1pro-16G |
+
 ### License
 
 This project is licensed under the MIT license.
