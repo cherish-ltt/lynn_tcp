@@ -16,6 +16,8 @@ English|[简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/README_
 
 - **Lower latency**: Design with read and write separation to achieve lower latency
 
+- **Single Server**: Focused on providing TCP service development for single server
+
 - **Security**: Code written with strong typing and memory safety in Rust
 
   > **tips**: Lynn_tcp is mainly used for <u>message forwarding</u> and <u>long link TCP game servers</u>
@@ -36,21 +38,21 @@ Use `cargo add lynn_tcp` or:
 
 ```rust
 [dependencies]
-lynn_tcp = "=1.1.11"
+lynn_tcp = "=1.1.12"
 ```
 
 **server feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "=1.1.11" , features = "server" }
+lynn_tcp = { version = "=1.1.12" , features = "server" }
 ```
 
 **client feature**
 
 ```rust
 [dependencies]
-lynn_tcp = { version = "=1.1.11" , features = "client" }
+lynn_tcp = { version = "=1.1.12" , features = "client" }
 ```
 
 #### Server
@@ -100,7 +102,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         LynnServerConfigBuilder::new()
             .with_addr("0.0.0.0:9177")
             .with_server_max_connections(Some(&200))
-            .with_server_max_threadpool_size(&10)
+            // Suggestion 300-500
+            .with_server_max_taskpool_size(&300)
             // ...more
             .build(),
     )
@@ -198,6 +201,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Release note 
 
 [version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
+
+### Test results
+
+| client concurrency | request counts | Total time | platform      |
+| ------------------ | -------------- | ---------- | ------------- |
+| 10                 | 1              | 5.2ms      | mac-m1pro-16G |
+| 100                | 1              | 5.6ms      | mac-m1pro-16G |
+| 1000               | 1              | 30.1ms     | mac-m1pro-16G |
+| 2000               | 1              | 59.9ms     | mac-m1pro-16G |
+| 10                 | 1000           | 32.3ms     | mac-m1pro-16G |
+| 100                | 1000           | 226.7ms    | mac-m1pro-16G |
+| 1000               | 1000           | 2.41s      | mac-m1pro-16G |
+| 2000               | 1000           | 5.14s      | mac-m1pro-16G |
 
 ### License
 

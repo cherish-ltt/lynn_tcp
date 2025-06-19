@@ -14,6 +14,8 @@
 
 - **低延迟,高效率**: 采用读写分离设计，实现更低的延迟
 
+- **单机服务器**: 专注于单机服务器下的tcp业务开发
+
 - **安全稳定**: 用Rust编写的具有强类型和内存安全的代码
 
   > **注意**: Lynn_tcp主要用于<u>消息转发</u>和<u>tcp游戏服务器</u>
@@ -94,7 +96,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         LynnServerConfigBuilder::new()
             .with_server_ipv4("0.0.0.0:9177")
             .with_server_max_connections(Some(&200))
-            .with_server_max_threadpool_size(&10)
+            // Suggestion 300-500
+            .with_server_max_taskpool_size(&300)
             // ...more
             .build(),
     )
@@ -186,6 +189,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### 版本介绍
 
 [version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
+
+### 测试结果
+
+| 并发数 | 请求次数 | Total time | 设备          |
+| ------ | -------- | ---------- | ------------- |
+| 10     | 1        | 5.2ms      | mac-m1pro-16G |
+| 100    | 1        | 5.6ms      | mac-m1pro-16G |
+| 1000   | 1        | 30.1ms     | mac-m1pro-16G |
+| 2000   | 1        | 59.9ms     | mac-m1pro-16G |
+| 10     | 1000     | 32.3ms     | mac-m1pro-16G |
+| 100    | 1000     | 226.7ms    | mac-m1pro-16G |
+| 1000   | 1000     | 2.41s      | mac-m1pro-16G |
+| 2000   | 1000     | 5.14s      | mac-m1pro-16G |
 
 ### 开源协议
 

@@ -1,8 +1,8 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 
 use crate::const_config::{
-    DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME, DEFAULT_IPV4,
-    DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MAX_THREADPOOL_SIZE,
+    DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME,
+    DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_REACTOR_TASKPOOL_SIZE, DEFAULT_MAX_RECEIVE_BYTES_SIZE,
     DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE,
 };
 
@@ -13,11 +13,11 @@ use crate::const_config::{
 #[cfg(feature = "server")]
 pub struct LynnServerConfig<'a> {
     // The address of the server.
-    server_addr: SocketAddr,
+    pub(super) server_addr: SocketAddr,
     // The maximum number of connections for the server.
     server_max_connections: Option<&'a usize>,
     // The maximum number of threads for the server.
-    server_max_threadpool_size: &'a usize,
+    server_max_reactor_taskpool_size: &'a usize,
     // The maximum number of bytes the server can receive.
     server_max_receive_bytes_reader_size: &'a usize,
     // The permit size for a single process.
@@ -55,7 +55,7 @@ impl<'a> LynnServerConfig<'a> {
     fn new<T>(
         server_addr: T,
         server_max_connections: Option<&'a usize>,
-        server_max_threadpool_size: &'a usize,
+        server_max_reactor_taskpool_size: &'a usize,
         server_max_receive_bytes_reader_size: &'a usize,
         server_single_processs_permit: &'a usize,
         server_check_heart_interval: &'a u64,
@@ -70,7 +70,7 @@ impl<'a> LynnServerConfig<'a> {
         Self {
             server_addr,
             server_max_connections,
-            server_max_threadpool_size,
+            server_max_reactor_taskpool_size,
             server_max_receive_bytes_reader_size,
             server_single_processs_permit,
             server_check_heart_interval,
@@ -89,7 +89,7 @@ impl<'a> LynnServerConfig<'a> {
         Self {
             server_addr: *DEFAULT_ADDR,
             server_max_connections: Some(&DEFAULT_MAX_CONNECTIONS),
-            server_max_threadpool_size: &DEFAULT_MAX_THREADPOOL_SIZE,
+            server_max_reactor_taskpool_size: &DEFAULT_MAX_REACTOR_TASKPOOL_SIZE,
             server_max_receive_bytes_reader_size: &DEFAULT_MAX_RECEIVE_BYTES_SIZE,
             server_single_processs_permit: &DEFAULT_PROCESS_PERMIT_SIZE,
             server_check_heart_interval: &DEFAULT_CHECK_HEART_INTERVAL,
@@ -99,12 +99,12 @@ impl<'a> LynnServerConfig<'a> {
         }
     }
 
-    /// Gets the IPv4 address of the server.
+    /// Gets the address of the server.
     ///
     /// # Returns
     ///
-    /// The IPv4 address of the server.
-    pub(crate) fn get_server_ipv4(&self) -> String {
+    /// The address of the server.
+    pub(crate) fn get_server_addr(&self) -> String {
         self.server_addr.to_string()
     }
 
@@ -149,8 +149,13 @@ impl<'a> LynnServerConfig<'a> {
     /// # Returns
     ///
     /// The maximum number of threads for the server.
+    #[deprecated(note = "use 'get_server_max_reactor_taskpool_size'", since = "1.1.12")]
     pub(crate) fn get_server_max_threadpool_size(&self) -> &usize {
-        self.server_max_threadpool_size
+        self.server_max_reactor_taskpool_size
+    }
+
+    pub(crate) fn get_server_max_reactor_taskpool_size(&self) -> &usize {
+        self.server_max_reactor_taskpool_size
     }
 
     /// Gets the maximum number of bytes the server can receive.
@@ -305,11 +310,36 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// # Returns
     ///
     /// The updated `LynnServerConfigBuilder` instance.
+    #[deprecated(note = "use `with_server_max_taskpool_size`", since = "1.1.12")]
     pub fn with_server_max_threadpool_size(
         mut self,
         server_max_threadpool_size: &'a usize,
     ) -> Self {
-        self.lynn_config.server_max_threadpool_size = server_max_threadpool_size;
+        self.lynn_config.server_max_reactor_taskpool_size = server_max_threadpool_size;
+        self
+    }
+
+    /// Sets the maximum number of taskpool for the server.
+    /// This value determines the throughput of the entire service.
+    ///
+    /// # Parameters
+    ///
+    /// * `server_max_taskpool_size` - The maximum number of taskpool for the server.
+    /// * `default` - The default value is 300.
+    /// * `suggestion` - If the known user base is small and there is little data interaction,
+    /// it can be set to <100.
+    /// It is necessary to find a suitable value in the actual application environment,
+    /// but it is not recommended to set it too small
+    ///
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_server_max_taskpool_size(
+        mut self,
+        server_max_reactor_taskpool_size: &'a usize,
+    ) -> Self {
+        self.lynn_config.server_max_reactor_taskpool_size = server_max_reactor_taskpool_size;
         self
     }
 

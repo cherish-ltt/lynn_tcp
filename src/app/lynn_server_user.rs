@@ -2,26 +2,28 @@ use std::{sync::Arc, time::SystemTime};
 
 use bytes::Bytes;
 use tokio::{
-    sync::{RwLock, Semaphore, mpsc},
-    task::JoinHandle,
+    io::{AsyncWriteExt, WriteHalf},
+    net::TcpStream,
+    sync::{Mutex, RwLock},
 };
+use tracing::error;
 
 /// Represents a user in the Lynn system.
 ///
 /// This struct holds information about a user, including their sender channel, user ID,
 /// process permit, last communicate time, and associated thread.
 pub(crate) struct LynnUser {
-    /// The sender channel used to send data to the client.
-    sender: mpsc::Sender<Bytes>,
+    /// The write_half used to send data to the client.
+    write_half: *mut WriteHalf<TcpStream>,
     /// An optional user ID.
     user_id: Option<u64>,
-    /// The process permit for the user.
-    process_permit: Arc<Semaphore>,
     /// The last time the user communicated.
     last_communicate_time: Arc<RwLock<SystemTime>>,
-    /// The thread associated with the user.
-    thread: Option<JoinHandle<()>>,
+    mutex: Mutex<()>,
 }
+
+unsafe impl Send for LynnUser {}
+unsafe impl Sync for LynnUser {}
 
 /// Implementation of methods for the LynnUser struct.
 impl LynnUser {
@@ -38,27 +40,15 @@ impl LynnUser {
     ///
     /// A new instance of LynnUser.
     pub(crate) fn new(
-        sender: mpsc::Sender<Bytes>,
-        process_permit: Arc<Semaphore>,
-        join_handle: JoinHandle<()>,
+        write_half: WriteHalf<TcpStream>,
         last_communicate_time: Arc<RwLock<SystemTime>>,
     ) -> Self {
         Self {
-            sender,
+            write_half: Box::into_raw(Box::new(write_half)),
             user_id: None,
-            process_permit,
             last_communicate_time,
-            thread: Some(join_handle),
+            mutex: Mutex::new(()),
         }
-    }
-
-    /// Gets a clone of the process permit.
-    ///
-    /// # Returns
-    ///
-    /// A clone of the process permit.
-    pub(crate) fn get_process_permit(&self) -> Arc<Semaphore> {
-        self.process_permit.clone()
     }
 
     /// Gets a clone of the last communicate time.
@@ -71,7 +61,16 @@ impl LynnUser {
     }
 
     pub(crate) async fn send_response(&self, response: &Bytes) {
-        self.sender.send(response.clone()).await;
+        let _lock = self.mutex.lock().await;
+        if !self.write_half.is_null() {
+            if let Some(write_half) = unsafe { self.write_half.as_mut() } {
+                if let Err(e) = write_half.write_all(&response).await {
+                    error!("Failed to write to socket: {}", e);
+                } else {
+                    let _ = write_half.flush().await;
+                }
+            }
+        }
     }
 }
 
@@ -82,10 +81,5 @@ impl Drop for LynnUser {
     /// # Parameters
     ///
     /// * `self` - The mutable reference to the LynnUser instance.
-    fn drop(&mut self) {
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.abort();
-        }
-        self.thread = None;
-    }
+    fn drop(&mut self) {}
 }

@@ -2,17 +2,23 @@
 
 ### v1.1.x - release
 
-#### v1.1.12 - plan
+#### v1.1.12 - release
 
-1.feat
+1.perf
 
-- Thread pool panic automatically restarts
+- Change the original task listening of each socket to a reactor model to reduce memory usage. This modification optimizes three channels layer and 50% of the memory overhead compared to the previous version(In actual testing, the throughput per second increased by about 20% compared to version v1.1.11, and by about 50% compared to other versions earlier than v1.1.11)
+
+- Simplify code(Abandoned and deleted the original thread_pool,removed some other redundant code)
+
+2.doc
+
+- Add and Update doc
 
 #### v1.1.11 - release
 
 1.perf
 
-- Update thread pool load balancing method, switch from simple rotation training to job stealing algorithm (Tested delay reduced by approximately 20%)
+- Update thread pool load balancing method, switch from simple rotation training to job stealing algorithm (In actual testing, the throughput per second increased by about 20%)
 
 #### v1.1.10 - release
 

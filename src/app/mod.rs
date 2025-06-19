@@ -1,32 +1,27 @@
 mod common_api;
 mod lynn_server_config;
 mod lynn_server_user;
-mod server_thread_pool;
+mod tcp_reactor;
 
 use std::{
     collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
-    ops::{Deref, DerefMut},
+    ops::DerefMut,
     sync::Arc,
-    time::SystemTime,
 };
 
-use bytes::Bytes;
-use common_api::{spawn_check_heart, spawn_socket_server};
+use common_api::spawn_check_heart;
 use crossbeam_deque::Injector;
-use lynn_server_config::{LynnServerConfig, LynnServerConfigBuilder};
+use lynn_server_config::LynnServerConfig;
 use lynn_server_user::LynnUser;
-use server_thread_pool::LynnServerThreadPool;
-use tokio::{
-    io::AsyncWriteExt,
-    net::TcpListener,
-    sync::{RwLock, Semaphore, mpsc},
-    task::JoinHandle,
-};
+use tokio::{net::TcpListener, sync::RwLock};
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
+#[cfg(feature = "server")]
+use crate::app::tcp_reactor::TcpReactor;
 use crate::{
+    app::tcp_reactor::event_api::ReactorEvent,
     const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK},
     handler::{HandlerContext, IHandler, IntoSystem},
 };
@@ -34,6 +29,10 @@ use crate::{
 pub mod lynn_config_api {
     pub use super::lynn_server_config::LynnServerConfig;
     pub use super::lynn_server_config::LynnServerConfigBuilder;
+}
+
+pub(crate) mod event_api {
+    pub(crate) use super::tcp_reactor::*;
 }
 
 /// Represents a server for the Lynn application.
@@ -87,7 +86,8 @@ pub mod lynn_config_api {
 ///         LynnServerConfigBuilder::new()
 ///             .with_addr("0.0.0.0:9177")
 ///             .with_server_max_connections(Some(&200))
-///             .with_server_max_threadpool_size(&10)
+///             // Suggestion 300-500
+///             .with_server_max_taskpool_size(&300)
 ///             // ...more
 ///             .build(),
 ///         )
@@ -123,8 +123,8 @@ pub struct LynnServer<'a> {
     router_maps: RouterMapsStruct,
     /// The configuration for the server.
     lynn_config: LynnServerConfig<'a>,
-    /// The thread pool for the server.
-    lynn_thread_pool: LynnServerThreadPool,
+    /// reactor
+    reactor: TcpReactor,
 }
 
 pub(crate) type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
@@ -135,7 +135,8 @@ struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 
 pub(crate) type AsyncFunc = Box<dyn IHandler>;
 type TaskBodyOutChannel = (Arc<AsyncFunc>, HandlerContext, ClientsStructType);
-pub(crate) type TaskBody = Arc<Injector<TaskBodyOutChannel>>;
+pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
+// pub(crate) type TaskBody = Arc<Injector<TaskBodyOutChannel>>;
 // pub(crate) type TaskBody = mpsc::Sender<(Arc<AsyncFunc>, HandlerContext, ClientsStructType)>;
 
 /// Implementation of methods for the LynnServer struct.
@@ -147,14 +148,12 @@ impl<'a> LynnServer<'a> {
     /// A new instance of `LynnServer`.
     pub async fn new() -> Self {
         let lynn_config = LynnServerConfig::default();
-        let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
         let app = Self {
             clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
-            lynn_thread_pool: thread_pool,
+            reactor: TcpReactor::new(),
         };
         app
     }
@@ -170,18 +169,8 @@ impl<'a> LynnServer<'a> {
     /// A new instance of `LynnServer`.
     #[deprecated(note = "use `new_with_addr`", since = "1.1.7")]
     pub async fn new_with_ipv4(ipv4: &'a str) -> Self {
-        let lynn_config = LynnServerConfigBuilder::new()
-            .with_server_ipv4(ipv4)
-            .build();
-        let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
-        let app = Self {
-            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
-            router_maps: RouterMapsStruct(None),
-            lynn_config,
-            lynn_thread_pool: thread_pool,
-        };
+        let mut app = Self::new().await;
+        app.lynn_config.server_addr = ipv4.to_socket_addrs().unwrap().next().unwrap();
         app
     }
 
@@ -198,16 +187,8 @@ impl<'a> LynnServer<'a> {
     where
         T: ToSocketAddrs,
     {
-        let lynn_config = LynnServerConfigBuilder::new().with_addr(addr).build();
-        let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
-        let app = Self {
-            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
-            router_maps: RouterMapsStruct(None),
-            lynn_config,
-            lynn_thread_pool: thread_pool,
-        };
+        let mut app = Self::new().await;
+        app.lynn_config.server_addr = addr.to_socket_addrs().unwrap().next().unwrap();
         app
     }
 
@@ -221,15 +202,8 @@ impl<'a> LynnServer<'a> {
     ///
     /// A new instance of `LynnServer`.
     pub async fn new_with_config(lynn_config: LynnServerConfig<'a>) -> Self {
-        let server_max_threadpool_size = lynn_config.get_server_max_threadpool_size();
-        let thread_pool = LynnServerThreadPool::new(server_max_threadpool_size).await;
-        let app = Self {
-            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
-            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
-            router_maps: RouterMapsStruct(None),
-            lynn_config,
-            lynn_thread_pool: thread_pool,
-        };
+        let mut app = Self::new().await;
+        app.lynn_config = lynn_config;
         app
     }
 
@@ -257,29 +231,6 @@ impl<'a> LynnServer<'a> {
     async fn synchronous_router(&mut self) {
         self.router_map_async.0 = Arc::new(self.router_maps.0.clone());
         self.router_maps.0 = None;
-    }
-
-    /// Adds a new client to the server.
-    ///
-    /// # Parameters
-    ///
-    /// * `sender` - The sender channel for the client.
-    /// * `addr` - The address of the client.
-    /// * `process_permit` - The process permit for the client.
-    /// * `join_handle` - The join handle for the client's task.
-    /// * `last_communicate_time` - The last time the client communicated.
-    async fn add_client(
-        &self,
-        sender: mpsc::Sender<Bytes>,
-        addr: SocketAddr,
-        process_permit: Arc<Semaphore>,
-        join_handle: JoinHandle<()>,
-        last_communicate_time: Arc<RwLock<SystemTime>>,
-    ) {
-        let mut clients = self.clients.0.write().await;
-        let guard = clients.deref_mut();
-        let lynn_user = LynnUser::new(sender, process_permit, join_handle, last_communicate_time);
-        guard.insert(addr, lynn_user);
     }
 
     /// Removes a client from the server.
@@ -327,67 +278,27 @@ impl<'a> LynnServer<'a> {
     /// Returns `Ok(())` if the server starts successfully, otherwise returns an error.
     async fn run(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
         // Binds a TCP listener to the local address.
-        let listener = TcpListener::bind(self.lynn_config.get_server_ipv4()).await?;
+        let listener = TcpListener::bind(self.lynn_config.get_server_addr()).await?;
         info!(
-            "Server - [Main-LynnServer] start success!!! with [server_ipv4:{}]",
-            self.lynn_config.get_server_ipv4()
+            "Server - [Main-LynnServer] start success!!! with [server_addr:{}]",
+            self.lynn_config.get_server_addr()
         );
 
         self.check_heart().await;
 
-        loop {
-            // Waits for a client to connect.
-            let clinet_result = listener.accept().await;
-            if let Ok((mut socket, addr)) = clinet_result {
-                let mut socket_permit = true;
-                {
-                    if let Some(max_connections) = self.lynn_config.get_server_max_connections() {
-                        let clients = self.clients.0.write().await;
-                        let guard = clients.deref();
-                        if guard.len() < *max_connections {
-                            socket_permit = true;
-                        } else {
-                            socket_permit = false;
-                        }
-                    }
-                }
-                if socket_permit {
-                    info!("Accepted connection from: {}", addr);
-                    let process_permit = Arc::new(Semaphore::new(
-                        *self.lynn_config.get_server_single_processs_permit(),
-                    ));
-                    let clients = self.clients.0.clone();
-                    let router_map_async = self.router_map_async.0.clone();
-                    let thread_pool_task_body_sender =
-                        self.lynn_thread_pool.task_body_sender.0.clone();
-                    let message_header_mark = self.lynn_config.get_message_header_mark().clone();
-                    let message_tail_mark = self.lynn_config.get_message_tail_mark().clone();
-                    spawn_socket_server(
-                        addr,
-                        process_permit,
-                        message_header_mark,
-                        message_tail_mark,
-                        socket,
-                        router_map_async,
-                        clients,
-                        thread_pool_task_body_sender,
-                    );
-                } else {
-                    let _ = socket.shutdown().await;
-                    warn!(
-                        "Server socket's count is more than MAX_CONNECTIONS ,can not accept new client:{}",
-                        addr
-                    );
-                }
-            } else {
-                if let Err(e) = clinet_result {
-                    warn!(
-                        "Failed to accept connection , server run next, e :{}",
-                        e.to_string()
-                    );
-                }
-            }
-        }
+        self.reactor
+            .start(
+                self.clients.0.clone(),
+                self.lynn_config.get_server_single_processs_permit(),
+                *self.lynn_config.get_message_header_mark(),
+                *self.lynn_config.get_message_tail_mark(),
+                self.router_map_async.0.clone(),
+                listener,
+                self.lynn_config.get_server_max_connections(),
+                self.lynn_config.get_server_max_reactor_taskpool_size(),
+            )
+            .await;
+        Ok(())
     }
 
     async fn init_marks(&self) {

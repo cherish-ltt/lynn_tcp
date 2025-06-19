@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use bytes::{Buf, Bytes, BytesMut};
 
 use crate::{
-    app::{AsyncFunc, ClientsStructType, TaskBody},
+    app::{AsyncFunc, ClientsStructType, ReactorEventSender},
     const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK},
 };
 
@@ -185,10 +185,11 @@ pub(crate) trait IHandlerCombinedTrait: IHandlerMethod {
         &mut self,
         clients: ClientsStructType,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: TaskBody,
+        reactor_event_sender: ReactorEventSender,
     ) {
         // Business logic
-        self.handler(handler_method, thread_pool, clients).await;
+        self.handler(handler_method, reactor_event_sender, clients)
+            .await;
     }
 }
 
@@ -206,7 +207,7 @@ pub(crate) trait IHandlerMethod {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: TaskBody,
+        reactor_event_sender: ReactorEventSender,
         clients: ClientsStructType,
     );
 }

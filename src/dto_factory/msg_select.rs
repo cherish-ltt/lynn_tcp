@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use crate::{
-    app::{AsyncFunc, ClientsStructType, TaskBody},
+    app::{AsyncFunc, ClientsStructType, ReactorEventSender, event_api::event_api::ReactorEvent},
     handler::HandlerContext,
 };
 
@@ -57,10 +57,11 @@ impl IHandlerCombinedTrait for MsgSelect {
         &mut self,
         clients: ClientsStructType,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: TaskBody,
+        reactor_event_sender: ReactorEventSender,
     ) {
         // Business logic
-        self.handler(handler_method, thread_pool, clients).await;
+        self.handler(handler_method, reactor_event_sender, clients)
+            .await;
     }
 }
 
@@ -82,7 +83,7 @@ impl IHandlerMethod for MsgSelect {
     async fn handler(
         &mut self,
         handler_method: Arc<AsyncFunc>,
-        thread_pool: TaskBody,
+        reactor_event_sender: ReactorEventSender,
         clients: ClientsStructType,
     ) {
         let task_body = (
@@ -90,6 +91,6 @@ impl IHandlerMethod for MsgSelect {
             self.handler_context.clone(),
             clients,
         );
-        thread_pool.push(task_body);
+        reactor_event_sender.push(ReactorEvent::crate_excute_task_event(task_body));
     }
 }
