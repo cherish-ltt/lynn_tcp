@@ -86,8 +86,8 @@ pub(crate) mod event_api {
 ///         LynnServerConfigBuilder::new()
 ///             .with_addr("0.0.0.0:9177")
 ///             .with_server_max_connections(Some(&200))
-///             // Suggestion 300-500
-///             .with_server_max_taskpool_size(&300)
+///             // Suggestion 256-512
+///             .with_server_max_taskpool_size(&512)
 ///             // ...more
 ///             .build(),
 ///         )
