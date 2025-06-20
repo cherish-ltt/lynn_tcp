@@ -12,7 +12,7 @@ pub(crate) const DEFAULT_IPV4: &str = "0.0.0.0:9177";
 /// The maximum number of connections allowed by the server.
 pub(crate) const DEFAULT_MAX_CONNECTIONS: usize = 1000;
 /// The maximum number of threads allowed by the server.
-pub(crate) const DEFAULT_MAX_REACTOR_TASKPOOL_SIZE: usize = 300;
+pub(crate) const DEFAULT_MAX_REACTOR_TASKPOOL_SIZE: usize = 512;
 /// The default maximum receive data size for a single client in bytes.
 pub(crate) const DEFAULT_MAX_RECEIVE_BYTES_SIZE: usize = 1024 * 1;
 /// The default system channel size, used to store the maximum number of messages that can be buffered in the system channel.

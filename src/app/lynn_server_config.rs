@@ -325,7 +325,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// # Parameters
     ///
     /// * `server_max_taskpool_size` - The maximum number of taskpool for the server.
-    /// * `default` - The default value is 300.
+    /// * `default` - The default value is 512.
     /// * `suggestion` - If the known user base is small and there is little data interaction,
     /// it can be set to <100.
     /// It is necessary to find a suitable value in the actual application environment,

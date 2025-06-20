@@ -1,8 +1,8 @@
-// #![allow(unused)]
-// #![allow(private_interfaces)]
-// #![allow(private_bounds)]
-// #![allow(non_snake_case)]
-//#![allow(deprecated)]
+#![allow(unused)]
+#![allow(private_interfaces)]
+#![allow(private_bounds)]
+#![allow(non_snake_case)]
+#![allow(deprecated)]
 //! # Lynn_tcp
 //! `Lynn_tcp` is a lightweight TCP server framework
 //! ## Keywords
@@ -64,7 +64,8 @@
 //!         LynnServerConfigBuilder::new()
 //!             .with_addr("0.0.0.0:9177")
 //!             .with_server_max_connections(Some(&200))
-//!             .with_server_max_threadpool_size(&10)
+//!             // Suggestion 256-512
+//!             .with_server_max_taskpool_size(&512)
 //!             // ...more
 //!             .build(),
 //!         )

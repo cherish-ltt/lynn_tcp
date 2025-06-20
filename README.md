@@ -204,16 +204,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### Test results
 
-| client concurrency | request counts | Total time | platform      |
-| ------------------ | -------------- | ---------- | ------------- |
-| 10                 | 1              | 5.2ms      | mac-m1pro-16G |
-| 100                | 1              | 5.6ms      | mac-m1pro-16G |
-| 1000               | 1              | 30.1ms     | mac-m1pro-16G |
-| 2000               | 1              | 59.9ms     | mac-m1pro-16G |
-| 10                 | 1000           | 32.3ms     | mac-m1pro-16G |
-| 100                | 1000           | 226.7ms    | mac-m1pro-16G |
-| 1000               | 1000           | 2.41s      | mac-m1pro-16G |
-| 2000               | 1000           | 5.14s      | mac-m1pro-16G |
+platform:mac-m1pro-16G
+
+| client concurrency | Total time | Requests | Maximum time | Minimum time | Average time | Requests/Seconds |
+| ------------------ | ---------- | -------- | ------------ | ------------ | ------------ | ---------------- |
+| 256                | 14.95s     | 2259754  | 29.15ms      | 33µs         | 1ms          | 151128           |
+| 512                | 14.91s     | 2290097  | 77.93ms      | 43µs         | 3ms          | 153591           |
+| 1024               | 14.89s     | 2330169  | 101.87ms     | 43µs         | 6ms          | 156537           |
+| 2048               | 14.71s     | 2339629  | 147.11ms     | 51µs         | 12ms         | 159065           |
+| 4096               | 14.47s     | 2072039  | 411.51ms     | 163µs        | 28ms         | 143095           |
 
 ### License
 

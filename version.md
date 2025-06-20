@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.13 - release
+
+1.doc
+
+- Add and Update doc
+
 #### v1.1.12 - release
 
 1.perf
