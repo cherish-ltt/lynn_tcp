@@ -1,5 +1,7 @@
 use bytes::BytesMut;
 
+use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
+
 /// A struct for reading large buffers.
 pub(crate) struct BigBufReader {
     /// The data buffer.
@@ -27,7 +29,7 @@ impl BigBufReader {
     /// A new `BigBufReader` instance.
     pub(crate) fn new(message_header_mark: u16, message_tail_mark: u16) -> Self {
         Self {
-            data: BytesMut::with_capacity(0),
+            data: BytesMut::with_capacity(DEFAULT_MAX_RECEIVE_BYTES_SIZE),
             remaining_data: None,
             target_len: None,
             message_header_mark,
@@ -128,9 +130,7 @@ impl BigBufReader {
     ///
     /// The data from the buffer.
     pub(crate) fn get_data(&mut self) -> BytesMut {
-        let result = &self.data[10..self.target_len.unwrap() + 8];
-        let mut bytes = BytesMut::new();
-        bytes.extend_from_slice(result);
+        let bytes = BytesMut::from(&self.data[10..self.target_len.unwrap() + 8]);
         self.check_data();
         bytes
     }

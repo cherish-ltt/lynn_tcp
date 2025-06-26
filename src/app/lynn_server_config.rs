@@ -2,8 +2,8 @@ use std::net::{SocketAddr, ToSocketAddrs};
 
 use crate::const_config::{
     DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME,
-    DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_REACTOR_TASKPOOL_SIZE, DEFAULT_MAX_RECEIVE_BYTES_SIZE,
-    DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE,
+    DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_REACTOR_TASKPOOL_SIZE, DEFAULT_MESSAGE_HEADER_MARK,
+    DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE,
 };
 
 /// Represents the configuration for the Lynn server.
@@ -18,8 +18,6 @@ pub struct LynnServerConfig<'a> {
     server_max_connections: Option<&'a usize>,
     // The maximum number of threads for the server.
     server_max_reactor_taskpool_size: &'a usize,
-    // The maximum number of bytes the server can receive.
-    server_max_receive_bytes_reader_size: &'a usize,
     // The permit size for a single process.
     server_single_processs_permit: &'a usize,
     // The interval for checking heartbeats.
@@ -36,50 +34,6 @@ pub struct LynnServerConfig<'a> {
 ///
 /// This implementation includes a constructor for the default configuration and methods to get the configuration parameters.
 impl<'a> LynnServerConfig<'a> {
-    /// Creates a new LynnServerConfig instance with the given parameters.
-    ///
-    /// # Parameters
-    ///
-    /// * `server_ipv4` - The IPv4 address of the server.
-    /// * `server_single_channel_size` - The size of a single channel.
-    /// * `server_max_connections` - The maximum number of connections for the server.
-    /// * `server_max_threadpool_size` - The maximum number of threads for the server.
-    /// * `server_max_receive_bytes_reader_size` - The maximum number of bytes the server can receive.
-    /// * `server_single_processs_permit` - The permit size for a single process.
-    /// * `server_check_heart_interval` - The interval for checking heartbeats.
-    /// * `server_check_heart_timeout_time` - The timeout time for checking heartbeats.
-    ///
-    /// # Returns
-    ///
-    /// A new LynnServerConfig instance.
-    fn new<T>(
-        server_addr: T,
-        server_max_connections: Option<&'a usize>,
-        server_max_reactor_taskpool_size: &'a usize,
-        server_max_receive_bytes_reader_size: &'a usize,
-        server_single_processs_permit: &'a usize,
-        server_check_heart_interval: &'a u64,
-        server_check_heart_timeout_time: &'a u64,
-        message_header_mark: &'a u16,
-        message_tail_mark: &'a u16,
-    ) -> Self
-    where
-        T: ToSocketAddrs,
-    {
-        let server_addr = server_addr.to_socket_addrs().unwrap().next().unwrap();
-        Self {
-            server_addr,
-            server_max_connections,
-            server_max_reactor_taskpool_size,
-            server_max_receive_bytes_reader_size,
-            server_single_processs_permit,
-            server_check_heart_interval,
-            server_check_heart_timeout_time,
-            message_header_mark,
-            message_tail_mark,
-        }
-    }
-
     /// Creates a default LynnServerConfig instance.
     ///
     /// # Returns
@@ -90,7 +44,6 @@ impl<'a> LynnServerConfig<'a> {
             server_addr: *DEFAULT_ADDR,
             server_max_connections: Some(&DEFAULT_MAX_CONNECTIONS),
             server_max_reactor_taskpool_size: &DEFAULT_MAX_REACTOR_TASKPOOL_SIZE,
-            server_max_receive_bytes_reader_size: &DEFAULT_MAX_RECEIVE_BYTES_SIZE,
             server_single_processs_permit: &DEFAULT_PROCESS_PERMIT_SIZE,
             server_check_heart_interval: &DEFAULT_CHECK_HEART_INTERVAL,
             server_check_heart_timeout_time: &DEFAULT_CHECK_HEART_TIMEOUT_TIME,
@@ -144,27 +97,8 @@ impl<'a> LynnServerConfig<'a> {
         self.server_max_connections
     }
 
-    /// Gets the maximum number of threads for the server.
-    ///
-    /// # Returns
-    ///
-    /// The maximum number of threads for the server.
-    #[deprecated(note = "use 'get_server_max_reactor_taskpool_size'", since = "1.1.12")]
-    pub(crate) fn get_server_max_threadpool_size(&self) -> &usize {
-        self.server_max_reactor_taskpool_size
-    }
-
     pub(crate) fn get_server_max_reactor_taskpool_size(&self) -> &usize {
         self.server_max_reactor_taskpool_size
-    }
-
-    /// Gets the maximum number of bytes the server can receive.
-    ///
-    /// # Returns
-    ///
-    /// The maximum number of bytes the server can receive.
-    pub(crate) fn get_server_max_receive_bytes_reader_size(&self) -> &usize {
-        self.server_max_receive_bytes_reader_size
     }
 
     /// Gets the mark for the message header.
@@ -343,24 +277,6 @@ impl<'a> LynnServerConfigBuilder<'a> {
         self
     }
 
-    /// Sets the maximum number of bytes the server can receive.
-    ///
-    /// # Parameters
-    ///
-    /// * `server_max_receive_bytes_reader_size` - The maximum number of bytes the server can receive.
-    ///
-    /// # Returns
-    ///
-    /// The updated `LynnServerConfigBuilder` instance.
-    pub fn with_server_max_receive_bytes_reader_size(
-        mut self,
-        server_max_receive_bytes_reader_size: &'a usize,
-    ) -> Self {
-        self.lynn_config.server_max_receive_bytes_reader_size =
-            server_max_receive_bytes_reader_size;
-        self
-    }
-
     /// Builds the `LynnServerConfig` instance.
     ///
     /// # Returns
@@ -379,7 +295,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// # Returns
     ///
     /// The updated `LynnServerConfigBuilder` instance.
-    pub(crate) fn with_message_header_mark(mut self, msg_header_mark: &'a u16) -> Self {
+    pub fn with_message_header_mark(mut self, msg_header_mark: &'a u16) -> Self {
         self.lynn_config.message_header_mark = msg_header_mark;
         self
     }
@@ -393,7 +309,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// # Returns
     ///
     /// The updated `LynnServerConfigBuilder` instance.
-    pub(crate) fn with_message_tail_mark(mut self, msg_tail_mark: &'a u16) -> Self {
+    pub fn with_message_tail_mark(mut self, msg_tail_mark: &'a u16) -> Self {
         self.lynn_config.message_tail_mark = msg_tail_mark;
         self
     }

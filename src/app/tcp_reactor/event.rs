@@ -131,6 +131,7 @@ impl EventManager {
     }
 }
 
+#[inline(always)]
 fn get_event(
     local_queue: &Worker<ReactorEvent>,
     global_queue: &ReactorEventSender,

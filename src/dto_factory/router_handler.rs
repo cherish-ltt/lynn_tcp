@@ -1,11 +1,8 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 
-use crate::{
-    app::{AsyncFunc, ClientsStructType, ReactorEventSender},
-    const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK},
-};
+use crate::const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK};
 
 /// A struct representing the result of a handler.
 ///
@@ -128,10 +125,10 @@ impl HandlerResult {
     /// # Returns
     ///
     /// The response data as an optional byte vector.
-    pub(crate) fn get_response_data(&self) -> Option<Bytes> {
-        match self.result_data.clone() {
+    pub(crate) fn get_response_data(&self) -> Option<BytesMut> {
+        match &self.result_data {
             Some((method_id, bytes)) => {
-                let mut bytes_mut = BytesMut::new();
+                let mut bytes_mut = BytesMut::with_capacity(bytes.len() + 14);
 
                 if let Some(mark) = self.message_header_mark {
                     bytes_mut.extend_from_slice(&mark.to_le_bytes());
@@ -139,7 +136,6 @@ impl HandlerResult {
                     bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_HEADER_MARK.to_le_bytes());
                 }
 
-                let mut msg_len = 0_u64;
                 let constructor_id = if self.is_heart {
                     2_u8.to_le_bytes()
                 } else {
@@ -148,7 +144,7 @@ impl HandlerResult {
                 let method_id_bytes = method_id.to_le_bytes();
                 let bytes_body_len = bytes.len();
                 let msg_tail_len = 2_u64;
-                msg_len = constructor_id.len() as u64
+                let msg_len = constructor_id.len() as u64
                     + method_id_bytes.len() as u64
                     + bytes_body_len as u64
                     + msg_tail_len;
@@ -165,49 +161,9 @@ impl HandlerResult {
                 } else {
                     bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_le_bytes());
                 }
-                Some(bytes_mut.copy_to_bytes(bytes_mut.len()))
+                Some(bytes_mut)
             }
             None => None,
         }
     }
-}
-
-/// A trait representing a combined handler method and data.
-///
-/// This trait combines the IHandlerMethod and IHandlerData traits.
-pub(crate) trait IHandlerCombinedTrait: IHandlerMethod {
-    /// Executes the handler logic and sends a HandlerResult instance through a channel.
-    ///
-    /// # Parameters
-    ///
-    /// * `tx`: The channel for sending the HandlerResult instance.
-    async fn execute(
-        &mut self,
-        clients: ClientsStructType,
-        handler_method: Arc<AsyncFunc>,
-        reactor_event_sender: ReactorEventSender,
-    ) {
-        // Business logic
-        self.handler(handler_method, reactor_event_sender, clients)
-            .await;
-    }
-}
-
-/// A trait representing a handler method.
-///
-/// This trait provides a method for handling data and returning a HandlerResult instance.
-pub(crate) trait IHandlerMethod {
-    /// Handles the data and returns a HandlerResult instance.
-    ///
-    /// # Parameters
-    ///
-    /// * `handler_method`: The handler method as a boxed trait object.
-    /// * `thread_pool`: The thread pool as a mutex-protected instance.
-    /// * `clients`: The clients as a mutex-protected HashMap.
-    async fn handler(
-        &mut self,
-        handler_method: Arc<AsyncFunc>,
-        reactor_event_sender: ReactorEventSender,
-        clients: ClientsStructType,
-    );
 }

@@ -31,8 +31,8 @@ pub(crate) type NewSocketEventSender = Sender<(
 )>;
 
 pub(super) struct TcpReactor {
-    pub(crate) core_reactor: CoreReactor,
-    pub(crate) event_manager: EventManager,
+    core_reactor: CoreReactor,
+    event_manager: EventManager,
 }
 
 impl TcpReactor {
