@@ -25,38 +25,6 @@ pub struct LynnClientConfig<'a> {
 }
 
 impl<'a> LynnClientConfig<'a> {
-    /// Creates a new `LynnClientConfig` instance.
-    ///
-    /// # Parameters
-    ///
-    /// - `server_ipv4`: The IPv4 address of the server.
-    /// - `client_single_channel_size`: The size of the client's single channel.
-    /// - `client_check_heart_interval`: The interval for checking the server's heartbeat.
-    /// - `message_header_mark`: The mark for the message header.
-    /// - `message_tail_mark`: The mark for the message tail.
-    ///
-    /// # Returns
-    ///
-    /// A new `LynnClientConfig` instance.
-    fn new<T>(
-        server_addr: T,
-        client_single_channel_size: &'a usize,
-        client_check_heart_interval: &'a u64,
-        message_header_mark: &'a u16,
-        message_tail_mark: &'a u16,
-    ) -> Self
-    where
-        T: ToSocketAddrs,
-    {
-        Self {
-            server_addr: server_addr.to_socket_addrs().unwrap().next().unwrap(),
-            client_single_channel_size,
-            client_check_heart_interval,
-            message_header_mark,
-            message_tail_mark,
-        }
-    }
-
     /// Returns the default configuration for the Lynn client.
     ///
     /// # Returns
@@ -79,15 +47,6 @@ impl<'a> LynnClientConfig<'a> {
     /// The server's IPv4 address.
     pub(crate) fn get_server_ipv4(&self) -> String {
         self.server_addr.to_string()
-    }
-
-    /// Sets the server's IPv4 address.
-    ///
-    /// # Parameters
-    ///
-    /// - `server_ipv4`: The new IPv4 address of the server.
-    pub(crate) fn set_server_ipv4(&mut self, server_addr: SocketAddr) {
-        self.server_addr = server_addr
     }
 
     /// Returns the size of the client's single channel.

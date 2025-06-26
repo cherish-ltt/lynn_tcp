@@ -76,7 +76,7 @@ pub(super) fn spawn_handle(
         if let Ok(wirte_half) = write_handle.await {
             if read_half.is_pair_of(&wirte_half) {
                 let mut socket = read_half.unsplit(wirte_half);
-                socket.shutdown();
+                let _ = socket.shutdown();
             }
         }
     });

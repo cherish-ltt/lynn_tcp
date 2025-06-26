@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::SystemTime};
 
-use bytes::Bytes;
+use bytes::BytesMut;
 use tokio::{
     io::{AsyncWriteExt, WriteHalf},
     net::TcpStream,
@@ -15,8 +15,6 @@ use tracing::error;
 pub(crate) struct LynnUser {
     /// The write_half used to send data to the client.
     write_half: *mut WriteHalf<TcpStream>,
-    /// An optional user ID.
-    user_id: Option<u64>,
     /// The last time the user communicated.
     last_communicate_time: Arc<RwLock<SystemTime>>,
     mutex: Mutex<()>,
@@ -45,7 +43,6 @@ impl LynnUser {
     ) -> Self {
         Self {
             write_half: Box::into_raw(Box::new(write_half)),
-            user_id: None,
             last_communicate_time,
             mutex: Mutex::new(()),
         }
@@ -60,7 +57,7 @@ impl LynnUser {
         self.last_communicate_time.clone()
     }
 
-    pub(crate) async fn send_response(&self, response: &Bytes) {
+    pub(crate) async fn send_response(&self, response: &BytesMut) {
         let _lock = self.mutex.lock().await;
         if !self.write_half.is_null() {
             if let Some(write_half) = unsafe { self.write_half.as_mut() } {

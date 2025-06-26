@@ -2,6 +2,14 @@
 
 ### v1.1.x - release
 
+#### v1.1.14 - release
+
+1.perf
+
+- Optimize memory usage
+
+- Remove unused code
+
 #### v1.1.13 - release
 
 1.doc

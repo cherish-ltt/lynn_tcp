@@ -6,7 +6,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use bytes::Bytes;
+use bytes::BytesMut;
 use tokio::{
     io::{AsyncReadExt, ReadHalf, split},
     net::TcpStream,
@@ -16,12 +16,11 @@ use tokio::{
 use tracing::{error, info, warn};
 
 use crate::{
-    app::ReactorEventSender,
+    app::{ReactorEventSender, event_api::event_api::ReactorEvent},
     const_config::{
         DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
         SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK,
     },
-    dto_factory::input_dto::{IHandlerCombinedTrait, MsgSelect},
     handler::{ClientsContext, HandlerContext},
     lynn_tcp_dependents::{HandlerResult, InputBufVO},
     vo_factory::big_buf::BigBufReader,
@@ -127,7 +126,7 @@ pub(crate) async fn check_handler_result(
 
 #[inline(always)]
 async fn send_response(
-    response: &Bytes,
+    response: &BytesMut,
     addrs: &Vec<SocketAddr>,
     clients: &ClientsStructType,
 ) -> Option<Vec<SocketAddr>> {
@@ -161,41 +160,26 @@ pub(crate) async fn input_dto_build(
     handler_method: Arc<AsyncFunc>,
     reactor_event_sender: ReactorEventSender,
 ) {
-    tokio::spawn(async move {
-        // Attempt to acquire a permit from the semaphore.
-        let result_permit = process_permit.try_acquire();
-        match result_permit {
-            Ok(permit) => {
-                // If the permit is acquired successfully, create a new `MsgSelect` instance and spawn a handler task.
-                let result = MsgSelect::new(
-                    addr,
-                    HandlerContext::new(
-                        input_buf_vo,
-                        ClientsContext::new(ClientsStruct(clients.clone())),
-                    ),
-                );
-                spawn_handler(result, clients, handler_method, reactor_event_sender).await;
-                // Release the permit after the handler task is completed.
-                drop(permit);
-            }
-            Err(_) => {
-                // If the permit cannot be acquired, log a warning.
-                warn!("addr:{} PROCESS_PERMIT_SIZE is full", addr)
-            }
+    // Attempt to acquire a permit from the semaphore.
+    let result_permit = process_permit.try_acquire();
+    match result_permit {
+        Ok(permit) => {
+            reactor_event_sender.push(ReactorEvent::crate_excute_task_event((
+                handler_method,
+                HandlerContext::new(
+                    input_buf_vo,
+                    ClientsContext::new(ClientsStruct(clients.clone())),
+                ),
+                clients,
+            )));
+            // Release the permit after the handler task is completed.
+            drop(permit);
         }
-    });
-}
-
-#[inline(always)]
-async fn spawn_handler(
-    mut result: MsgSelect,
-    clients: ClientsStructType,
-    handler_method: Arc<AsyncFunc>,
-    reactor_event_sender: ReactorEventSender,
-) {
-    result
-        .execute(clients, handler_method, reactor_event_sender)
-        .await;
+        Err(_) => {
+            // If the permit cannot be acquired, log a warning.
+            warn!("addr:{} PROCESS_PERMIT_SIZE is full", addr)
+        }
+    }
 }
 
 #[inline(always)]
@@ -260,13 +244,13 @@ pub(crate) async fn push_read_half(
                                     let guard = router_map_async.deref();
                                     if let Some(map) = guard {
                                         if map.contains_key(&method_id) {
-                                            let a = map.get(&method_id).unwrap();
+                                            let handler_method = map.get(&method_id).unwrap();
                                             input_dto_build(
                                                 addr,
                                                 input_buf_vo,
                                                 process_permit.clone(),
                                                 clients.clone(),
-                                                a.clone(),
+                                                handler_method.clone(),
                                                 reactor_event_sender.clone(),
                                             )
                                             .await;

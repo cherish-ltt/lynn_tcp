@@ -87,7 +87,7 @@ impl<'a> LynnClient<'a> {
     pub async fn new_with_ipv4(server_ipv4: &'a str) -> Self {
         let client = Self {
             lynn_client_config: LynnClientConfigBuilder::new()
-                .with_server_ipv4(server_ipv4)
+                .with_server_addr(server_ipv4)
                 .build(),
             connection_join_handle: None,
             tx_write: None,

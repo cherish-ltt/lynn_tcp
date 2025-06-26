@@ -6,7 +6,6 @@ mod tcp_reactor;
 use std::{
     collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
-    ops::DerefMut,
     sync::Arc,
 };
 
@@ -231,19 +230,6 @@ impl<'a> LynnServer<'a> {
     async fn synchronous_router(&mut self) {
         self.router_map_async.0 = Arc::new(self.router_maps.0.clone());
         self.router_maps.0 = None;
-    }
-
-    /// Removes a client from the server.
-    ///
-    /// # Parameters
-    ///
-    /// * `addr` - The address of the client to remove.
-    async fn remove_client(&mut self, addr: SocketAddr) {
-        let mut clients = self.clients.0.write().await;
-        let guard = clients.deref_mut();
-        if guard.contains_key(&addr) {
-            guard.remove(&addr);
-        }
     }
 
     /// Checks the heartbeat of connected clients and removes those that have not sent messages for a long time.
