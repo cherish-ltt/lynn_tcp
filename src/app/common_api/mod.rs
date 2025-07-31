@@ -46,10 +46,9 @@ pub(super) fn spawn_check_heart(
             interval.tick().await;
             let mut remove_list = vec![];
             {
-                let clients_mutex = clients.read().await;
-                let guard = clients_mutex.deref();
-                for (addr, lynn_user) in guard.iter() {
-                    let last_communicate_time = lynn_user.get_last_communicate_time();
+                
+                for ele in clients.iter() {
+                    let last_communicate_time = ele.value().get_last_communicate_time();
                     let last_communicate_time = last_communicate_time.read().await;
                     let time_old = last_communicate_time.deref().clone();
                     let time_now = SystemTime::now();
@@ -57,7 +56,7 @@ pub(super) fn spawn_check_heart(
                         Some(std::cmp::Ordering::Less) => match time_now.duration_since(time_old) {
                             Ok(duration) => {
                                 if duration.as_secs() > server_check_heart_timeout_time {
-                                    remove_list.push(addr.clone());
+                                    remove_list.push(ele.key().clone());
                                 }
                             }
                             Err(e) => {
@@ -68,18 +67,16 @@ pub(super) fn spawn_check_heart(
                     }
                 }
             }
-            let mut clients_mutex = clients.write().await;
-            let guard = clients_mutex.deref_mut();
             for i in remove_list {
-                if guard.contains_key(&i) {
-                    guard.remove(&i);
+                if clients.contains_key(&i) {
+                    clients.remove(&i);
                     info!(
                         "Clean up addr:{}, that have not sent messages for a long time",
                         i
                     )
                 }
             }
-            info!("Server check online socket count:{}", guard.len());
+            info!("Server check online socket count:{}", clients.len());
         }
     });
 }
@@ -132,11 +129,9 @@ async fn send_response(
 ) -> Option<Vec<SocketAddr>> {
     {
         let mut delay_socket = Vec::new();
-        let mutex = clients.read().await;
-        let guard = mutex.deref();
         for socket_addr in addrs {
-            if guard.contains_key(socket_addr) {
-                if let Some(socket) = guard.get(socket_addr) {
+            if clients.contains_key(socket_addr) {
+                if let Some(socket) = clients.get(socket_addr) {
                     socket.send_response(response).await;
                 }
             } else {
@@ -189,11 +184,9 @@ pub(crate) async fn add_client(
     addr: SocketAddr,
     last_communicate_time: Arc<RwLock<SystemTime>>,
 ) -> ReadHalf<TcpStream> {
-    let mut clients_mutex = clients.write().await;
-    let guard = clients_mutex.deref_mut();
     let (read_half, write_half) = split(socket);
     let lynn_user = LynnUser::new(write_half, last_communicate_time);
-    guard.insert(addr, lynn_user);
+    clients.insert(addr, lynn_user);
     read_half
 }
 

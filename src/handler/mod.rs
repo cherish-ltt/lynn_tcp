@@ -43,9 +43,9 @@ impl ClientsContext {
     pub async fn get_all_clients_addrs(&self) -> Vec<SocketAddr> {
         let mut result = Vec::new();
         if let Some(clients) = &self.clients {
-            let clients = clients.0.read().await;
+            let clients = &clients.0;
             for client in clients.iter() {
-                result.push(client.0.clone());
+                result.push(client.key().clone());
             }
         }
         result

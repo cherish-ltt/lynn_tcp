@@ -56,9 +56,7 @@ impl CoreReactor {
                 let mut socket_permit = true;
                 {
                     if let Some(max_connections) = alow_max_connections {
-                        let clients = clients.write().await;
-                        let guard = clients.deref();
-                        if guard.len() < *max_connections {
+                        if clients.len() < *max_connections {
                             socket_permit = true;
                         } else {
                             socket_permit = false;

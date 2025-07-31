@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.16 - release
+
+1.perf
+
+- Replace RwLock<HashMap<K, V>> with DashMap(more convenient and high-performance thread-safe map)
+
 #### v1.1.15 - release
 
 1.perf

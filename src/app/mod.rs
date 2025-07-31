@@ -11,6 +11,7 @@ use std::{
 
 use common_api::spawn_check_heart;
 use crossbeam_deque::Injector;
+use dashmap::DashMap;
 use lynn_server_config::LynnServerConfig;
 use lynn_server_user::LynnUser;
 use tokio::{net::TcpListener, sync::RwLock};
@@ -126,7 +127,7 @@ pub struct LynnServer<'a> {
     reactor: TcpReactor,
 }
 
-pub(crate) type ClientsStructType = Arc<RwLock<HashMap<SocketAddr, LynnUser>>>;
+pub(crate) type ClientsStructType = Arc<DashMap<SocketAddr, LynnUser>>;
 #[derive(Clone)]
 pub(crate) struct ClientsStruct(pub(crate) ClientsStructType);
 struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
@@ -148,7 +149,7 @@ impl<'a> LynnServer<'a> {
     pub async fn new() -> Self {
         let lynn_config = LynnServerConfig::default();
         let app = Self {
-            clients: ClientsStruct(Arc::new(RwLock::new(HashMap::new()))),
+            clients: ClientsStruct(Arc::new(DashMap::new())),
             router_map_async: RouterMapAsyncStruct(Arc::new(None)),
             router_maps: RouterMapsStruct(None),
             lynn_config,
