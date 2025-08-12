@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::SystemTime};
+use std::{net::SocketAddr, sync::Arc, time::SystemTime};
 
 use tokio::{
     io::ReadHalf,
@@ -7,7 +7,7 @@ use tokio::{
 };
 
 use crate::app::{
-    AsyncFunc, ClientsStructType, ReactorEventSender,
+    ClientsStructType, LynnRouter, ReactorEventSender,
     tcp_reactor::{event::EventManager, reactor::CoreReactor},
 };
 
@@ -25,7 +25,7 @@ pub(crate) type NewSocketEventSender = Sender<(
     ClientsStructType,
     u16,
     u16,
-    Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
+    Arc<LynnRouter>,
     ReactorEventSender,
     Arc<RwLock<SystemTime>>,
 )>;
@@ -49,7 +49,7 @@ impl TcpReactor {
         server_single_processs_permit: &usize,
         message_header_mark: u16,
         message_tail_mark: u16,
-        router_map_async: Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
+        lynn_router: Arc<LynnRouter>,
         tcp_listener: TcpListener,
         alow_max_connections: Option<&usize>,
         server_max_reactor_taskpool_size: &usize,
@@ -59,7 +59,7 @@ impl TcpReactor {
             server_single_processs_permit,
             message_header_mark,
             message_tail_mark,
-            router_map_async,
+            lynn_router,
             self.event_manager.get_global_queue(),
             self.core_reactor.tx.clone(),
             server_max_reactor_taskpool_size,

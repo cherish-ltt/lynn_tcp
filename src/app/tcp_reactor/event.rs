@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -11,7 +10,7 @@ use tokio::{
 };
 
 use crate::app::{
-    AsyncFunc, ClientsStructType, ReactorEventSender, TaskBodyOutChannel,
+    ClientsStructType, LynnRouter, ReactorEventSender, TaskBodyOutChannel,
     common_api::{add_client, check_handler_result},
     tcp_reactor::NewSocketEventSender,
 };
@@ -54,7 +53,7 @@ impl EventManager {
         server_single_processs_permit: &usize,
         message_header_mark: u16,
         message_tail_mark: u16,
-        router_map_async: Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
+        lynn_router: Arc<LynnRouter>,
         reactor_event_sender: ReactorEventSender,
         tx: NewSocketEventSender,
         server_max_reactor_taskpool_size: &usize,
@@ -75,9 +74,9 @@ impl EventManager {
             let stealers_arc_clone = stealers_arc.clone();
             let clients_clone = clients.clone();
             let server_single_processs_permit = server_single_processs_permit.clone();
-            let router_map_async = router_map_async.clone();
             let reactor_event_sender = reactor_event_sender.clone();
             let tx = tx.clone();
+            let lynn_router = lynn_router.clone();
             tokio::spawn(async move {
                 let local_queue = local_queue;
                 let global_queue = global_queue_clone;
@@ -106,7 +105,7 @@ impl EventManager {
                                         clients.clone(),
                                         message_header_mark,
                                         message_tail_mark,
-                                        router_map_async.clone(),
+                                        lynn_router.clone(),
                                         reactor_event_sender.clone(),
                                         last_communicate_time,
                                     ))
