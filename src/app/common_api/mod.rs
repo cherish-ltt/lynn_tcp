@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     net::SocketAddr,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -16,7 +15,7 @@ use tokio::{
 use tracing::{error, info, warn};
 
 use crate::{
-    app::{ReactorEventSender, event_api::event_api::ReactorEvent},
+    app::{LynnRouter, ReactorEventSender, event_api::event_api::ReactorEvent},
     const_config::{
         DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
         SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK,
@@ -46,7 +45,6 @@ pub(super) fn spawn_check_heart(
             interval.tick().await;
             let mut remove_list = vec![];
             {
-                
                 for ele in clients.iter() {
                     let last_communicate_time = ele.value().get_last_communicate_time();
                     let last_communicate_time = last_communicate_time.read().await;
@@ -198,7 +196,7 @@ pub(crate) async fn push_read_half(
     clients: ClientsStructType,
     message_header_mark: u16,
     message_tail_mark: u16,
-    router_map_async: Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
+    lynn_router: Arc<LynnRouter>,
     reactor_event_sender: ReactorEventSender,
     last_communicate_time: Arc<RwLock<SystemTime>>,
 ) {
@@ -234,24 +232,20 @@ pub(crate) async fn push_read_half(
                                 continue;
                             } else if constructor_id == 1 {
                                 if let Some(method_id) = input_buf_vo.get_method_id() {
-                                    let guard = router_map_async.deref();
-                                    if let Some(map) = guard {
-                                        if map.contains_key(&method_id) {
-                                            let handler_method = map.get(&method_id).unwrap();
-                                            input_dto_build(
-                                                addr,
-                                                input_buf_vo,
-                                                process_permit.clone(),
-                                                clients.clone(),
-                                                handler_method.clone(),
-                                                reactor_event_sender.clone(),
-                                            )
-                                            .await;
-                                        } else {
-                                            warn!("router_map_async no method match,{}", method_id);
-                                        }
+                                    if let Some(handler_method) =
+                                        lynn_router.get_handler_by_method_id(&method_id)
+                                    {
+                                        input_dto_build(
+                                            addr,
+                                            input_buf_vo,
+                                            process_permit.clone(),
+                                            clients.clone(),
+                                            handler_method.clone(),
+                                            reactor_event_sender.clone(),
+                                        )
+                                        .await;
                                     } else {
-                                        warn!("server router is none");
+                                        warn!("router_map_async no method match,{}", method_id);
                                     }
                                 } else {
                                     warn!("router_map_async input_buf_vo no method_id");

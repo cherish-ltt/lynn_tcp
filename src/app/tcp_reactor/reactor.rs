@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, ops::Deref, sync::Arc, time::SystemTime};
+use std::{net::SocketAddr, sync::Arc, time::SystemTime};
 
 use tokio::{
     io::{AsyncWriteExt, ReadHalf},
@@ -11,7 +11,7 @@ use tokio::{
 use tracing::{info, warn};
 
 use crate::app::{
-    AsyncFunc, ClientsStructType, ReactorEventSender,
+    ClientsStructType, LynnRouter, ReactorEventSender,
     common_api::push_read_half,
     tcp_reactor::{NewSocketEventSender, event::ReactorEvent},
 };
@@ -29,7 +29,7 @@ impl CoreReactor {
             ClientsStructType,
             u16,
             u16,
-            Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>,
+            Arc<LynnRouter>,
             ReactorEventSender,
             Arc<RwLock<SystemTime>>,
         )>(64);

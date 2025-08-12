@@ -2,6 +2,12 @@
 
 ### v1.1.x - release
 
+#### v1.1.17 - release
+
+1.perf
+
+- Optimize the working mode of the router
+
 #### v1.1.16 - release
 
 1.perf

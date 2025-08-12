@@ -1,10 +1,10 @@
 mod common_api;
 mod lynn_server_config;
 mod lynn_server_user;
+mod router;
 mod tcp_reactor;
 
 use std::{
-    collections::HashMap,
     net::{SocketAddr, ToSocketAddrs},
     sync::Arc,
 };
@@ -14,12 +14,12 @@ use crossbeam_deque::Injector;
 use dashmap::DashMap;
 use lynn_server_config::LynnServerConfig;
 use lynn_server_user::LynnUser;
-use tokio::{net::TcpListener, sync::RwLock};
+use tokio::net::TcpListener;
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
 #[cfg(feature = "server")]
-use crate::app::tcp_reactor::TcpReactor;
+use crate::app::{router::LynnRouter, tcp_reactor::TcpReactor};
 use crate::{
     app::tcp_reactor::event_api::ReactorEvent,
     const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK},
@@ -119,8 +119,7 @@ pub struct LynnServer<'a> {
     /// A map of connected clients, where the key is the client's address and the value is a `LynnUser` instance.
     clients: ClientsStruct,
     /// A map of routes, where the key is a method ID and the value is a service handler.
-    router_map_async: RouterMapAsyncStruct,
-    router_maps: RouterMapsStruct,
+    lynn_router: Arc<LynnRouter>,
     /// The configuration for the server.
     lynn_config: LynnServerConfig<'a>,
     /// reactor
@@ -130,8 +129,6 @@ pub struct LynnServer<'a> {
 pub(crate) type ClientsStructType = Arc<DashMap<SocketAddr, LynnUser>>;
 #[derive(Clone)]
 pub(crate) struct ClientsStruct(pub(crate) ClientsStructType);
-struct RouterMapAsyncStruct(Arc<Option<HashMap<u16, Arc<AsyncFunc>>>>);
-struct RouterMapsStruct(Option<HashMap<u16, Arc<AsyncFunc>>>);
 
 pub(crate) type AsyncFunc = Box<dyn IHandler>;
 type TaskBodyOutChannel = (Arc<AsyncFunc>, HandlerContext, ClientsStructType);
@@ -150,8 +147,7 @@ impl<'a> LynnServer<'a> {
         let lynn_config = LynnServerConfig::default();
         let app = Self {
             clients: ClientsStruct(Arc::new(DashMap::new())),
-            router_map_async: RouterMapAsyncStruct(Arc::new(None)),
-            router_maps: RouterMapsStruct(None),
+            lynn_router: Arc::new(LynnRouter::new()),
             lynn_config,
             reactor: TcpReactor::new(),
         };
@@ -218,19 +214,8 @@ impl<'a> LynnServer<'a> {
     ///
     /// The modified `LynnServer` instance.
     pub fn add_router<Param>(mut self, method_id: u16, handler: impl IntoSystem<Param>) -> Self {
-        if let Some(ref mut map) = self.router_maps.0 {
-            map.insert(method_id, Arc::new(Box::new(handler.to_system())));
-        } else {
-            let mut map: HashMap<u16, Arc<Box<dyn IHandler>>> = HashMap::new();
-            map.insert(method_id, Arc::new(Box::new(handler.to_system())));
-            self.router_maps.0 = Some(map);
-        }
+        self.lynn_router.add_router(method_id, handler);
         self
-    }
-
-    async fn synchronous_router(&mut self) {
-        self.router_map_async.0 = Arc::new(self.router_maps.0.clone());
-        self.router_maps.0 = None;
     }
 
     /// Checks the heartbeat of connected clients and removes those that have not sent messages for a long time.
@@ -250,7 +235,6 @@ impl<'a> LynnServer<'a> {
     }
 
     pub async fn start(mut self: Self) {
-        self.synchronous_router().await;
         self.init_marks().await;
         let server_arc = Arc::new(self);
         if let Err(e) = server_arc.run().await {
@@ -279,7 +263,7 @@ impl<'a> LynnServer<'a> {
                 self.lynn_config.get_server_single_processs_permit(),
                 *self.lynn_config.get_message_header_mark(),
                 *self.lynn_config.get_message_tail_mark(),
-                self.router_map_async.0.clone(),
+                self.lynn_router.clone(),
                 listener,
                 self.lynn_config.get_server_max_connections(),
                 self.lynn_config.get_server_max_reactor_taskpool_size(),
