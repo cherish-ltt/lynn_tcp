@@ -1,6 +1,6 @@
 [package]
 name = "lynn_tcp"
-version = "1.1.17"
+version = "1.2.0-rc.1"
 edition = "2024"
 rust-version = "1.89"
 authors = ["lynn_tcp Contributors"]
@@ -9,7 +9,7 @@ readme = "README.md"
 repository = "https://github.com/cherish-ltt/lynn_tcp"
 description = "Lightweight asynchronous TCP framework"
 categories = ["network-programming"]
-keywords = ["tcp" , "tcp-server" , "tcp-client" , "network"]
+keywords = ["tcp" , "tcp-server" , "tcp-client" , "network" , "lynn"]
 
 [dependencies]
 bytes = "=1.10.1"

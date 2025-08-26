@@ -1,5 +1,21 @@
 # Version Note
 
+### v1.3.x - plan
+
+#### v1.3.0-plan
+
+1.feat
+
+- unstable: Add optional TLS(based on rustls/tokio-rustls), enable this option to support efficient and secure communication encryption
+
+### v1.2.x - rc
+
+#### v1.2.0-rc.1
+
+1.perf
+
+- Adding actor model on a small scale to improve the performance of high concurrency distribution
+
 ### v1.1.x - release
 
 #### v1.1.17 - release

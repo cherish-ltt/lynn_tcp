@@ -4,20 +4,30 @@ use bytes::BytesMut;
 use tokio::{
     io::{AsyncWriteExt, WriteHalf},
     net::TcpStream,
-    sync::{Mutex, RwLock},
+    sync::{
+        RwLock,
+        mpsc::{Sender, channel},
+    },
+    task::JoinHandle,
 };
 use tracing::error;
+
+use crate::const_config::DEFAULT_SYSTEM_CHANNEL_SIZE;
+
+pub(crate) enum LynnUserSignal {
+    SendResponse(BytesMut),
+}
 
 /// Represents a user in the Lynn system.
 ///
 /// This struct holds information about a user, including their sender channel, user ID,
 /// process permit, last communicate time, and associated thread.
 pub(crate) struct LynnUser {
-    /// The write_half used to send data to the client.
-    write_half: *mut WriteHalf<TcpStream>,
     /// The last time the user communicated.
     last_communicate_time: Arc<RwLock<SystemTime>>,
-    mutex: Mutex<()>,
+    sender: Sender<LynnUserSignal>,
+
+    main_join_handle: JoinHandle<()>,
 }
 
 unsafe impl Send for LynnUser {}
@@ -41,10 +51,27 @@ impl LynnUser {
         write_half: WriteHalf<TcpStream>,
         last_communicate_time: Arc<RwLock<SystemTime>>,
     ) -> Self {
+        let (tx, mut rx) = channel(DEFAULT_SYSTEM_CHANNEL_SIZE);
+        let main_join_handle = tokio::spawn(async move {
+            let mut write_half = write_half;
+            loop {
+                if let Some(signal) = rx.recv().await {
+                    match signal {
+                        LynnUserSignal::SendResponse(response) => {
+                            if let Err(e) = write_half.write_all(&response).await {
+                                error!("Failed to write to socket: {}", e);
+                            } else {
+                                let _ = write_half.flush().await;
+                            }
+                        }
+                    }
+                }
+            }
+        });
         Self {
-            write_half: Box::into_raw(Box::new(write_half)),
             last_communicate_time,
-            mutex: Mutex::new(()),
+            sender: tx,
+            main_join_handle,
         }
     }
 
@@ -53,20 +80,19 @@ impl LynnUser {
     /// # Returns
     ///
     /// A clone of the last communicate time.
+    #[inline(always)]
     pub(crate) fn get_last_communicate_time(&self) -> Arc<RwLock<SystemTime>> {
         self.last_communicate_time.clone()
     }
 
+    #[inline(always)]
     pub(crate) async fn send_response(&self, response: &BytesMut) {
-        let _lock = self.mutex.lock().await;
-        if !self.write_half.is_null() {
-            if let Some(write_half) = unsafe { self.write_half.as_mut() } {
-                if let Err(e) = write_half.write_all(&response).await {
-                    error!("Failed to write to socket: {}", e);
-                } else {
-                    let _ = write_half.flush().await;
-                }
-            }
+        if let Err(e) = self
+            .sender
+            .send(LynnUserSignal::SendResponse(response.clone()))
+            .await
+        {
+            error!("lynn_user-send_response err: {}", e.to_string());
         }
     }
 }
@@ -78,5 +104,7 @@ impl Drop for LynnUser {
     /// # Parameters
     ///
     /// * `self` - The mutable reference to the LynnUser instance.
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        self.main_join_handle.abort();
+    }
 }
