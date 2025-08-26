@@ -192,15 +192,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 测试结果
 
-platform:mac-m1pro-16G
+平台: Debian12.9 (4H4G)
 
-| client concurrency | Total time | Requests | Maximum time | Minimum time | Average time | Requests/Seconds |
-| ------------------ | ---------- | -------- | ------------ | ------------ | ------------ | ---------------- |
-| 256                | 14.95s     | 2259754  | 29.15ms      | 33µs         | 1ms          | 151128           |
-| 512                | 14.91s     | 2290097  | 77.93ms      | 43µs         | 3ms          | 153591           |
-| 1024               | 14.89s     | 2330169  | 101.87ms     | 43µs         | 6ms          | 156537           |
-| 2048               | 14.71s     | 2339629  | 147.11ms     | 51µs         | 12ms         | 159065           |
-| 4096               | 14.47s     | 2072039  | 411.51ms     | 163µs        | 28ms         | 143095           |
+model-1: one request by one response
+
+model-2: concurrent `send request` and `recv response`
+
+总时长: 20s
+
+**version: lynn_tcp-v1.1.x**
+
+| client concurrency | model-1(Responses/Seconds) | model-2(Responses/Seconds) |
+| :----------------- | :------------------------- | -------------------------- |
+| 256                | 182,879                    | 80,499                     |
+| 512                | 249,135                    | 61,370                     |
+| 1024               | 232,861                    | 23,143                     |
+| 2048               | 185,735                    | 16,468                     |
+| 4096               | 160,318                    | 13,557                     |
+
+**version: lynn_tcp-v1.2.x**
+
+| client concurrency | model-1(Responses/Seconds) | model-2(Responses/Seconds) |
+| :----------------- | -------------------------- | -------------------------- |
+| 256                | 45,816                     | 437,347                    |
+| 512                | 182,296                    | 259,459                    |
+| 1024               | 163,307                    | 140,934                    |
+| 2048               | 131,346                    | 59,427                     |
+| 4096               | 124,645                    | 37,034                     |
 
 ### 开源协议
 
