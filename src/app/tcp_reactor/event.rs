@@ -7,6 +7,7 @@ use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use tokio::{
     net::TcpStream,
     sync::{RwLock, Semaphore},
+    task::yield_now,
 };
 
 use crate::app::{
@@ -25,13 +26,17 @@ pub(crate) struct ReactorEvent {
 }
 
 impl ReactorEvent {
+    #[inline(always)]
     fn new_with_event_type(event_type: EventType) -> Self {
         Self { event_type }
     }
+
+    #[inline(always)]
     pub(crate) fn crate_new_socket_event(socket: TcpStream, addr: core::net::SocketAddr) -> Self {
         ReactorEvent::new_with_event_type(EventType::NewSocket((socket, addr)))
     }
 
+    #[inline(always)]
     pub(crate) fn crate_excute_task_event(task_body: TaskBodyOutChannel) -> Self {
         ReactorEvent::new_with_event_type(EventType::ExcuteTask(task_body))
     }
@@ -62,14 +67,17 @@ impl EventManager {
             Vec::with_capacity(*server_max_reactor_taskpool_size);
         let mut stealers: Vec<Stealer<ReactorEvent>> =
             Vec::with_capacity(*server_max_reactor_taskpool_size);
+
         for _ in 0..*server_max_reactor_taskpool_size {
-            let worker = Worker::new_lifo();
+            let worker = Worker::new_fifo();
             stealers.push(worker.stealer());
             local_queues.push(worker);
         }
+
         let global_queue = self.global_queue.clone();
         let stealers_arc = Arc::new(stealers);
-        for local_queue in local_queues {
+
+        for (index, local_queue) in local_queues.into_iter().enumerate() {
             let global_queue_clone = global_queue.clone();
             let stealers_arc_clone = stealers_arc.clone();
             let clients_clone = clients.clone();
@@ -77,13 +85,19 @@ impl EventManager {
             let reactor_event_sender = reactor_event_sender.clone();
             let tx = tx.clone();
             let lynn_router = lynn_router.clone();
+
             tokio::spawn(async move {
                 let local_queue = local_queue;
                 let global_queue = global_queue_clone;
                 let stealers_arc = stealers_arc_clone;
                 let clients = clients_clone;
+                let mut idle_count = 0;
+
                 loop {
-                    if let Some(event) = get_event(&local_queue, &global_queue, &stealers_arc) {
+                    if let Some(event) =
+                        get_event(&local_queue, &global_queue, &stealers_arc, index)
+                    {
+                        idle_count = 0;
                         match event.event_type {
                             EventType::NewSocket((socket, addr)) => {
                                 let last_communicate_time =
@@ -118,13 +132,24 @@ impl EventManager {
                             }
                         }
                     } else {
-                        tokio::time::sleep(Duration::from_millis(10)).await;
+                        idle_count += 1;
+                        if idle_count < 64 {
+                            // Temporarily relinquish control
+                            yield_now().await;
+                        } else if idle_count < 256 {
+                            // A slightly longer wait
+                            tokio::time::sleep(Duration::from_millis(5)).await;
+                        } else {
+                            // Longer waiting time reduces CPU usage
+                            tokio::time::sleep(Duration::from_millis(25)).await;
+                        }
                     }
                 }
             });
         }
     }
 
+    #[inline(always)]
     pub(crate) fn get_global_queue(&self) -> ReactorEventSender {
         self.global_queue.clone()
     }
@@ -135,6 +160,7 @@ fn get_event(
     local_queue: &Worker<ReactorEvent>,
     global_queue: &ReactorEventSender,
     stealers_arc: &Arc<Vec<Stealer<ReactorEvent>>>,
+    worker_index: usize,
 ) -> Option<ReactorEvent> {
     // 1. local
     if let Some(event) = local_queue.pop() {
@@ -142,14 +168,28 @@ fn get_event(
     }
 
     // 2. global
-    if let Steal::Success(event) = global_queue.steal_batch_and_pop(local_queue) {
-        return Some(event);
+    match global_queue.steal_batch_and_pop(local_queue) {
+        Steal::Success(event) => return Some(event),
+        Steal::Empty => {}
+        Steal::Retry => {}
     }
 
     // 3. stealers
-    for i in 0..stealers_arc.len() {
-        if let Steal::Success(event) = stealers_arc[i].steal() {
-            return Some(event);
+    let stealers_len = stealers_arc.len();
+    if stealers_len > 1 {
+        let start_index = (worker_index + 1) % stealers_len;
+
+        for i in 0..stealers_len {
+            let steal_index = (start_index + i) % stealers_len;
+            match stealers_arc[steal_index].steal() {
+                Steal::Success(event) => return Some(event),
+                Steal::Empty | Steal::Retry => continue,
+            }
+        }
+    } else if stealers_len == 1 {
+        match stealers_arc[0].steal() {
+            Steal::Success(event) => return Some(event),
+            Steal::Empty | Steal::Retry => {}
         }
     }
 
