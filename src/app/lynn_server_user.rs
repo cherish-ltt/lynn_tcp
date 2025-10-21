@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::SystemTime};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use bytes::BytesMut;
 use tokio::{
@@ -30,9 +33,6 @@ pub(crate) struct LynnUser {
     main_join_handle: JoinHandle<()>,
 }
 
-unsafe impl Send for LynnUser {}
-unsafe impl Sync for LynnUser {}
-
 /// Implementation of methods for the LynnUser struct.
 impl LynnUser {
     /// Creates a new instance of LynnUser with the specified sender channel.
@@ -54,18 +54,30 @@ impl LynnUser {
         let (tx, mut rx) = channel(DEFAULT_SYSTEM_CHANNEL_SIZE);
         let main_join_handle = tokio::spawn(async move {
             let mut write_half = write_half;
+
+            let mut buffer = Vec::with_capacity(4096);
             loop {
-                if let Some(signal) = rx.recv().await {
-                    match signal {
-                        LynnUserSignal::SendResponse(response) => {
-                            if let Err(e) = write_half.write_all(&response).await {
-                                error!("Failed to write to socket: {}", e);
-                            } else {
-                                let _ = write_half.flush().await;
+                match rx.recv().await {
+                    Some(LynnUserSignal::SendResponse(response)) => {
+                        if let Err(e) = write_half.write_all(&response).await {
+                            error!("Failed to write to socket: {}", e);
+                            break;
+                        } else {
+                            buffer.extend_from_slice(&response);
+                            if buffer.len() >= 4096 {
+                                if let Err(e) = write_half.flush().await {
+                                    error!("Failed to flush socket: {}", e);
+                                    break;
+                                }
+                                buffer.clear();
                             }
                         }
                     }
+                    None => break,
                 }
+            }
+            if !buffer.is_empty() {
+                let _ = write_half.flush().await;
             }
         });
         Self {
@@ -92,7 +104,7 @@ impl LynnUser {
             .send(LynnUserSignal::SendResponse(response.clone()))
             .await
         {
-            error!("lynn_user-send_response err: {}", e.to_string());
+            error!("Send response error:{}", e);
         }
     }
 }

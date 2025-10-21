@@ -37,43 +37,46 @@ pub(super) fn spawn_check_heart(
 ) {
     tokio::spawn(async move {
         let mut interval = interval(Duration::from_secs(server_check_heart_interval));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
         info!(
-            "Server - [check heart] start sucess!!! with [server_check_heart_interval:{}s] [server_check_heart_timeout_time:{}s]",
+            "Server - [check heart] start success!!! with [server_check_heart_interval:{}s] [server_check_heart_timeout_time:{}s]",
             server_check_heart_interval, server_check_heart_timeout_time
         );
+
+        let timeout_duration = Duration::from_secs(server_check_heart_timeout_time);
+
         loop {
             interval.tick().await;
-            let mut remove_list = vec![];
-            {
-                for ele in clients.iter() {
-                    let last_communicate_time = ele.value().get_last_communicate_time();
-                    let last_communicate_time = last_communicate_time.read().await;
-                    let time_old = last_communicate_time.deref().clone();
-                    let time_now = SystemTime::now();
-                    match time_old.partial_cmp(&time_now) {
-                        Some(std::cmp::Ordering::Less) => match time_now.duration_since(time_old) {
-                            Ok(duration) => {
-                                if duration.as_secs() > server_check_heart_timeout_time {
-                                    remove_list.push(ele.key().clone());
-                                }
-                            }
-                            Err(e) => {
-                                warn!("unable to compare time,{}", e.to_string())
-                            }
-                        },
-                        Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) | None => {}
+
+            let mut remove_list = Vec::with_capacity(clients.len() / 10); // Assuming that up to 10% of clients may timeout
+            let current_time = SystemTime::now();
+
+            for entry in clients.iter() {
+                let addr = *entry.key();
+                let last_communicate_time = entry.value().get_last_communicate_time();
+
+                if let Ok(last_time_guard) = last_communicate_time.try_read() {
+                    let time_old = *last_time_guard;
+
+                    if let Ok(duration) = current_time.duration_since(time_old) {
+                        if duration > timeout_duration {
+                            remove_list.push(addr);
+                        }
                     }
                 }
+                // If unable to obtain a read lock, skip the client to avoid blocking
             }
-            for i in remove_list {
-                if clients.contains_key(&i) {
-                    clients.remove(&i);
+
+            for addr in remove_list {
+                if let Some((_, user)) = clients.remove(&addr) {
                     info!(
                         "Clean up addr:{}, that have not sent messages for a long time",
-                        i
-                    )
+                        addr
+                    );
                 }
             }
+
             info!("Server check online socket count:{}", clients.len());
         }
     });
@@ -105,12 +108,10 @@ pub(crate) async fn check_handler_result(
             {
                 if let Some(addrs) = handler_result.get_addrs() {
                     if let Some(delay_socket) = send_response(&response, &addrs, &clients).await {
-                        if let Some(delay_socket) =
-                            send_response(&response, &delay_socket, &clients).await
-                        {
+                        if !delay_socket.is_empty() {
                             delay_socket.iter().for_each(|addr|{
-                                    warn!("Failed to find the client correctly, message sending is invalid , target-addr:{}",addr);
-                                });
+                                warn!("Failed to find the client correctly, message sending is invalid , target-addr:{}",addr);
+                            });
                         }
                     }
                 }
@@ -122,25 +123,27 @@ pub(crate) async fn check_handler_result(
 #[inline(always)]
 async fn send_response(
     response: &BytesMut,
-    addrs: &Vec<SocketAddr>,
+    addrs: &[SocketAddr],
     clients: &ClientsStructType,
 ) -> Option<Vec<SocketAddr>> {
-    {
-        let mut delay_socket = Vec::new();
-        for socket_addr in addrs {
-            if clients.contains_key(socket_addr) {
-                if let Some(socket) = clients.get(socket_addr) {
-                    socket.send_response(response).await;
-                }
-            } else {
-                delay_socket.push(socket_addr.clone());
-            }
-        }
-        if !delay_socket.is_empty() {
-            Some(delay_socket)
+    if addrs.is_empty() {
+        return None;
+    }
+
+    let mut delay_socket = Vec::with_capacity(addrs.len());
+
+    for socket_addr in addrs {
+        if let Some(socket) = clients.get(socket_addr) {
+            socket.send_response(response).await;
         } else {
-            None
+            delay_socket.push(*socket_addr);
         }
+    }
+
+    if delay_socket.is_empty() {
+        None
+    } else {
+        Some(delay_socket)
     }
 }
 
@@ -154,9 +157,8 @@ pub(crate) async fn input_dto_build(
     reactor_event_sender: ReactorEventSender,
 ) {
     // Attempt to acquire a permit from the semaphore.
-    let result_permit = process_permit.try_acquire();
-    match result_permit {
-        Ok(permit) => {
+    match process_permit.try_acquire() {
+        Ok(_permit) => {
             reactor_event_sender.push(ReactorEvent::crate_excute_task_event((
                 handler_method,
                 HandlerContext::new(
@@ -165,8 +167,6 @@ pub(crate) async fn input_dto_build(
                 ),
                 clients,
             )));
-            // Release the permit after the handler task is completed.
-            drop(permit);
         }
         Err(_) => {
             // If the permit cannot be acquired, log a warning.
@@ -203,6 +203,7 @@ pub(crate) async fn push_read_half(
     tokio::spawn(async move {
         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
         let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
+
         loop {
             let result = read_half.read(&mut buf).await;
             match result {
@@ -212,43 +213,36 @@ pub(crate) async fn push_read_half(
                     while big_buf.is_complete() {
                         let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
                         if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
-                            if constructor_id == 2 {
-                                let last_communicate_time = last_communicate_time.clone();
-                                tokio::spawn(async move {
-                                    let time_now = SystemTime::now();
-                                    let mut mutex = last_communicate_time.write().await;
-                                    let guard = mutex.deref_mut();
-                                    let time_old = guard.clone();
-                                    match time_old.partial_cmp(&time_now) {
-                                        Some(std::cmp::Ordering::Less) => {
-                                            *guard = time_now;
+                            match constructor_id {
+                                2 => {
+                                    if let Ok(mut time_guard) = last_communicate_time.try_write() {
+                                        *time_guard = SystemTime::now();
+                                    }
+                                    continue;
+                                }
+                                1 => {
+                                    if let Some(method_id) = input_buf_vo.get_method_id() {
+                                        if let Some(handler_method) =
+                                            lynn_router.get_handler_by_method_id(&method_id)
+                                        {
+                                            input_dto_build(
+                                                addr,
+                                                input_buf_vo,
+                                                process_permit.clone(),
+                                                clients.clone(),
+                                                handler_method.clone(),
+                                                reactor_event_sender.clone(),
+                                            )
+                                            .await;
+                                        } else {
+                                            warn!("router_map_async no method match,{}", method_id);
                                         }
-                                        Some(
-                                            std::cmp::Ordering::Equal | std::cmp::Ordering::Greater,
-                                        )
-                                        | None => {}
-                                    }
-                                });
-                                continue;
-                            } else if constructor_id == 1 {
-                                if let Some(method_id) = input_buf_vo.get_method_id() {
-                                    if let Some(handler_method) =
-                                        lynn_router.get_handler_by_method_id(&method_id)
-                                    {
-                                        input_dto_build(
-                                            addr,
-                                            input_buf_vo,
-                                            process_permit.clone(),
-                                            clients.clone(),
-                                            handler_method.clone(),
-                                            reactor_event_sender.clone(),
-                                        )
-                                        .await;
                                     } else {
-                                        warn!("router_map_async no method match,{}", method_id);
+                                        warn!("router_map_async input_buf_vo no method_id");
                                     }
-                                } else {
-                                    warn!("router_map_async input_buf_vo no method_id");
+                                }
+                                _ => {
+                                    warn!("Unknown constructor_id: {}", constructor_id);
                                 }
                             }
                         }
