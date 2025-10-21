@@ -208,13 +208,13 @@ Disconnecting reconnection mechanism
 
 ### Test results
 
-platform: Debian12.9 (4H4G)
+platform: Debian12.12 (4H4G) - 2025.10.21
 
 model-1: one request by one response
 
 model-2: concurrent `send request` and `recv response`
 
-total-time: 20s
+total-time: 15s
 
 **version: lynn_tcp-v1.1.x**
 
@@ -230,11 +230,11 @@ total-time: 20s
 
 | client concurrency | model-1(Responses/Seconds) | model-2(Responses/Seconds) |
 | :----------------- | -------------------------- | -------------------------- |
-| 256                | 45,816                     | 437,347                    |
-| 512                | 182,296                    | 259,459                    |
-| 1024               | 163,307                    | 140,934                    |
-| 2048               | 131,346                    | 59,427                     |
-| 4096               | 124,645                    | 37,034                     |
+| 256                | 64,630                     | 492,889                    |
+| 512                | 182,296                    | 300,550                    |
+| 1024               | 163,307                    | 158,056                    |
+| 2048               | 131,346                    | 71,263                     |
+| 4096               | 124,645                    | 52,163                     |
 
 ### License
 

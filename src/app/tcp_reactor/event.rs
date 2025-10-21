@@ -67,16 +67,13 @@ impl EventManager {
             Vec::with_capacity(*server_max_reactor_taskpool_size);
         let mut stealers: Vec<Stealer<ReactorEvent>> =
             Vec::with_capacity(*server_max_reactor_taskpool_size);
-
         for _ in 0..*server_max_reactor_taskpool_size {
             let worker = Worker::new_fifo();
             stealers.push(worker.stealer());
             local_queues.push(worker);
         }
-
         let global_queue = self.global_queue.clone();
         let stealers_arc = Arc::new(stealers);
-
         for (index, local_queue) in local_queues.into_iter().enumerate() {
             let global_queue_clone = global_queue.clone();
             let stealers_arc_clone = stealers_arc.clone();
@@ -85,14 +82,13 @@ impl EventManager {
             let reactor_event_sender = reactor_event_sender.clone();
             let tx = tx.clone();
             let lynn_router = lynn_router.clone();
+            let mut idle_count: u16 = 0;
 
             tokio::spawn(async move {
                 let local_queue = local_queue;
                 let global_queue = global_queue_clone;
                 let stealers_arc = stealers_arc_clone;
                 let clients = clients_clone;
-                let mut idle_count = 0;
-
                 loop {
                     if let Some(event) =
                         get_event(&local_queue, &global_queue, &stealers_arc, index)
@@ -132,11 +128,14 @@ impl EventManager {
                             }
                         }
                     } else {
-                        idle_count += 1;
-                        if idle_count < 64 {
+                        idle_count.saturating_add(1);
+                        if idle_count < 32 {
                             // Temporarily relinquish control
                             yield_now().await;
-                        } else if idle_count < 256 {
+                        } else if idle_count < 1024_0 {
+                            // A slightly longer wait
+                            tokio::time::sleep(Duration::from_millis(1)).await;
+                        } else if idle_count < 32767 {
                             // A slightly longer wait
                             tokio::time::sleep(Duration::from_millis(5)).await;
                         } else {
@@ -149,7 +148,6 @@ impl EventManager {
         }
     }
 
-    #[inline(always)]
     pub(crate) fn get_global_queue(&self) -> ReactorEventSender {
         self.global_queue.clone()
     }
@@ -168,27 +166,29 @@ fn get_event(
     }
 
     // 2. global
-    match global_queue.steal_batch_and_pop(local_queue) {
-        Steal::Success(event) => return Some(event),
-        Steal::Empty => {}
-        Steal::Retry => {}
+    if let Steal::Success(event) = global_queue.steal_batch_and_pop(local_queue) {
+        return Some(event);
     }
 
     // 3. stealers
     let stealers_len = stealers_arc.len();
+
     if stealers_len > 1 {
         let start_index = (worker_index + 1) % stealers_len;
 
         for i in 0..stealers_len {
             let steal_index = (start_index + i) % stealers_len;
+
             match stealers_arc[steal_index].steal() {
                 Steal::Success(event) => return Some(event),
+
                 Steal::Empty | Steal::Retry => continue,
             }
         }
     } else if stealers_len == 1 {
         match stealers_arc[0].steal() {
             Steal::Success(event) => return Some(event),
+
             Steal::Empty | Steal::Retry => {}
         }
     }
