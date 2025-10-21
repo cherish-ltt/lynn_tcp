@@ -10,6 +10,10 @@
 
 ### v1.2.x - rc
 
+#### v1.2.0-release
+
+Integrate v1.2.0-rc.1,rc.2
+
 #### v1.2.0-rc.2
 
 Optimize network handling performance(by ai-agent GLM4.6)

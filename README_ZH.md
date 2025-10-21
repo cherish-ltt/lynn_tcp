@@ -192,7 +192,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 测试结果
 
-平台: Debian12.9 (4H4G)
+平台: Debian12.12 (4H4G)
 
 model-1: one request by one response
 
@@ -214,11 +214,11 @@ model-2: concurrent `send request` and `recv response`
 
 | client concurrency | model-1(Responses/Seconds) | model-2(Responses/Seconds) |
 | :----------------- | -------------------------- | -------------------------- |
-| 256                | 45,816                     | 437,347                    |
-| 512                | 182,296                    | 259,459                    |
-| 1024               | 163,307                    | 140,934                    |
-| 2048               | 131,346                    | 59,427                     |
-| 4096               | 124,645                    | 37,034                     |
+| 256                | 64,630                     | 492,889                    |
+| 512                | 182,296                    | 300,550                    |
+| 1024               | 163,307                    | 158,056                    |
+| 2048               | 131,346                    | 71,263                     |
+| 4096               | 124,645                    | 52,163                     |
 
 ### 开源协议
 
