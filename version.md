@@ -10,6 +10,19 @@
 
 ### v1.2.x - rc
 
+#### v1.2.0-rc.2
+
+Optimize network handling performance(by ai-agent GLM4.6)
+
+Improve server throughput and reliability by:
+- Using non-blocking operations for client timeout checks
+- Adding adaptive buffering for socket writes
+- Implementing better work-stealing algorithm
+- Adding adaptive idle waiting to reduce CPU usage
+- Fixing various error handling issues
+
+We are testing and using `AI agent-GLM4.6` for the first time to optimize and develop a new version
+
 #### v1.2.0-rc.1
 
 1.perf

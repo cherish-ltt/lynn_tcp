@@ -182,9 +182,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #### Extended functions
 
- ✅ TLS1.3 (support on v1.2.0 and above)
+TLS1.3 (plan on v1.3.0)
 
-Scheduled tasks
+Scheduled tasks (plan on v1.4.0)
 
 Middleware
 
