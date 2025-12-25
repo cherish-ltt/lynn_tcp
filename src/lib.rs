@@ -132,6 +132,12 @@ mod error;
 mod handler;
 /// The macros module, containing custom macros used throughout the application.
 mod macros;
+/// The metrics module, containing Prometheus metrics collection.
+#[cfg(feature = "metrics")]
+mod metrics;
+/// The metrics server module, providing HTTP metrics endpoint.
+#[cfg(feature = "metrics")]
+mod metrics_server;
 /// The validation module, containing input validation and security functions.
 mod validation;
 /// The VO factory module, responsible for creating value objects.
@@ -144,6 +150,17 @@ pub extern crate tracing_subscriber;
 
 /// Re-export common error types
 pub use error::{LynnError, Result};
+
+/// Metrics module for monitoring
+#[cfg(feature = "metrics")]
+pub mod lynn_metrics {
+    /// Re-export metrics collection
+    pub use super::metrics::{Metrics, Timer, export_metrics};
+    /// Re-export metrics server
+    pub use super::metrics_server::{MetricsServerConfig, serve_metrics, spawn_metrics_server};
+    /// Re-export prometheus for advanced usage
+    pub use prometheus;
+}
 
 /// The server module, containing the server configuration API and server implementation.
 #[cfg(feature = "server")]

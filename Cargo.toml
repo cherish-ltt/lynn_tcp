@@ -1,8 +1,8 @@
 [package]
 name = "lynn_tcp"
-version = "1.2.0"
+version = "1.2.4"
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.92"
 authors = ["lynn_tcp Contributors"]
 license = "MIT"
 readme = "README.md"
@@ -21,8 +21,12 @@ tracing-subscriber = "0.3"
 thiserror = "2.0"
 anyhow = "1.0"
 socket2 = "0.5"
+prometheus = "0.13"
+lazy_static = "1.5"
 
 [features]
 default=["server","client"]
-server=[]
+server=["metrics"]
 client=[]
+
+metrics=[]
