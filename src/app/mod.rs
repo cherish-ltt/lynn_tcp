@@ -1,4 +1,5 @@
 mod common_api;
+mod connection_limiter;
 mod lynn_server_config;
 mod lynn_server_user;
 mod router;
@@ -10,6 +11,7 @@ use std::{
 };
 
 use common_api::spawn_check_heart;
+use connection_limiter::ConnectionLimiter;
 use crossbeam_deque::Injector;
 use dashmap::DashMap;
 use lynn_server_config::LynnServerConfig;
@@ -19,7 +21,7 @@ use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 #[cfg(feature = "server")]
-use crate::app::{router::LynnRouter, tcp_reactor::TcpReactor};
+use crate::app::{router::LynnRouter, tcp_reactor::{TcpReactor, TcpSocketConfig}};
 use crate::{
     app::tcp_reactor::event_api::ReactorEvent,
     const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK},
@@ -284,6 +286,24 @@ impl<'a> LynnServer<'a> {
 
         self.check_heart().await;
 
+        // Create connection limiter if rate limiting or per-IP limiting is enabled
+        let rate_limit = *self.lynn_config.get_server_connection_rate_limit();
+        let max_connections_per_ip = *self.lynn_config.get_server_max_connections_per_ip();
+        let connection_limiter = if rate_limit > 0 || max_connections_per_ip > 0 {
+            Some(Arc::new(ConnectionLimiter::new(rate_limit, max_connections_per_ip)))
+        } else {
+            None
+        };
+
+        // Create TCP socket configuration
+        let tcp_config = TcpSocketConfig {
+            nodelay: *self.lynn_config.get_tcp_nodelay(),
+            keepalive_enabled: *self.lynn_config.get_tcp_keepalive_enabled(),
+            keepalive_time_secs: *self.lynn_config.get_tcp_keepalive_time_secs(),
+            recv_buffer_size: *self.lynn_config.get_recv_buffer_size(),
+            send_buffer_size: *self.lynn_config.get_send_buffer_size(),
+        };
+
         self.reactor
             .start(
                 self.clients.0.clone(),
@@ -294,6 +314,14 @@ impl<'a> LynnServer<'a> {
                 listener,
                 self.lynn_config.get_server_max_connections(),
                 self.lynn_config.get_server_max_reactor_taskpool_size(),
+                connection_limiter.as_ref().map(|limiter| {
+                    (
+                        self.lynn_config.get_server_connection_rate_limit(),
+                        self.lynn_config.get_server_max_connections_per_ip(),
+                        limiter.clone(),
+                    )
+                }),
+                tcp_config,
             )
             .await;
         Ok(())

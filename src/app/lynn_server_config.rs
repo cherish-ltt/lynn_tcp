@@ -433,4 +433,131 @@ impl<'a> LynnServerConfigBuilder<'a> {
         self.lynn_config.message_tail_mark = msg_tail_mark;
         self
     }
+
+    /// Sets the maximum number of connections per IP address.
+    ///
+    /// # Parameters
+    ///
+    /// * `max_connections_per_ip` - The maximum number of connections per IP.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_max_connections_per_ip(mut self, max_connections_per_ip: &'a usize) -> Self {
+        self.lynn_config.server_max_connections_per_ip = max_connections_per_ip;
+        self
+    }
+
+    /// Sets the connection rate limit (connections per second).
+    /// Set to 0 to disable rate limiting.
+    ///
+    /// # Parameters
+    ///
+    /// * `connection_rate_limit` - The maximum number of connections per second.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_connection_rate_limit(mut self, connection_rate_limit: &'a u64) -> Self {
+        self.lynn_config.server_connection_rate_limit = connection_rate_limit;
+        self
+    }
+
+    /// Sets the TCP_NODELAY setting.
+    ///
+    /// # Parameters
+    ///
+    /// * `tcp_nodelay` - Whether to enable TCP_NODELAY.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_tcp_nodelay(mut self, tcp_nodelay: &'a bool) -> Self {
+        self.lynn_config.tcp_nodelay = tcp_nodelay;
+        self
+    }
+
+    /// Sets the TCP keep-alive enabled setting.
+    ///
+    /// # Parameters
+    ///
+    /// * `tcp_keepalive_enabled` - Whether to enable TCP keep-alive.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_tcp_keepalive_enabled(mut self, tcp_keepalive_enabled: &'a bool) -> Self {
+        self.lynn_config.tcp_keepalive_enabled = tcp_keepalive_enabled;
+        self
+    }
+
+    /// Sets the TCP keep-alive time in seconds.
+    ///
+    /// # Parameters
+    ///
+    /// * `tcp_keepalive_time_secs` - The TCP keep-alive time in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_tcp_keepalive_time_secs(mut self, tcp_keepalive_time_secs: &'a u64) -> Self {
+        self.lynn_config.tcp_keepalive_time_secs = tcp_keepalive_time_secs;
+        self
+    }
+
+    /// Sets the read timeout in seconds. Set to 0 to disable timeout.
+    ///
+    /// # Parameters
+    ///
+    /// * `read_timeout_secs` - The read timeout in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_read_timeout_secs(mut self, read_timeout_secs: &'a u64) -> Self {
+        self.lynn_config.read_timeout_secs = read_timeout_secs;
+        self
+    }
+
+    /// Sets the write timeout in seconds. Set to 0 to disable timeout.
+    ///
+    /// # Parameters
+    ///
+    /// * `write_timeout_secs` - The write timeout in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_write_timeout_secs(mut self, write_timeout_secs: &'a u64) -> Self {
+        self.lynn_config.write_timeout_secs = write_timeout_secs;
+        self
+    }
+
+    /// Sets the receive buffer size in bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `recv_buffer_size` - The receive buffer size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_recv_buffer_size(mut self, recv_buffer_size: &'a usize) -> Self {
+        self.lynn_config.recv_buffer_size = recv_buffer_size;
+        self
+    }
+
+    /// Sets the send buffer size in bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `send_buffer_size` - The send buffer size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_send_buffer_size(mut self, send_buffer_size: &'a usize) -> Self {
+        self.lynn_config.send_buffer_size = send_buffer_size;
+        self
+    }
 }
