@@ -132,6 +132,8 @@ mod error;
 mod handler;
 /// The macros module, containing custom macros used throughout the application.
 mod macros;
+/// The validation module, containing input validation and security functions.
+mod validation;
 /// The VO factory module, responsible for creating value objects.
 mod vo_factory;
 

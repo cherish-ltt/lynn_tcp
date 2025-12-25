@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use bytes::BytesMut;
 
 use super::InputBufVOTrait;
+use crate::validation::validate_message_length;
 
 /// A struct representing a value object for an input buffer.
 ///
@@ -212,13 +213,21 @@ impl InputBufVOTrait for InputBufVO {
     ///
     /// The next string from the input buffer.
     fn next_str_with_len(&mut self, len: u64) -> Option<String> {
-        let len = len as usize;
+        // Validate the length to prevent memory exhaustion attacks
+        let validated_len = match validate_message_length(len) {
+            Ok(l) => l,
+            Err(e) => {
+                tracing::warn!("Invalid string length in next_str_with_len: {}", e);
+                return None;
+            }
+        };
+
         let length = self.data.len();
-        if length < self.index + len {
+        if length < self.index + validated_len {
             return None;
         } else {
-            let bytes = &mut self.data[self.index..self.index + len].to_vec();
-            self.index = self.index + len;
+            let bytes = &mut self.data[self.index..self.index + validated_len].to_vec();
+            self.index = self.index + validated_len;
             Some(String::from_utf8_lossy(bytes).to_string())
         }
     }

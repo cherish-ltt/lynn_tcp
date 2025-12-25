@@ -2,6 +2,7 @@ use bytes::BytesMut;
 
 use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
 use crate::LynnError;
+use crate::validation::validate_message_length;
 
 /// A struct for reading large buffers.
 pub(crate) struct BigBufReader {
@@ -187,7 +188,17 @@ impl BigBufReader {
                                 self.data[8].clone(),
                                 self.data[9].clone(),
                             ]);
-                            self.target_len = Some(msg_len.try_into().unwrap_or(5));
+
+                            // Validate message length to prevent memory exhaustion attacks
+                            match validate_message_length(msg_len) {
+                                Ok(validated_len) => {
+                                    self.target_len = Some(validated_len);
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Invalid message length: {}", e);
+                                    self.forced_clear();
+                                }
+                            }
                         }
                     } else {
                         self.forced_clear();
