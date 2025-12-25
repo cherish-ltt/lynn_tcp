@@ -1,12 +1,89 @@
 # Version Note
 
-### v1.3.x - plan
+### v1.4.x - plan
 
-#### v1.3.0-plan
+#### v1.4.0-plan
 
 1.feat
 
 - unstable: Add optional TLS(based on rustls/tokio-rustls), enable this option to support efficient and secure communication encryption
+
+### v1.2.x - release
+
+#### v1.2.5 - release
+
+1.feat
+
+- Add Prometheus + Grafana monitoring integration
+  - 17 production-grade metrics (connections, messages, network, system)
+  - HTTP /metrics endpoint for Prometheus scraping
+  - /health check endpoint
+  - Timer helper for automatic duration tracking
+  - Grafana Dashboard ready-to-use
+  - Complete documentation (METRICS.md)
+  - Feature flag: `metrics` (auto-enabled with `server`)
+
+2.perf
+
+- Low overhead monitoring: <1% CPU, ~2-3 MB memory
+- Optimized metric recording with atomic operations
+
+#### v1.2.4 - release
+
+1.feat
+
+- Add connection limiter (IP-based and global)
+- Add connection rate limiting
+- Add configurable TCP parameters
+- Add server socket options configuration
+
+2.sec
+
+- IP-level connection limits to prevent resource abuse
+- Connection rate limiting to prevent DDoS attacks
+
+#### v1.2.3 - release
+
+1.sec
+
+- Add comprehensive input validation
+- Add message length validation (max 10MB)
+- Add message format validation
+- Add connection limiter (per-IP and total)
+- Add rate limiter with sliding window
+- Add SafeBuffer to prevent overflow
+
+2.fix
+
+- Prevent memory exhaustion attacks
+- Prevent buffer overflow
+- Prevent protocol confusion attacks
+
+#### v1.2.2 - release
+
+1.fix
+
+- Add thiserror and anyhow for error handling
+- Create unified LynnError type system
+- Remove 10+ unwrap() calls
+- Add proper error propagation
+
+2.refactor
+
+- Improve error handling across router, client config, server config, and buffer reader
+
+#### v1.2.1 - release
+
+1.fix
+
+- Remove unsafe raw pointer usage in router
+- Replace with DashMap for thread-safe hashmap
+- Fix memory leak in LynnRouter
+- Remove unsafe code blocks
+
+2.perf
+
+- Better concurrent performance with DashMap
 
 ### v1.2.x - rc
 
