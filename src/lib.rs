@@ -126,6 +126,8 @@ mod client;
 mod const_config;
 /// The DTO factory module, responsible for creating data transfer objects.
 mod dto_factory;
+/// The error module, containing error types for the framework.
+mod error;
 /// The handler module, containing the implementation of request handlers.
 mod handler;
 /// The macros module, containing custom macros used throughout the application.
@@ -137,6 +139,9 @@ pub extern crate bytes;
 pub extern crate tokio;
 pub extern crate tracing;
 pub extern crate tracing_subscriber;
+
+/// Re-export common error types
+pub use error::{LynnError, Result};
 
 /// The server module, containing the server configuration API and server implementation.
 #[cfg(feature = "server")]

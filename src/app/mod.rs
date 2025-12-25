@@ -15,7 +15,7 @@ use dashmap::DashMap;
 use lynn_server_config::LynnServerConfig;
 use lynn_server_user::LynnUser;
 use tokio::net::TcpListener;
-use tracing::{Level, error, info, warn};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 #[cfg(feature = "server")]
@@ -24,6 +24,7 @@ use crate::{
     app::tcp_reactor::event_api::ReactorEvent,
     const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK},
     handler::{HandlerContext, IHandler, IntoSystem},
+    LynnError,
 };
 
 pub mod lynn_config_api {
@@ -166,7 +167,20 @@ impl<'a> LynnServer<'a> {
     #[deprecated(note = "use `new_with_addr`", since = "1.1.7")]
     pub async fn new_with_ipv4(ipv4: &'a str) -> Self {
         let mut app = Self::new().await;
-        app.lynn_config.server_addr = ipv4.to_socket_addrs().unwrap().next().unwrap();
+        match ipv4.to_socket_addrs() {
+            Ok(mut addrs) => {
+                if let Some(addr) = addrs.next() {
+                    app.lynn_config.server_addr = addr;
+                } else {
+                    error!("Invalid IPv4 address: {}", ipv4);
+                    panic!("Invalid IPv4 address: {}", ipv4);
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse IPv4 address '{}': {}", ipv4, e);
+                panic!("Failed to parse IPv4 address '{}': {}", ipv4, e);
+            }
+        }
         app
     }
 
@@ -184,7 +198,20 @@ impl<'a> LynnServer<'a> {
         T: ToSocketAddrs,
     {
         let mut app = Self::new().await;
-        app.lynn_config.server_addr = addr.to_socket_addrs().unwrap().next().unwrap();
+        match addr.to_socket_addrs() {
+            Ok(mut addrs) => {
+                if let Some(socket_addr) = addrs.next() {
+                    app.lynn_config.server_addr = socket_addr;
+                } else {
+                    error!("No valid addresses found");
+                    panic!("No valid addresses found");
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse address: {}", e);
+                panic!("Failed to parse address: {}", e);
+            }
+        }
         app
     }
 

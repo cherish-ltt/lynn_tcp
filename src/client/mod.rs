@@ -83,12 +83,18 @@ impl<'a> LynnClient<'a> {
     /// # Returns
     ///
     /// A new `LynnClient` instance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the address is invalid.
     #[deprecated(since = "1.1.7", note = "use `new_with_addr` instead")]
     pub async fn new_with_ipv4(server_ipv4: &'a str) -> Self {
+        let config = LynnClientConfigBuilder::new()
+            .with_server_addr(server_ipv4)
+            .expect("Invalid server address")
+            .build();
         let client = Self {
-            lynn_client_config: LynnClientConfigBuilder::new()
-                .with_server_addr(server_ipv4)
-                .build(),
+            lynn_client_config: config,
             connection_join_handle: None,
             tx_write: None,
             rx_read: None,
@@ -105,14 +111,20 @@ impl<'a> LynnClient<'a> {
     /// # Returns
     ///
     /// A new `LynnClient` instance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the address is invalid.
     pub async fn new_with_addr<T>(server_addr: T) -> Self
     where
         T: ToSocketAddrs,
     {
+        let config = LynnClientConfigBuilder::new()
+            .with_server_addr(server_addr)
+            .expect("Invalid server address")
+            .build();
         let client = Self {
-            lynn_client_config: LynnClientConfigBuilder::new()
-                .with_server_addr(server_addr)
-                .build(),
+            lynn_client_config: config,
             connection_join_handle: None,
             tx_write: None,
             rx_read: None,
@@ -207,9 +219,15 @@ impl<'a> LynnClient<'a> {
     ///
     /// # Returns
     ///
-    /// An `Option` containing the received data.
+    /// An `Option` containing the received data, or `None` if the client is not connected.
     pub async fn get_receive_data(&mut self) -> Option<InputBufVO> {
-        self.rx_read.as_mut().unwrap().recv().await
+        match self.rx_read.as_mut() {
+            Some(rx) => rx.recv().await,
+            None => {
+                error!("Client is not connected. Call start() first.");
+                None
+            }
+        }
     }
 
     /// Gets the sender for the write channel.

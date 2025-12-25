@@ -1,6 +1,7 @@
 use bytes::BytesMut;
 
 use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
+use crate::LynnError;
 
 /// A struct for reading large buffers.
 pub(crate) struct BigBufReader {
@@ -129,8 +130,13 @@ impl BigBufReader {
     /// # Returns
     ///
     /// The data from the buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `target_len` is not set (i.e., the message hasn't been properly initialized).
     pub(crate) fn get_data(&mut self) -> BytesMut {
-        let bytes = BytesMut::from(&self.data[10..self.target_len.unwrap() + 8]);
+        let target_len = self.target_len.expect("target_len should be set before get_data is called");
+        let bytes = BytesMut::from(&self.data[10..target_len + 8]);
         self.check_data();
         bytes
     }
@@ -144,19 +150,24 @@ impl BigBufReader {
         let buf_len = buf.len();
         if !self.is_complete() {
             let next_len = self.get_next_extend_buf_len();
-            if next_len.is_none() || next_len.unwrap() >= buf_len {
-                self.data.extend_from_slice(buf);
-            } else {
-                self.data.extend_from_slice(&buf[0..next_len.unwrap()]);
-                let bytes_mut = &buf[next_len.unwrap()..buf_len];
-                if self.remaining_data.is_none() {
-                    self.remaining_data = Some(BytesMut::from(bytes_mut));
-                } else {
-                    if let Some(source_bytes_mut) = &self.remaining_data {
-                        let mut data = source_bytes_mut.clone();
-                        data.extend_from_slice(&bytes_mut);
-                        self.remaining_data = Some(data)
+            match next_len {
+                Some(len) if len < buf_len => {
+                    // Extend with part of the buffer
+                    self.data.extend_from_slice(&buf[0..len]);
+                    let bytes_mut = &buf[len..buf_len];
+                    if self.remaining_data.is_none() {
+                        self.remaining_data = Some(BytesMut::from(bytes_mut));
+                    } else {
+                        if let Some(source_bytes_mut) = &self.remaining_data {
+                            let mut data = source_bytes_mut.clone();
+                            data.extend_from_slice(&bytes_mut);
+                            self.remaining_data = Some(data)
+                        }
                     }
+                }
+                // Either next_len is None or next_len >= buf_len, extend with full buffer
+                _ => {
+                    self.data.extend_from_slice(buf);
                 }
             }
             if self.target_len.is_none() {

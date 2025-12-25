@@ -32,3 +32,21 @@ pub(crate) const DEFAULT_MESSAGE_TAIL_MARK: u16 = 7719;
 pub(crate) static SERVER_MESSAGE_HEADER_MARK: OnceLock<u16> = OnceLock::new();
 /// A OnceLock for the server message tail mark, used to store the message tail mark for the server.
 pub(crate) static SERVER_MESSAGE_TAIL_MARK: OnceLock<u16> = OnceLock::new();
+/// The default maximum number of connections allowed per IP address.
+pub(crate) const DEFAULT_MAX_CONNECTIONS_PER_IP: usize = 10;
+/// The default connection rate limit (connections per second). 0 means no limit.
+pub(crate) const DEFAULT_CONNECTION_RATE_LIMIT: u64 = 100;
+/// The default TCP_NODELAY setting.
+pub(crate) const DEFAULT_TCP_NODELAY: bool = true;
+/// The default TCP keep-alive enabled setting.
+pub(crate) const DEFAULT_TCP_KEEPALIVE_ENABLED: bool = false;
+/// The default TCP keep-alive time in seconds.
+pub(crate) const DEFAULT_TCP_KEEPALIVE_TIME_SECS: u64 = 60;
+/// The default read timeout in seconds. 0 means no timeout.
+pub(crate) const DEFAULT_READ_TIMEOUT_SECS: u64 = 0;
+/// The default write timeout in seconds. 0 means no timeout.
+pub(crate) const DEFAULT_WRITE_TIMEOUT_SECS: u64 = 0;
+/// The default receive buffer size in bytes.
+pub(crate) const DEFAULT_RECV_BUFFER_SIZE: usize = 8192;
+/// The default send buffer size in bytes.
+pub(crate) const DEFAULT_SEND_BUFFER_SIZE: usize = 8192;
