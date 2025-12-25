@@ -1,8 +1,8 @@
 # Version Note
 
-### v1.4.x - plan
+### v1.3.x - plan
 
-#### v1.4.0-plan
+#### v1.3.0-plan
 
 1.feat
 
