@@ -4,6 +4,7 @@ use crate::const_config::{
     DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_MESSAGE_HEADER_MARK,
     DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_SYSTEM_CHANNEL_SIZE,
 };
+use crate::{LynnError, Result};
 
 /// The configuration for the Lynn client.
 ///
@@ -117,20 +118,28 @@ impl<'a> LynnClientConfigBuilder<'a> {
     ///
     /// The `LynnClientConfigBuilder` instance.
     #[deprecated(since = "1.1.7", note = "use `with_server_addr` instead")]
-    pub fn with_server_ipv4<T>(mut self, server_addr: T) -> Self
+    pub fn with_server_ipv4<T>(mut self, server_addr: T) -> Result<Self>
     where
         T: ToSocketAddrs,
     {
-        self.lynn_config.server_addr = server_addr.to_socket_addrs().unwrap().next().unwrap();
-        self
+        self.lynn_config.server_addr = server_addr
+            .to_socket_addrs()
+            .map_err(|e| LynnError::invalid_address(format!("Failed to parse address: {}", e)))?
+            .next()
+            .ok_or_else(|| LynnError::invalid_address("No addresses found"))?;
+        Ok(self)
     }
 
-    pub fn with_server_addr<T>(mut self, server_addr: T) -> Self
+    pub fn with_server_addr<T>(mut self, server_addr: T) -> Result<Self>
     where
         T: ToSocketAddrs,
     {
-        self.lynn_config.server_addr = server_addr.to_socket_addrs().unwrap().next().unwrap();
-        self
+        self.lynn_config.server_addr = server_addr
+            .to_socket_addrs()
+            .map_err(|e| LynnError::invalid_address(format!("Failed to parse address: {}", e)))?
+            .next()
+            .ok_or_else(|| LynnError::invalid_address("No addresses found"))?;
+        Ok(self)
     }
 
     /// Sets the size of the client's single channel.

@@ -3,8 +3,12 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use crate::const_config::{
     DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CHECK_HEART_TIMEOUT_TIME,
     DEFAULT_MAX_CONNECTIONS, DEFAULT_MAX_REACTOR_TASKPOOL_SIZE, DEFAULT_MESSAGE_HEADER_MARK,
-    DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE,
+    DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_PROCESS_PERMIT_SIZE, DEFAULT_MAX_CONNECTIONS_PER_IP,
+    DEFAULT_CONNECTION_RATE_LIMIT, DEFAULT_TCP_NODELAY, DEFAULT_TCP_KEEPALIVE_ENABLED,
+    DEFAULT_TCP_KEEPALIVE_TIME_SECS, DEFAULT_READ_TIMEOUT_SECS, DEFAULT_WRITE_TIMEOUT_SECS,
+    DEFAULT_RECV_BUFFER_SIZE, DEFAULT_SEND_BUFFER_SIZE,
 };
+use crate::{LynnError, Result};
 
 /// Represents the configuration for the Lynn server.
 ///
@@ -28,6 +32,24 @@ pub struct LynnServerConfig<'a> {
     message_header_mark: &'a u16,
     // The mark for the message tail.
     message_tail_mark: &'a u16,
+    // The maximum number of connections per IP address.
+    server_max_connections_per_ip: &'a usize,
+    // The connection rate limit (connections per second).
+    server_connection_rate_limit: &'a u64,
+    // The TCP_NODELAY setting.
+    tcp_nodelay: &'a bool,
+    // The TCP keep-alive enabled setting.
+    tcp_keepalive_enabled: &'a bool,
+    // The TCP keep-alive time in seconds.
+    tcp_keepalive_time_secs: &'a u64,
+    // The read timeout in seconds.
+    read_timeout_secs: &'a u64,
+    // The write timeout in seconds.
+    write_timeout_secs: &'a u64,
+    // The receive buffer size in bytes.
+    recv_buffer_size: &'a usize,
+    // The send buffer size in bytes.
+    send_buffer_size: &'a usize,
 }
 
 /// Implementation for LynnServerConfig, providing methods to create and get the configuration.
@@ -49,6 +71,15 @@ impl<'a> LynnServerConfig<'a> {
             server_check_heart_timeout_time: &DEFAULT_CHECK_HEART_TIMEOUT_TIME,
             message_header_mark: &DEFAULT_MESSAGE_HEADER_MARK,
             message_tail_mark: &DEFAULT_MESSAGE_TAIL_MARK,
+            server_max_connections_per_ip: &DEFAULT_MAX_CONNECTIONS_PER_IP,
+            server_connection_rate_limit: &DEFAULT_CONNECTION_RATE_LIMIT,
+            tcp_nodelay: &DEFAULT_TCP_NODELAY,
+            tcp_keepalive_enabled: &DEFAULT_TCP_KEEPALIVE_ENABLED,
+            tcp_keepalive_time_secs: &DEFAULT_TCP_KEEPALIVE_TIME_SECS,
+            read_timeout_secs: &DEFAULT_READ_TIMEOUT_SECS,
+            write_timeout_secs: &DEFAULT_WRITE_TIMEOUT_SECS,
+            recv_buffer_size: &DEFAULT_RECV_BUFFER_SIZE,
+            send_buffer_size: &DEFAULT_SEND_BUFFER_SIZE,
         }
     }
 
@@ -118,6 +149,87 @@ impl<'a> LynnServerConfig<'a> {
     pub(crate) fn get_message_tail_mark(&self) -> &u16 {
         self.message_tail_mark
     }
+
+    /// Gets the maximum number of connections per IP address.
+    ///
+    /// # Returns
+    ///
+    /// The maximum number of connections per IP address.
+    pub(crate) fn get_server_max_connections_per_ip(&self) -> &usize {
+        self.server_max_connections_per_ip
+    }
+
+    /// Gets the connection rate limit (connections per second).
+    ///
+    /// # Returns
+    ///
+    /// The connection rate limit.
+    pub(crate) fn get_server_connection_rate_limit(&self) -> &u64 {
+        self.server_connection_rate_limit
+    }
+
+    /// Gets the TCP_NODELAY setting.
+    ///
+    /// # Returns
+    ///
+    /// The TCP_NODELAY setting.
+    pub(crate) fn get_tcp_nodelay(&self) -> &bool {
+        self.tcp_nodelay
+    }
+
+    /// Gets the TCP keep-alive enabled setting.
+    ///
+    /// # Returns
+    ///
+    /// Whether TCP keep-alive is enabled.
+    pub(crate) fn get_tcp_keepalive_enabled(&self) -> &bool {
+        self.tcp_keepalive_enabled
+    }
+
+    /// Gets the TCP keep-alive time in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The TCP keep-alive time.
+    pub(crate) fn get_tcp_keepalive_time_secs(&self) -> &u64 {
+        self.tcp_keepalive_time_secs
+    }
+
+    /// Gets the read timeout in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The read timeout.
+    pub(crate) fn get_read_timeout_secs(&self) -> &u64 {
+        self.read_timeout_secs
+    }
+
+    /// Gets the write timeout in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The write timeout.
+    pub(crate) fn get_write_timeout_secs(&self) -> &u64 {
+        self.write_timeout_secs
+    }
+
+    /// Gets the receive buffer size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// The receive buffer size.
+    pub(crate) fn get_recv_buffer_size(&self) -> &usize {
+        self.recv_buffer_size
+    }
+
+    /// Gets the send buffer size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// The send buffer size.
+    pub(crate) fn get_send_buffer_size(&self) -> &usize {
+        self.send_buffer_size
+    }
 }
 
 /// A builder for creating a LynnServerConfig instance.
@@ -153,18 +265,26 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// The updated `LynnServerConfigBuilder` instance.
     #[deprecated(note = "use `with_addr`", since = "1.1.7")]
-    pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Self {
-        let mut addr = server_ipv4.to_socket_addrs().unwrap();
-        self.lynn_config.server_addr = addr.next().unwrap();
-        self
+    pub fn with_server_ipv4(mut self, server_ipv4: &'a str) -> Result<Self> {
+        let mut addr = server_ipv4
+            .to_socket_addrs()
+            .map_err(|e| LynnError::invalid_address(format!("Failed to parse address: {}", e)))?;
+        self.lynn_config.server_addr = addr
+            .next()
+            .ok_or_else(|| LynnError::invalid_address("No addresses found"))?;
+        Ok(self)
     }
 
-    pub fn with_addr<T>(mut self, addr: T) -> Self
+    pub fn with_addr<T>(mut self, addr: T) -> Result<Self>
     where
         T: ToSocketAddrs,
     {
-        self.lynn_config.server_addr = addr.to_socket_addrs().unwrap().next().unwrap();
-        self
+        self.lynn_config.server_addr = addr
+            .to_socket_addrs()
+            .map_err(|e| LynnError::invalid_address(format!("Failed to parse address: {}", e)))?
+            .next()
+            .ok_or_else(|| LynnError::invalid_address("No addresses found"))?;
+        Ok(self)
     }
 
     /// Sets the permit size for a single process.
@@ -311,6 +431,133 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_message_tail_mark(mut self, msg_tail_mark: &'a u16) -> Self {
         self.lynn_config.message_tail_mark = msg_tail_mark;
+        self
+    }
+
+    /// Sets the maximum number of connections per IP address.
+    ///
+    /// # Parameters
+    ///
+    /// * `max_connections_per_ip` - The maximum number of connections per IP.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_max_connections_per_ip(mut self, max_connections_per_ip: &'a usize) -> Self {
+        self.lynn_config.server_max_connections_per_ip = max_connections_per_ip;
+        self
+    }
+
+    /// Sets the connection rate limit (connections per second).
+    /// Set to 0 to disable rate limiting.
+    ///
+    /// # Parameters
+    ///
+    /// * `connection_rate_limit` - The maximum number of connections per second.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_connection_rate_limit(mut self, connection_rate_limit: &'a u64) -> Self {
+        self.lynn_config.server_connection_rate_limit = connection_rate_limit;
+        self
+    }
+
+    /// Sets the TCP_NODELAY setting.
+    ///
+    /// # Parameters
+    ///
+    /// * `tcp_nodelay` - Whether to enable TCP_NODELAY.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_tcp_nodelay(mut self, tcp_nodelay: &'a bool) -> Self {
+        self.lynn_config.tcp_nodelay = tcp_nodelay;
+        self
+    }
+
+    /// Sets the TCP keep-alive enabled setting.
+    ///
+    /// # Parameters
+    ///
+    /// * `tcp_keepalive_enabled` - Whether to enable TCP keep-alive.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_tcp_keepalive_enabled(mut self, tcp_keepalive_enabled: &'a bool) -> Self {
+        self.lynn_config.tcp_keepalive_enabled = tcp_keepalive_enabled;
+        self
+    }
+
+    /// Sets the TCP keep-alive time in seconds.
+    ///
+    /// # Parameters
+    ///
+    /// * `tcp_keepalive_time_secs` - The TCP keep-alive time in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_tcp_keepalive_time_secs(mut self, tcp_keepalive_time_secs: &'a u64) -> Self {
+        self.lynn_config.tcp_keepalive_time_secs = tcp_keepalive_time_secs;
+        self
+    }
+
+    /// Sets the read timeout in seconds. Set to 0 to disable timeout.
+    ///
+    /// # Parameters
+    ///
+    /// * `read_timeout_secs` - The read timeout in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_read_timeout_secs(mut self, read_timeout_secs: &'a u64) -> Self {
+        self.lynn_config.read_timeout_secs = read_timeout_secs;
+        self
+    }
+
+    /// Sets the write timeout in seconds. Set to 0 to disable timeout.
+    ///
+    /// # Parameters
+    ///
+    /// * `write_timeout_secs` - The write timeout in seconds.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_write_timeout_secs(mut self, write_timeout_secs: &'a u64) -> Self {
+        self.lynn_config.write_timeout_secs = write_timeout_secs;
+        self
+    }
+
+    /// Sets the receive buffer size in bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `recv_buffer_size` - The receive buffer size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_recv_buffer_size(mut self, recv_buffer_size: &'a usize) -> Self {
+        self.lynn_config.recv_buffer_size = recv_buffer_size;
+        self
+    }
+
+    /// Sets the send buffer size in bytes.
+    ///
+    /// # Parameters
+    ///
+    /// * `send_buffer_size` - The send buffer size in bytes.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    pub fn with_send_buffer_size(mut self, send_buffer_size: &'a usize) -> Self {
+        self.lynn_config.send_buffer_size = send_buffer_size;
         self
     }
 }

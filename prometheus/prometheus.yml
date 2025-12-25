@@ -1,0 +1,68 @@
+# Prometheus configuration for Lynn TCP monitoring
+#
+# Place this file in your Prometheus directory and start Prometheus with:
+# prometheus --config.file=prometheus.yml
+
+global:
+  scrape_interval: 10s  # Scrape targets every 10 seconds
+  evaluation_interval: 10s  # Evaluate rules every 10 seconds
+  external_labels:
+    cluster: 'lynn_tcp_cluster'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - localhost:9093
+
+# Load rules once and periodically evaluate them
+# rule_files:
+#   - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Lynn TCP metrics endpoint
+  - job_name: 'lynn_tcp'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - localhost:9091  # Lynn TCP metrics endpoint
+        labels:
+          service: 'lynn_tcp_server'
+          env: 'production'
+
+  # Prometheus self-monitoring (optional but recommended)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Example for multiple Lynn TCP instances
+#  - job_name: 'lynn_tcp_cluster'
+#    scrape_interval: 10s
+#    static_configs:
+#      - targets:
+#          - 'server1.example.com:9091'
+#          - 'server2.example.com:9091'
+#          - 'server3.example.com:9091'
+#        labels:
+#          cluster: 'lynn_tcp_cluster'
+#          datacenter: 'us-west'
+
+# Example with service discovery (Kubernetes)
+#  - job_name: 'lynn_tcp_k8s'
+#    kubernetes_sd_configs:
+#      - role: pod
+#        namespaces:
+#          names:
+#            - default
+#    relabel_configs:
+#      - source_labels: [__meta_kubernetes_pod_label_app]
+#        action: keep
+#        regex: lynn_tcp
+#      - source_labels: [__meta_kubernetes_pod_ip]
+#        target_label: __address__
+#        replacement: $1:9091

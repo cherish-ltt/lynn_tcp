@@ -14,6 +14,15 @@ use crate::app::{
 mod event;
 mod reactor;
 
+/// TCP socket configuration.
+pub(super) struct TcpSocketConfig {
+    pub nodelay: bool,
+    pub keepalive_enabled: bool,
+    pub keepalive_time_secs: u64,
+    pub recv_buffer_size: usize,
+    pub send_buffer_size: usize,
+}
+
 pub(crate) mod event_api {
     pub(crate) use super::event::*;
 }
@@ -53,6 +62,12 @@ impl TcpReactor {
         tcp_listener: TcpListener,
         alow_max_connections: Option<&usize>,
         server_max_reactor_taskpool_size: &usize,
+        connection_limiter: Option<(
+            &u64,                // rate_limit
+            &usize,               // max_connections_per_ip
+            Arc<crate::app::connection_limiter::ConnectionLimiter>,
+        )>,
+        tcp_config: TcpSocketConfig,
     ) {
         self.event_manager.run(
             clients.clone(),
@@ -64,12 +79,22 @@ impl TcpReactor {
             self.core_reactor.tx.clone(),
             server_max_reactor_taskpool_size,
         );
+
+        // Spawn cleanup task for connection limiter if rate limiting is enabled
+        if let Some((rate_limit, _, limiter)) = &connection_limiter {
+            if **rate_limit > 0 {
+                limiter.clone().spawn_cleanup_task();
+            }
+        }
+
         self.core_reactor
             .run(
                 tcp_listener,
                 clients,
                 alow_max_connections,
                 self.event_manager.get_global_queue(),
+                connection_limiter,
+                tcp_config,
             )
             .await;
     }

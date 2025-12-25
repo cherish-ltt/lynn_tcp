@@ -1,4 +1,5 @@
 mod common_api;
+mod connection_limiter;
 mod lynn_server_config;
 mod lynn_server_user;
 mod router;
@@ -10,20 +11,22 @@ use std::{
 };
 
 use common_api::spawn_check_heart;
+use connection_limiter::ConnectionLimiter;
 use crossbeam_deque::Injector;
 use dashmap::DashMap;
 use lynn_server_config::LynnServerConfig;
 use lynn_server_user::LynnUser;
 use tokio::net::TcpListener;
-use tracing::{Level, error, info, warn};
+use tracing::{error, info, warn, Level};
 use tracing_subscriber::fmt;
 
 #[cfg(feature = "server")]
-use crate::app::{router::LynnRouter, tcp_reactor::TcpReactor};
+use crate::app::{router::LynnRouter, tcp_reactor::{TcpReactor, TcpSocketConfig}};
 use crate::{
     app::tcp_reactor::event_api::ReactorEvent,
     const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK},
     handler::{HandlerContext, IHandler, IntoSystem},
+    LynnError,
 };
 
 pub mod lynn_config_api {
@@ -166,7 +169,20 @@ impl<'a> LynnServer<'a> {
     #[deprecated(note = "use `new_with_addr`", since = "1.1.7")]
     pub async fn new_with_ipv4(ipv4: &'a str) -> Self {
         let mut app = Self::new().await;
-        app.lynn_config.server_addr = ipv4.to_socket_addrs().unwrap().next().unwrap();
+        match ipv4.to_socket_addrs() {
+            Ok(mut addrs) => {
+                if let Some(addr) = addrs.next() {
+                    app.lynn_config.server_addr = addr;
+                } else {
+                    error!("Invalid IPv4 address: {}", ipv4);
+                    panic!("Invalid IPv4 address: {}", ipv4);
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse IPv4 address '{}': {}", ipv4, e);
+                panic!("Failed to parse IPv4 address '{}': {}", ipv4, e);
+            }
+        }
         app
     }
 
@@ -184,7 +200,20 @@ impl<'a> LynnServer<'a> {
         T: ToSocketAddrs,
     {
         let mut app = Self::new().await;
-        app.lynn_config.server_addr = addr.to_socket_addrs().unwrap().next().unwrap();
+        match addr.to_socket_addrs() {
+            Ok(mut addrs) => {
+                if let Some(socket_addr) = addrs.next() {
+                    app.lynn_config.server_addr = socket_addr;
+                } else {
+                    error!("No valid addresses found");
+                    panic!("No valid addresses found");
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse address: {}", e);
+                panic!("Failed to parse address: {}", e);
+            }
+        }
         app
     }
 
@@ -257,6 +286,24 @@ impl<'a> LynnServer<'a> {
 
         self.check_heart().await;
 
+        // Create connection limiter if rate limiting or per-IP limiting is enabled
+        let rate_limit = *self.lynn_config.get_server_connection_rate_limit();
+        let max_connections_per_ip = *self.lynn_config.get_server_max_connections_per_ip();
+        let connection_limiter = if rate_limit > 0 || max_connections_per_ip > 0 {
+            Some(Arc::new(ConnectionLimiter::new(rate_limit, max_connections_per_ip)))
+        } else {
+            None
+        };
+
+        // Create TCP socket configuration
+        let tcp_config = TcpSocketConfig {
+            nodelay: *self.lynn_config.get_tcp_nodelay(),
+            keepalive_enabled: *self.lynn_config.get_tcp_keepalive_enabled(),
+            keepalive_time_secs: *self.lynn_config.get_tcp_keepalive_time_secs(),
+            recv_buffer_size: *self.lynn_config.get_recv_buffer_size(),
+            send_buffer_size: *self.lynn_config.get_send_buffer_size(),
+        };
+
         self.reactor
             .start(
                 self.clients.0.clone(),
@@ -267,6 +314,14 @@ impl<'a> LynnServer<'a> {
                 listener,
                 self.lynn_config.get_server_max_connections(),
                 self.lynn_config.get_server_max_reactor_taskpool_size(),
+                connection_limiter.as_ref().map(|limiter| {
+                    (
+                        self.lynn_config.get_server_connection_rate_limit(),
+                        self.lynn_config.get_server_max_connections_per_ip(),
+                        limiter.clone(),
+                    )
+                }),
+                tcp_config,
             )
             .await;
         Ok(())
