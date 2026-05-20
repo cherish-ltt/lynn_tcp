@@ -32,7 +32,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 ///
 /// # Example
 /// Use default config
-/// ```rust
+/// ```rust,no_run
 /// use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 ///
 /// #[tokio::main]
@@ -65,7 +65,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 /// ```
 /// # Example
 /// Use customized config
-/// ```rust
+/// ```rust,no_run
 /// use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 ///
 /// #[tokio::main]
@@ -74,7 +74,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 ///     tracing_subscriber::fmt::init();
 ///     let _ = LynnServer::new_with_config(
 ///         LynnServerConfigBuilder::new()
-///             .with_addr("0.0.0.0:9177")
+///             .with_addr("0.0.0.0:9177").unwrap()
 ///             .with_server_max_connections(Some(&200))
 ///             // Suggestion 256-512
 ///             .with_server_max_taskpool_size(&512)

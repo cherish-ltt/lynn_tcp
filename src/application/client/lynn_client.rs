@@ -16,7 +16,7 @@ use crate::domain::model::input_buf_vo::InputBufVO;
 /// The client runs in a separate task and uses channels to communicate with the main task.
 /// # Example
 /// Use default config (If you want to use custom configuration, please use `LynnClientConfigBuilder`)
-/// ```rust
+/// ```rust,no_run
 /// use lynn_tcp::{
 ///     lynn_client::LynnClient,
 ///     lynn_tcp_dependents::*,
@@ -26,7 +26,7 @@ use crate::domain::model::input_buf_vo::InputBufVO;
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     // Initialize tracing or use app.logserver()
 ///     tracing_subscriber::fmt::init();
-///     let client = LynnClient::new_with_addr("127.0.0.1:9177")
+///     let mut client = LynnClient::new_with_addr("127.0.0.1:9177")
 ///             .await
 ///             .start()
 ///             .await;

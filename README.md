@@ -1,6 +1,23 @@
-## Lynn_tcp
-
-[![Crates.io](https://img.shields.io/crates/v/lynn_tcp)](https://crates.io/crates/lynn_tcp) [![MIT licensed](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE) [![doc](https://docs.rs/lynn_tcp/badge.svg)](https://docs.rs/lynn_tcp/latest/lynn_tcp/) [![Downloads](https://img.shields.io/crates/d/lynn_tcp.svg)](https://crates.io/crates/lynn_tcp) [![Rust](https://img.shields.io/badge/rust-1.95%2B-blue)](https://www.rust-lang.org)
+<div align="center">
+<h1>Lynn_tcp</h1>
+<p>
+  <a href="https://github.com/cherish-ltt/lynn_tcp/actions/workflows/rust-ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/cherish-ltt/lynn_tcp/rust-ci.yml?branch=main" alt="Build Status"/>
+  </a>
+  <a href="https://crates.io/crates/lynn_tcp">
+    <img src="https://img.shields.io/crates/v/lynn_tcp.svg" alt="crates.io version"/>
+  </a>
+  <a href="https://docs.rs/lynn_tcp">
+    <img src="https://docs.rs/lynn_tcp/badge.svg" alt="documentation"/>
+  </a>
+  <a href="https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license"/>
+  </a>
+  <a href="https://www.rust-lang.org">
+    <img src="https://img.shields.io/badge/rust-1.95.0+-orange.svg" alt="license"/>
+  </a>
+</p>
+</div>
 
 English | [简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/README_ZH.md)
 

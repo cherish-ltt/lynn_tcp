@@ -36,7 +36,7 @@
 //!
 //! ### Example
 //! Use default config
-//! ```rust
+//! ```rust,no_run
 //! use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 //!
 //! #[tokio::main]
@@ -67,14 +67,14 @@
 //! ```
 //! ### Example
 //! Use customized config
-//! ```rust
+//! ```rust,no_run
 //! use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let _ = LynnServer::new_with_config(
 //!         LynnServerConfigBuilder::new()
-//!             .with_addr("0.0.0.0:9177")
+//!             .with_addr("0.0.0.0:9177").unwrap()
 //!             .with_server_max_connections(Some(&200))
 //!             // Suggestion 256-512
 //!             .with_server_max_taskpool_size(&512)
@@ -112,7 +112,7 @@
 //! The client runs in a separate task and uses channels to communicate with the main task.
 //! ### Example
 //! Use default config (If you want to use custom configuration, please use `LynnClientConfigBuilder`)
-//! ```rust
+//! ```rust,no_run
 //! use lynn_tcp::{
 //!     lynn_client::LynnClient,
 //!     lynn_tcp_dependents::*,
@@ -120,7 +120,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let client = LynnClient::new_with_ipv4("127.0.0.1:9177")
+//!     let mut client = LynnClient::new_with_ipv4("127.0.0.1:9177")
 //!             .await
 //!             .start()
 //!             .await;
