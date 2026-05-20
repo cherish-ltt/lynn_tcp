@@ -1,0 +1,209 @@
+{
+  "version": 2,
+  "createdAt": "2026-05-20T16:20:50.076Z",
+  "updatedAt": "2026-05-20T16:20:50.076Z",
+  "prompt": "[feat] 在 当前目录 中实现 examples文件夹非rust cargo.toml标准示例；examples较少，需补充至少3个；\n\n**角色**：你是一个资深 rust 工程师。\n**背景**：项目使用 rust ddd tcp 洋葱结构，当前缺少 examples文件夹非rust cargo.toml标准示例；examples较少，需补充至少3个；。\n**任务**：\n1. 先分析代码库结构，给出逐步实施计划（列出要修改/创建的文件、数据库迁移、对现有代码的假设）。\n2. 计划经我确认后再编写代码。\n3. 实现后编写测试用例验证核心逻辑，并运行 cargo fmt/test/check/clippy 干净 确认通过。\n**输出**：提供 unified diff 和两句话的变更说明。\n**约束**：禁止顺手重构无关代码；保持所有公共 API 签名兼容；不要为假设性需求添加抽象层。\n**验证**：运行 cargo fmt/test/check/clippy 干净 确保无回归。",
+  "mode": "attended",
+  "steps": [
+    {
+      "status": "done",
+      "durationMs": 196802
+    },
+    {
+      "status": "done",
+      "loopCount": 1,
+      "durationMs": 438116
+    }
+  ],
+  "currentStepIndex": 1,
+  "loopCounts": {
+    "worker-reviewer": 1
+  },
+  "planFilePath": ".pi-dev-output/pi-plans/20260521-173000-add-examples.md",
+  "taskSummary": "feat - 在 当前目录 中实现 examples文件夹非rust cargo.toml标准示例；examples较少，需补充至少3个；",
+  "workflowType": "自定义",
+  "fileChanges": [
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "edit",
+      "filePath": "AGENTS.md",
+      "timestamp": "2026-05-20T16:12:56.452Z"
+    },
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "edit",
+      "filePath": "CLAUDE.md",
+      "timestamp": "2026-05-20T16:12:56.458Z"
+    },
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "new",
+      "filePath": ".pi-dev-output/pi-plans/20260521-173000-add-examples.md",
+      "timestamp": "2026-05-20T16:12:56.463Z"
+    },
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "new",
+      "filePath": ".pi-dev-output/pi-workflow/checkpoint.json",
+      "timestamp": "2026-05-20T16:12:56.463Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "metrics_example.rs",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/basic_server.rs",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/custom_config_server.rs",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/custom_protocol.rs",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": ".start().await",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/*.rs",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "impl_for_context.rs",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/metrics_example.rs",
+      "timestamp": "2026-05-20T16:17:42.858Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "metrics_example.rs",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/basic_server.rs",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/custom_config_server.rs",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/custom_protocol.rs",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": ".start().await",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/*.rs",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "impl_for_context.rs",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "examples/metrics_example.rs",
+      "timestamp": "2026-05-20T16:20:50.030Z"
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "type": "new",
+      "filePath": ".pi-dev-output/pi-review/md/review-20260521-001946.md",
+      "timestamp": "2026-05-20T16:20:50.070Z"
+    }
+  ],
+  "subAgentRuns": 3,
+  "filesModified": 18,
+  "filesCreated": 3,
+  "agentRunHistory": [
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "startedAt": "2026-05-20T16:09:39.662Z",
+      "durationMs": 196753,
+      "exitCode": 0,
+      "toolCount": 0
+    },
+    {
+      "agent": "worker",
+      "stepIndex": 1,
+      "startedAt": "2026-05-20T16:13:31.961Z",
+      "durationMs": 250891,
+      "exitCode": 0,
+      "toolCount": 4
+    },
+    {
+      "agent": "reviewer",
+      "stepIndex": 1,
+      "startedAt": "2026-05-20T16:17:42.890Z",
+      "durationMs": 187135,
+      "exitCode": 0,
+      "toolCount": 12
+    }
+  ],
+  "baseline": [
+    {
+      "path": ".pi-dev-output/pi-grill/answers/answer-mpe9c16d-20260521-0009.md",
+      "hash": "81b7740bdc3b79ea5353ae3a08d4d544fea10dae"
+    }
+  ]
+}
