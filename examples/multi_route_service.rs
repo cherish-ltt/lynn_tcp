@@ -191,16 +191,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(None) => {
             // Channel closed — this shouldn't normally happen
-            println!(
-                "⚠️  Client channel closed (unexpected for unknown route behavior)"
-            );
+            println!("⚠️  Client channel closed (unexpected for unknown route behavior)");
         }
         Err(_) => {
             // Timeout! This is the expected behavior:
             // unknown routes produce no response, so get_receive_data() never returns.
-            println!(
-                "✅ [expected] Timeout — no response for unknown route 99 (as expected)"
-            );
+            println!("✅ [expected] Timeout — no response for unknown route 99 (as expected)");
         }
     }
     println!();
