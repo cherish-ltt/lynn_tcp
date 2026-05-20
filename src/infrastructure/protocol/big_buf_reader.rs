@@ -134,7 +134,9 @@ impl BigBufReader {
     ///
     /// Panics if `target_len` is not set (i.e., the message hasn't been properly initialized).
     pub(crate) fn get_data(&mut self) -> BytesMut {
-        let target_len = self.target_len.expect("target_len should be set before get_data is called");
+        let target_len = self
+            .target_len
+            .expect("target_len should be set before get_data is called");
         let bytes = BytesMut::from(&self.data[10..target_len + 8]);
         self.check_data();
         bytes
@@ -172,8 +174,7 @@ impl BigBufReader {
             if self.target_len.is_none() {
                 let data_len = self.data.len();
                 if data_len >= 2 {
-                    let header_mark =
-                        u16::from_le_bytes([self.data[0], self.data[1]]);
+                    let header_mark = u16::from_le_bytes([self.data[0], self.data[1]]);
                     if header_mark == self.message_header_mark {
                         if data_len >= 10 {
                             let msg_len = u64::from_le_bytes([

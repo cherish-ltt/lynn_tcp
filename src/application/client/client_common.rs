@@ -34,8 +34,7 @@ pub(super) fn spawn_handle(
                 if !rx_write.is_closed() {
                     if let Some(mut handler_result) = rx_write.recv().await {
                         if !handler_result.is_with_mark() {
-                            handler_result
-                                .set_marks(message_header_mark, message_tail_mark);
+                            handler_result.set_marks(message_header_mark, message_tail_mark);
                         }
                         if let Some(response) = handler_result.get_response_data() {
                             if let Err(e) = write_half.write_all(&response).await {

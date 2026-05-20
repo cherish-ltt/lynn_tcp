@@ -3,9 +3,8 @@ use std::{
     sync::{LazyLock, OnceLock},
 };
 
-pub(crate) const DEFAULT_ADDR: LazyLock<SocketAddr> = LazyLock::new(|| {
-    DEFAULT_IPV4.parse::<SocketAddr>().unwrap()
-});
+pub(crate) const DEFAULT_ADDR: LazyLock<SocketAddr> =
+    LazyLock::new(|| DEFAULT_IPV4.parse::<SocketAddr>().unwrap());
 /// The default server address.
 pub(crate) const DEFAULT_IPV4: &str = "0.0.0.0:9177";
 /// The maximum number of connections allowed by the server.

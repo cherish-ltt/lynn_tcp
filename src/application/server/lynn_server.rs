@@ -6,7 +6,7 @@ use std::{
 use crossbeam_deque::Injector;
 use dashmap::DashMap;
 use tokio::net::TcpListener;
-use tracing::{error, info, warn, Level};
+use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
 use crate::application::server::server_common::spawn_check_heart;
@@ -226,11 +226,9 @@ impl<'a> LynnServer<'a> {
     /// Checks the heartbeat of connected clients and removes those that have not sent messages for a long time.
     async fn check_heart(&self) {
         let clients = self.clients.0.clone();
-        let server_check_heart_interval =
-            *self.lynn_config.get_server_check_heart_interval();
-        let server_check_heart_timeout_time = *self
-            .lynn_config
-            .get_server_check_heart_timeout_time();
+        let server_check_heart_interval = *self.lynn_config.get_server_check_heart_interval();
+        let server_check_heart_timeout_time =
+            *self.lynn_config.get_server_check_heart_timeout_time();
         spawn_check_heart(
             server_check_heart_interval,
             server_check_heart_timeout_time,
@@ -265,7 +263,10 @@ impl<'a> LynnServer<'a> {
         let rate_limit = *self.lynn_config.get_server_connection_rate_limit();
         let max_connections_per_ip = *self.lynn_config.get_server_max_connections_per_ip();
         let connection_limiter = if rate_limit > 0 || max_connections_per_ip > 0 {
-            Some(Arc::new(ConnectionLimiter::new(rate_limit, max_connections_per_ip)))
+            Some(Arc::new(ConnectionLimiter::new(
+                rate_limit,
+                max_connections_per_ip,
+            )))
         } else {
             None
         };

@@ -1,8 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-    time::SystemTime,
-};
+use std::{net::SocketAddr, sync::Arc, time::SystemTime};
 
 use dashmap::DashMap;
 
@@ -60,20 +56,20 @@ impl LynnUser {
 
             let mut buffer = Vec::with_capacity(4096);
             while let Some(LynnUserSignal::SendResponse(response)) = rx.recv().await {
-                        if let Err(e) = write_half.write_all(&response).await {
-                            error!("Failed to write to socket: {}", e);
+                if let Err(e) = write_half.write_all(&response).await {
+                    error!("Failed to write to socket: {}", e);
+                    break;
+                } else {
+                    buffer.extend_from_slice(&response);
+                    if buffer.len() >= 4096 {
+                        if let Err(e) = write_half.flush().await {
+                            error!("Failed to flush socket: {}", e);
                             break;
-                        } else {
-                            buffer.extend_from_slice(&response);
-                            if buffer.len() >= 4096 {
-                                if let Err(e) = write_half.flush().await {
-                                    error!("Failed to flush socket: {}", e);
-                                    break;
-                                }
-                                buffer.clear();
-                            }
                         }
+                        buffer.clear();
                     }
+                }
+            }
             if !buffer.is_empty() {
                 let _ = write_half.flush().await;
             }

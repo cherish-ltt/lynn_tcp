@@ -5,7 +5,7 @@
 //! Then visit http://localhost:9091/metrics to see the Prometheus metrics
 //! Or visit http://localhost:9091/health for health check
 
-use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_metrics::*};
+use lynn_tcp::{lynn_metrics::*, lynn_server::*, lynn_tcp_dependents::*};
 use tracing_subscriber::fmt;
 
 #[tokio::main]
@@ -29,7 +29,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Record some initial metrics
     #[cfg(feature = "metrics")]
     {
-        METRICS.system.memory_used_bytes.set(128.0 * 1024.0 * 1024.0); // 128MB
+        METRICS
+            .system
+            .memory_used_bytes
+            .set(128.0 * 1024.0 * 1024.0); // 128MB
         METRICS.system.active_threads.set(4.0);
     }
 
@@ -92,7 +95,10 @@ fn example_manual_metrics() {
         METRICS.network.bytes_sent_total.inc_by(2048.0);
 
         // System metrics
-        METRICS.system.memory_used_bytes.set(256.0 * 1024.0 * 1024.0);
+        METRICS
+            .system
+            .memory_used_bytes
+            .set(256.0 * 1024.0 * 1024.0);
         METRICS.system.active_threads.set(8.0);
         METRICS.system.queue_size.set(100.0);
 
@@ -111,13 +117,19 @@ async fn example_timing() {
         let start = std::time::Instant::now();
         // ... do some work ...
         let duration = start.elapsed().as_secs_f64();
-        METRICS.messages.processing_duration_seconds.observe(duration);
+        METRICS
+            .messages
+            .processing_duration_seconds
+            .observe(duration);
 
         // Method 2: Using Timer trait helper
-        METRICS.messages.processing_duration_seconds.observe_duration(|| {
-            // ... do some work ...
-            println!("Doing work...");
-        });
+        METRICS
+            .messages
+            .processing_duration_seconds
+            .observe_duration(|| {
+                // ... do some work ...
+                println!("Doing work...");
+            });
     }
 }
 

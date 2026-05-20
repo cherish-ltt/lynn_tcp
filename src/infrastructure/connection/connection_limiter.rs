@@ -280,13 +280,19 @@ mod tests {
         }
 
         // 6th connection should fail
-        assert!(!limiter.check_rate_limit(ip).await, "6th connection should fail");
+        assert!(
+            !limiter.check_rate_limit(ip).await,
+            "6th connection should fail"
+        );
 
         // Wait for window to expire
         tokio::time::sleep(Duration::from_secs(2)).await;
 
         // After window expires, should work again
-        assert!(limiter.check_rate_limit(ip).await, "Connection after window should succeed");
+        assert!(
+            limiter.check_rate_limit(ip).await,
+            "Connection after window should succeed"
+        );
     }
 
     #[tokio::test]
@@ -334,7 +340,10 @@ mod tests {
         }
 
         // 4th connection should fail (exceeds per-IP limit)
-        assert!(!limiter.check_connection(ip).await, "4th connection should fail (per-IP limit)");
+        assert!(
+            !limiter.check_connection(ip).await,
+            "4th connection should fail (per-IP limit)"
+        );
     }
 
     #[tokio::test]

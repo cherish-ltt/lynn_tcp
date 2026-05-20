@@ -6,7 +6,7 @@
 use crate::LynnError;
 
 use crate::domain::model::message_validation::{
-    MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE, validate_message_length
+    MAX_MESSAGE_SIZE, MIN_MESSAGE_SIZE, validate_message_length,
 };
 
 /// Default maximum buffer size for connections
@@ -48,8 +48,7 @@ pub fn validate_message_format(
 
     // Extract message length (bytes 2-9)
     let msg_len = u64::from_le_bytes([
-        data[2], data[3], data[4], data[5],
-        data[6], data[7], data[8], data[9],
+        data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9],
     ]);
 
     // Validate message length
@@ -60,7 +59,8 @@ pub fn validate_message_format(
     if data.len() < total_expected_size {
         return Err(LynnError::protocol(format!(
             "Incomplete message: {} bytes (expected {} for complete message)",
-            data.len(), total_expected_size
+            data.len(),
+            total_expected_size
         )));
     }
 
@@ -111,7 +111,8 @@ impl SafeBuffer {
         if data.len() > self.max_size {
             return Err(LynnError::buffer(format!(
                 "Single data chunk too large: {} bytes (maximum {})",
-                data.len(), self.max_size
+                data.len(),
+                self.max_size
             )));
         }
 

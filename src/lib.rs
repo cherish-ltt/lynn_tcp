@@ -132,16 +132,16 @@
 
 // ===== 分层架构模块注册 =====
 
-/// 领域层（纯业务逻辑）
-pub(crate) mod domain;
 /// 应用层（编排层）
 pub(crate) mod application;
-/// 基础设施层（TCP/事件循环/指标/限流等具体实现）
-pub(crate) mod infrastructure;
 /// 常量配置模块
 mod const_config;
+/// 领域层（纯业务逻辑）
+pub(crate) mod domain;
 /// 错误类型模块
 mod error;
+/// 基础设施层（TCP/事件循环/指标/限流等具体实现）
+pub(crate) mod infrastructure;
 
 pub extern crate bytes;
 pub extern crate tokio;
@@ -155,9 +155,11 @@ pub use error::{LynnError, Result};
 #[cfg(feature = "metrics")]
 pub mod lynn_metrics {
     /// Re-export metrics collection
-    pub use super::infrastructure::metrics::metrics::{Metrics, Timer, export_metrics, METRICS};
+    pub use super::infrastructure::metrics::metrics::{METRICS, Metrics, Timer, export_metrics};
     /// Re-export metrics server
-    pub use super::infrastructure::metrics::metrics_server::{MetricsServerConfig, serve_metrics, spawn_metrics_server};
+    pub use super::infrastructure::metrics::metrics_server::{
+        MetricsServerConfig, serve_metrics, spawn_metrics_server,
+    };
     /// Re-export prometheus for advanced usage
     pub use prometheus;
 }
@@ -180,19 +182,19 @@ pub mod lynn_server {
 pub mod lynn_tcp_dependents {
     /// The handler result type, used to represent the result of a request handler.
     pub use super::domain::model::handler_result::HandlerResult;
-    /// The input buffer value object trait, defining the behavior of input buffer value objects.
-    pub use super::domain::model::input_buf_vo::InputBufVOTrait;
     /// The input buffer value object, representing the input data received by the server or client.
     pub use super::domain::model::input_buf_vo::InputBufVO;
+    /// The input buffer value object trait, defining the behavior of input buffer value objects.
+    pub use super::domain::model::input_buf_vo::InputBufVOTrait;
 }
 
 /// The client module, containing the client configuration and client implementation.
 #[cfg(feature = "client")]
 pub mod lynn_client {
-    /// The client implementation, handling outgoing connections and requests.
-    pub use super::application::client::lynn_client::LynnClient;
     /// The client configuration API, providing methods to configure the client.
     pub use super::application::client::client_config::LynnClientConfig;
     /// The client configuration builder, providing a fluent interface to build client configurations.
     pub use super::application::client::client_config::LynnClientConfigBuilder;
+    /// The client implementation, handling outgoing connections and requests.
+    pub use super::application::client::lynn_client::LynnClient;
 }

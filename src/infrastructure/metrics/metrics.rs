@@ -4,13 +4,12 @@
 //! It includes metrics for connections, messages, network traffic, errors, and system resources.
 
 #[cfg(feature = "metrics")]
-use prometheus::{
-    Counter, Gauge, Histogram, TextEncoder,
-    register_counter, register_gauge, register_histogram,
-    HistogramOpts, histogram_opts,
-};
-#[cfg(feature = "metrics")]
 use lazy_static::lazy_static;
+#[cfg(feature = "metrics")]
+use prometheus::{
+    Counter, Gauge, Histogram, HistogramOpts, TextEncoder, histogram_opts, register_counter,
+    register_gauge, register_histogram,
+};
 
 /// Connection metrics
 #[cfg(feature = "metrics")]

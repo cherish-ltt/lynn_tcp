@@ -4,11 +4,11 @@
 //! at the /metrics endpoint for Prometheus to scrape.
 
 #[cfg(feature = "metrics")]
-use tokio::net::TcpListener;
-#[cfg(feature = "metrics")]
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(feature = "metrics")]
-use tracing::{info, error};
+use tokio::net::TcpListener;
+#[cfg(feature = "metrics")]
+use tracing::{error, info};
 
 use crate::infrastructure::metrics::metrics::export_metrics;
 
@@ -112,9 +112,7 @@ impl Default for MetricsServerConfig {
 ///
 /// A tokio::JoinHandle for the server task
 #[cfg(feature = "metrics")]
-pub fn spawn_metrics_server(
-    config: MetricsServerConfig,
-) -> tokio::task::JoinHandle<()> {
+pub fn spawn_metrics_server(config: MetricsServerConfig) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         if config.enabled {
             if let Err(e) = serve_metrics(&config.bind_addr).await {
@@ -128,7 +126,7 @@ pub fn spawn_metrics_server(
 #[cfg(feature = "metrics")]
 mod tests {
     use super::*;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_metrics_server() {
@@ -143,8 +141,13 @@ mod tests {
         sleep(Duration::from_millis(100)).await;
 
         // Test the /metrics endpoint
-        let mut stream = tokio::net::TcpStream::connect("127.0.0.1:19991").await.unwrap();
-        stream.write_all(b"GET /metrics HTTP/1.1\r\n\r\n").await.unwrap();
+        let mut stream = tokio::net::TcpStream::connect("127.0.0.1:19991")
+            .await
+            .unwrap();
+        stream
+            .write_all(b"GET /metrics HTTP/1.1\r\n\r\n")
+            .await
+            .unwrap();
 
         let mut response = Vec::new();
         stream.read_to_end(&mut response).await.unwrap();
@@ -167,8 +170,13 @@ mod tests {
 
         sleep(Duration::from_millis(100)).await;
 
-        let mut stream = tokio::net::TcpStream::connect("127.0.0.1:19992").await.unwrap();
-        stream.write_all(b"GET /health HTTP/1.1\r\n\r\n").await.unwrap();
+        let mut stream = tokio::net::TcpStream::connect("127.0.0.1:19992")
+            .await
+            .unwrap();
+        stream
+            .write_all(b"GET /health HTTP/1.1\r\n\r\n")
+            .await
+            .unwrap();
 
         let mut response = Vec::new();
         stream.read_to_end(&mut response).await.unwrap();
@@ -191,8 +199,13 @@ mod tests {
 
         sleep(Duration::from_millis(100)).await;
 
-        let mut stream = tokio::net::TcpStream::connect("127.0.0.1:19993").await.unwrap();
-        stream.write_all(b"GET /unknown HTTP/1.1\r\n\r\n").await.unwrap();
+        let mut stream = tokio::net::TcpStream::connect("127.0.0.1:19993")
+            .await
+            .unwrap();
+        stream
+            .write_all(b"GET /unknown HTTP/1.1\r\n\r\n")
+            .await
+            .unwrap();
 
         let mut response = Vec::new();
         stream.read_to_end(&mut response).await.unwrap();

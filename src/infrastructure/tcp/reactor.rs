@@ -8,17 +8,20 @@ use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use tokio::{
     io::{AsyncWriteExt, ReadHalf},
     net::{TcpListener, TcpStream},
-    sync::{RwLock, Semaphore, mpsc::{self, Sender}},
+    sync::{
+        RwLock, Semaphore,
+        mpsc::{self, Sender},
+    },
     task::yield_now,
 };
 use tracing::{info, warn};
 
 use crate::application::server::lynn_server::ReactorEventSender;
-use crate::domain::handler::handler_system::AsyncFunc;
-use crate::domain::model::lynn_user::ClientsStructType;
 use crate::application::server::server_common::{add_client, check_handler_result, push_read_half};
-use crate::domain::handler::handler_system::{HandlerContext, ClientsContext};
+use crate::domain::handler::handler_system::AsyncFunc;
+use crate::domain::handler::handler_system::{ClientsContext, HandlerContext};
 use crate::domain::model::input_buf_vo::InputBufVO;
+use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
 use crate::infrastructure::connection::connection_limiter::ConnectionLimiter;
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
@@ -256,8 +259,8 @@ impl CoreReactor {
         alow_max_connections: Option<&usize>,
         global_queue: ReactorEventSender,
         connection_limiter: Option<(
-            &u64,                                           // rate_limit
-            &usize,                                          // max_connections_per_ip
+            &u64,   // rate_limit
+            &usize, // max_connections_per_ip
             Arc<ConnectionLimiter>,
         )>,
         tcp_config: TcpSocketConfig,
@@ -280,7 +283,10 @@ impl CoreReactor {
                 }
 
                 // Apply TCP keep-alive and buffer sizes using socket2
-                if tcp_config.keepalive_enabled || tcp_config.recv_buffer_size > 0 || tcp_config.send_buffer_size > 0 {
+                if tcp_config.keepalive_enabled
+                    || tcp_config.recv_buffer_size > 0
+                    || tcp_config.send_buffer_size > 0
+                {
                     if let Some(s) = socket.take() {
                         // Convert TcpStream to std::net::TcpStream to access socket2
                         match s.into_std() {
@@ -291,8 +297,11 @@ impl CoreReactor {
                                 // Apply TCP keep-alive if enabled
                                 if tcp_config.keepalive_enabled {
                                     use socket2::TcpKeepalive;
-                                    let ka = TcpKeepalive::new()
-                                        .with_time(std::time::Duration::from_secs(tcp_config.keepalive_time_secs));
+                                    let ka = TcpKeepalive::new().with_time(
+                                        std::time::Duration::from_secs(
+                                            tcp_config.keepalive_time_secs,
+                                        ),
+                                    );
                                     if let Err(e) = socket2.set_tcp_keepalive(&ka) {
                                         warn!(
                                             "Failed to set keep-alive for {}: {}, using default",
@@ -303,7 +312,9 @@ impl CoreReactor {
 
                                 // Set buffer sizes if specified (non-zero)
                                 if tcp_config.recv_buffer_size > 0 {
-                                    if let Err(e) = socket2.set_recv_buffer_size(tcp_config.recv_buffer_size) {
+                                    if let Err(e) =
+                                        socket2.set_recv_buffer_size(tcp_config.recv_buffer_size)
+                                    {
                                         warn!(
                                             "Failed to set recv buffer size for {}: {}, using default",
                                             addr, e
@@ -312,7 +323,9 @@ impl CoreReactor {
                                 }
 
                                 if tcp_config.send_buffer_size > 0 {
-                                    if let Err(e) = socket2.set_send_buffer_size(tcp_config.send_buffer_size) {
+                                    if let Err(e) =
+                                        socket2.set_send_buffer_size(tcp_config.send_buffer_size)
+                                    {
                                         warn!(
                                             "Failed to set send buffer size for {}: {}, using default",
                                             addr, e
@@ -323,15 +336,23 @@ impl CoreReactor {
                                 // Convert back to TcpStream
                                 let std_socket: std::net::TcpStream = socket2.into();
                                 match TcpStream::from_std(std_socket) {
-                                    Ok(new_s) => { socket = Some(new_s); }
+                                    Ok(new_s) => {
+                                        socket = Some(new_s);
+                                    }
                                     Err(e) => {
-                                        warn!("Failed to convert back to TcpStream for {}: {}, closing connection", addr, e);
+                                        warn!(
+                                            "Failed to convert back to TcpStream for {}: {}, closing connection",
+                                            addr, e
+                                        );
                                         socket_permit = false;
                                     }
                                 }
                             }
                             Err(e) => {
-                                warn!("Failed to convert TcpStream for {}: {}, using default settings", addr, e);
+                                warn!(
+                                    "Failed to convert TcpStream for {}: {}, using default settings",
+                                    addr, e
+                                );
                                 // Note: We lost the socket here, but this is a very rare error case
                                 // In practice, this conversion should never fail
                                 socket_permit = false;
@@ -412,8 +433,8 @@ impl TcpReactor {
         alow_max_connections: Option<&usize>,
         server_max_reactor_taskpool_size: &usize,
         connection_limiter: Option<(
-            &u64,                // rate_limit
-            &usize,               // max_connections_per_ip
+            &u64,   // rate_limit
+            &usize, // max_connections_per_ip
             Arc<ConnectionLimiter>,
         )>,
         tcp_config: TcpSocketConfig,

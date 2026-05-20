@@ -1,6 +1,8 @@
 use std::{future::Future, pin::Pin};
 
-use crate::domain::handler::handler_system::{HandlerContext, SystemParam, SystemParamFunction, SystemParamState};
+use crate::domain::handler::handler_system::{
+    HandlerContext, SystemParam, SystemParamFunction, SystemParamState,
+};
 use crate::domain::model::handler_result::HandlerResult;
 
 macro_rules! impl_system_param_function {

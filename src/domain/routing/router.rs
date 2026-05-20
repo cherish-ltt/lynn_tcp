@@ -21,7 +21,8 @@ impl LynnRouter {
                 method_id
             );
         }
-        self.map.insert(method_id, Arc::new(Box::new(handler.to_system())));
+        self.map
+            .insert(method_id, Arc::new(Box::new(handler.to_system())));
     }
 
     pub(crate) fn get_handler_by_method_id(&self, method_id: &u16) -> Option<Arc<AsyncFunc>> {

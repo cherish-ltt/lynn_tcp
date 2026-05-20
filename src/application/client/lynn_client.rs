@@ -146,9 +146,7 @@ impl<'a> LynnClient<'a> {
         let retry_count = 3;
         let timeout = Duration::from_secs(3);
         let ip_v4 = self.lynn_client_config.get_server_ipv4().to_string();
-        let channel_size = *self
-            .lynn_client_config
-            .get_client_single_channel_size();
+        let channel_size = *self.lynn_client_config.get_client_single_channel_size();
         let message_header_mark = *self.lynn_client_config.get_message_header_mark();
         let message_tail_mark = *self.lynn_client_config.get_message_tail_mark();
         for _ in 0..retry_count {
@@ -248,9 +246,7 @@ impl<'a> LynnClient<'a> {
 
     /// Checks the heart.
     pub(crate) async fn check_heart(&mut self) {
-        let interval_time = *self
-            .lynn_client_config
-            .get_server_check_heart_interval();
+        let interval_time = *self.lynn_client_config.get_server_check_heart_interval();
         if let Some(sender) = self.get_sender().await {
             spawn_check_heart(interval_time, sender);
         } else {
