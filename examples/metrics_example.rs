@@ -22,15 +22,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Lynn TCP server with metrics...");
     println!("📊 Metrics available at: http://localhost:9091/metrics");
     println!("💚 Health check at: http://localhost:9091/health");
-    println!("");
+    println!();
 
     let _metrics_handle = spawn_metrics_server(metrics_config);
 
     // Record some initial metrics
     #[cfg(feature = "metrics")]
     {
-        METRICS.system.memory_used_bytes.set(128 * 1024 * 1024); // 128MB
-        METRICS.system.active_threads.set(4);
+        METRICS.system.memory_used_bytes.set(128.0 * 1024.0 * 1024.0); // 128MB
+        METRICS.system.active_threads.set(4.0);
     }
 
     // Start the server
@@ -60,13 +60,9 @@ pub async fn my_service() -> HandlerResult {
 pub async fn my_service_with_metrics(input_buf_vo: InputBufVO) -> HandlerResult {
     #[cfg(feature = "metrics")]
     {
-        // Time the handler execution
-        let _timer = METRICS.messages.processing_duration_seconds.start_timer();
-
         // Track message size
-        if let Some(data) = input_buf_vo.get_all_bytes().len() {
-            METRICS.messages.size_bytes.observe(data as f64);
-        }
+        let data_len = input_buf_vo.get_all_bytes().len();
+        METRICS.messages.size_bytes.observe(data_len as f64);
 
         METRICS.messages.received_total.inc();
     }
@@ -92,21 +88,13 @@ fn example_manual_metrics() {
         METRICS.messages.dropped_total.inc();
 
         // Network metrics
-        METRICS.network.bytes_received_total.inc_by(1024);
-        METRICS.network.bytes_sent_total.inc_by(2048);
+        METRICS.network.bytes_received_total.inc_by(1024.0);
+        METRICS.network.bytes_sent_total.inc_by(2048.0);
 
         // System metrics
-        METRICS.system.memory_used_bytes.set(256 * 1024 * 1024);
-        METRICS.system.active_threads.set(8);
-        METRICS.system.queue_size.set(100);
-
-        // Error metrics (with labels)
-        METRICS.errors.total
-            .with_label_values(&["network_error"])
-            .inc();
-
-        METRICS.errors.rate_limit_rejected.inc();
-        METRICS.errors.validation_errors.inc();
+        METRICS.system.memory_used_bytes.set(256.0 * 1024.0 * 1024.0);
+        METRICS.system.active_threads.set(8.0);
+        METRICS.system.queue_size.set(100.0);
 
         // Histogram observation
         METRICS.messages.size_bytes.observe(512.0);
@@ -126,7 +114,6 @@ async fn example_timing() {
         METRICS.messages.processing_duration_seconds.observe(duration);
 
         // Method 2: Using Timer trait helper
-        use lynn_tcp::metrics::Timer;
         METRICS.messages.processing_duration_seconds.observe_duration(|| {
             // ... do some work ...
             println!("Doing work...");

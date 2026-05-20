@@ -3,18 +3,6 @@
 #![allow(private_bounds)]
 #![allow(non_snake_case)]
 #![allow(deprecated)]
-// Clippy: allow style warnings that don't affect correctness
-#![allow(clippy::module_inception)]
-#![allow(clippy::doc_lazy_continuation)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::declare_interior_mutable_const)]
-#![allow(clippy::borrow_interior_mutable_const)]
-#![allow(clippy::new_without_default)]
-#![allow(clippy::let_underscore_future)]
-#![allow(clippy::redundant_guards)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::unused_unit)]
-#![allow(clippy::unnecessary_cast)]
 //! # Lynn_tcp
 //! `Lynn_tcp` is a lightweight TCP server framework
 //! ## Keywords
@@ -130,18 +118,30 @@
 //! }
 //! ```
 
-// ===== 分层架构模块注册 =====
-
-/// 领域层（纯业务逻辑）
-pub(crate) mod domain;
-/// 应用层（编排层）
-pub(crate) mod application;
-/// 基础设施层（TCP/事件循环/指标/限流等具体实现）
-pub(crate) mod infrastructure;
-/// 常量配置模块
+/// The application module, containing the server configuration API and server implementation.
+mod app;
+/// The client module, containing the client configuration and client implementation.
+mod client;
+/// The constant configuration module, containing constants used throughout the application.
 mod const_config;
-/// 错误类型模块
+/// The DTO factory module, responsible for creating data transfer objects.
+mod dto_factory;
+/// The error module, containing error types for the framework.
 mod error;
+/// The handler module, containing the implementation of request handlers.
+mod handler;
+/// The macros module, containing custom macros used throughout the application.
+mod macros;
+/// The metrics module, containing Prometheus metrics collection.
+#[cfg(feature = "metrics")]
+mod metrics;
+/// The metrics server module, providing HTTP metrics endpoint.
+#[cfg(feature = "metrics")]
+mod metrics_server;
+/// The validation module, containing input validation and security functions.
+mod validation;
+/// The VO factory module, responsible for creating value objects.
+mod vo_factory;
 
 pub extern crate bytes;
 pub extern crate tokio;
@@ -155,9 +155,9 @@ pub use error::{LynnError, Result};
 #[cfg(feature = "metrics")]
 pub mod lynn_metrics {
     /// Re-export metrics collection
-    pub use super::infrastructure::metrics::metrics::{Metrics, Timer, export_metrics, METRICS};
+    pub use super::metrics::{Metrics, Timer, export_metrics};
     /// Re-export metrics server
-    pub use super::infrastructure::metrics::metrics_server::{MetricsServerConfig, serve_metrics, spawn_metrics_server};
+    pub use super::metrics_server::{MetricsServerConfig, serve_metrics, spawn_metrics_server};
     /// Re-export prometheus for advanced usage
     pub use prometheus;
 }
@@ -166,33 +166,33 @@ pub mod lynn_metrics {
 #[cfg(feature = "server")]
 pub mod lynn_server {
     /// The server implementation, handling incoming connections and requests.
-    pub use super::application::server::lynn_server::LynnServer;
+    pub use super::app::LynnServer;
     /// The server configuration API, providing methods to configure the server.
-    pub use super::application::server::server_config::LynnServerConfig;
+    pub use super::app::lynn_config_api::LynnServerConfig;
     /// The server configuration builder, providing a fluent interface to build server configurations.
-    pub use super::application::server::server_config::LynnServerConfigBuilder;
+    pub use super::app::lynn_config_api::LynnServerConfigBuilder;
     /// The `ClientsContext` struct is used to manage the state and context of connected clients.
-    pub use super::domain::handler::handler_system::ClientsContext;
+    pub use super::handler::ClientsContext;
 }
 
 /// The TCP dependents module, containing common types used by both the server and client.
 #[cfg(any(feature = "server", feature = "client"))]
 pub mod lynn_tcp_dependents {
     /// The handler result type, used to represent the result of a request handler.
-    pub use super::domain::model::handler_result::HandlerResult;
+    pub use super::dto_factory::input_dto::HandlerResult;
     /// The input buffer value object trait, defining the behavior of input buffer value objects.
-    pub use super::domain::model::input_buf_vo::InputBufVOTrait;
+    pub use super::vo_factory::InputBufVOTrait;
     /// The input buffer value object, representing the input data received by the server or client.
-    pub use super::domain::model::input_buf_vo::InputBufVO;
+    pub use super::vo_factory::input_vo::InputBufVO;
 }
 
 /// The client module, containing the client configuration and client implementation.
 #[cfg(feature = "client")]
 pub mod lynn_client {
     /// The client implementation, handling outgoing connections and requests.
-    pub use super::application::client::lynn_client::LynnClient;
+    pub use super::client::LynnClient;
     /// The client configuration API, providing methods to configure the client.
-    pub use super::application::client::client_config::LynnClientConfig;
+    pub use super::client::client_config::LynnClientConfig;
     /// The client configuration builder, providing a fluent interface to build client configurations.
-    pub use super::application::client::client_config::LynnClientConfigBuilder;
+    pub use super::client::client_config::LynnClientConfigBuilder;
 }
