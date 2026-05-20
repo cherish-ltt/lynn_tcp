@@ -1,6 +1,38 @@
 # Version Note
 
-### v1.3.x - plan
+### v2.0.0 - release
+
+#### v2.0.0 - release
+
+1.refactor
+
+- **Architecture refactoring**: Restructured to DDD + Onion Architecture
+  - `domain/` — Pure business logic (model, routing, handler abstractions)
+  - `application/` — Orchestration layer (server, client)
+  - `infrastructure/` — Concrete implementations (TCP reactor, metrics, validation, protocol)
+  - `src/lib.rs` — Interface layer (public API unchanged)
+- Rust edition upgraded to `2024`, rust-version upgraded to `1.95`
+
+2.feat
+
+- **7 runnable examples** covering all framework usage scenarios:
+  - `basic_server` — Default server configuration with 3 handler signatures
+  - `custom_config_server` — Server with custom config via Builder
+  - `custom_protocol` — Custom message header/tail marks
+  - `echo_server_client` — Full request-response cycle (Client ↔ Server)
+  - `multi_route_service` — Multi-route distribution and verification
+  - `custom_protocol_full` — Custom protocol with client-side support
+  - `metrics_example` — Prometheus metrics integration demonstration
+
+3.docs
+
+- Rewrite README.md and README_ZH.md for v2.0
+- Add complete Architecture documentation
+- Add Examples section with run commands
+- Add FAQ section
+- Add v2.0.0 changelog
+
+### v1.3.x - plan _(skipped — jumped directly to v2.0.0)_
 
 #### v1.3.0-plan
 

@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "createdAt": "2026-05-20T17:10:23.169Z",
+  "updatedAt": "2026-05-20T17:10:23.169Z",
+  "prompt": "[doc] 为 整个项目已经更新 撰写一份文档\n\n**角色**：你是一位技术文档工程师。\n**背景**：目标受众是 github readme，他们需要了解 更新README.md 和README.md的_zh版。\n**任务**：\n1. 提取核心要点，按逻辑结构重组（概述 → 快速开始 → 详细说明 → 常见问题）。\n2. 添加至少 1 个真实可运行的示例（使用 md 语法高亮）。\n3. 如存在争议点，列出不同观点并注明\"无共识\"。\n**输出格式**：Markdown 层级标题，必要时插入表格/列表。\n**约束**：避免空洞词汇（如\"细致入微\"\"深入探究\"）；每段都应有实质信息；保持原意，不添加原文没有的事实。\n**验证**：请先提供大纲，经我确认后再扩展。",
+  "mode": "full-attended",
+  "steps": [
+    {
+      "status": "done",
+      "durationMs": 9313
+    },
+    {
+      "status": "pending"
+    }
+  ],
+  "currentStepIndex": 0,
+  "loopCounts": {},
+  "planFilePath": ".pi-dev-output/pi-plans/20260521-174000-add-client-server-examples.md",
+  "taskSummary": "doc - 为 整个项目已经更新 撰写一份文档",
+  "workflowType": "快速链式",
+  "fileChanges": [
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "new",
+      "filePath": ".pi-dev-output/pi-workflow/checkpoint-archive-mpebi9ov.json",
+      "timestamp": "2026-05-20T17:10:23.168Z"
+    }
+  ],
+  "subAgentRuns": 1,
+  "filesModified": 0,
+  "filesCreated": 1,
+  "agentRunHistory": [
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "startedAt": "2026-05-20T17:10:13.856Z",
+      "durationMs": 9281,
+      "exitCode": 143,
+      "toolCount": 0
+    }
+  ],
+  "baseline": [
+    {
+      "path": ".pi-dev-output/pi-grill/answers/answer-mpebhy9p-20260521-0110.md",
+      "hash": "f70c8cab284ea4b475f76e1c01e73945dac24229"
+    }
+  ]
+}

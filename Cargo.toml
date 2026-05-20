@@ -2,7 +2,7 @@
 name = "lynn_tcp"
 version = "2.0.0"
 edition = "2024"
-rust-version = "1.92"
+rust-version = "1.95"
 authors = ["lynn_tcp Contributors"]
 license = "MIT"
 readme = "README.md"

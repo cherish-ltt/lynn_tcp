@@ -1,0 +1,211 @@
+{
+  "version": 2,
+  "createdAt": "2026-05-20T17:10:23.169Z",
+  "updatedAt": "2026-05-20T17:15:03.875Z",
+  "prompt": "[doc] 为 当前项目已经从1.25大升级重构为2.0,`.pi-dev-output/pi-plans`有3次任务计划表，现在已经重构完成 撰写一份文档\n\n**角色**：你是一位技术文档工程师。\n**背景**：目标受众是 GitHub readme，他们需要了解 现在需要更新README.md和_zh版本，以及version.md和其他我未注意到的文档。注意readme可以结构优化，顺序变更，但内容图片等链接不建议删除(万不得已可以调整)。\n**任务**：\n1. 提取核心要点，按逻辑结构重组（概述 → 快速开始 → 详细说明 → 常见问题）。\n2. 添加至少 1 个真实可运行的示例（使用 md 语法高亮）。\n3. 如存在争议点，列出不同观点并注明\"无共识\"。\n**输出格式**：Markdown 层级标题，必要时插入表格/列表。\n**约束**：避免空洞词汇（如\"细致入微\"\"深入探究\"）；每段都应有实质信息；保持原意，不添加原文没有的事实。\n**验证**：请先提供大纲，经我确认后再扩展。",
+  "mode": "full-auto",
+  "steps": [
+    {
+      "status": "done",
+      "durationMs": 78115
+    },
+    {
+      "status": "done",
+      "durationMs": 9900
+    }
+  ],
+  "currentStepIndex": 1,
+  "loopCounts": {},
+  "planFilePath": ".pi-dev-output/pi-plans/20260521-193000-docs-update-v2.md",
+  "taskSummary": "doc - 为 当前项目已经从1.25大升级重构为2.0,`.pi-dev-output/pi-plans`有3次任务计划表，现在已经重构完成 撰写一份文档",
+  "workflowType": "快速链式",
+  "fileChanges": [
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "new",
+      "filePath": ".pi-dev-output/pi-workflow/checkpoint-archive-mpebi9ov.json",
+      "timestamp": "2026-05-20T17:10:23.168Z"
+    },
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "new",
+      "filePath": ".pi-dev-output/pi-plans/20260521-193000-docs-update-v2.md",
+      "timestamp": "2026-05-20T17:14:53.966Z"
+    },
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "type": "new",
+      "filePath": ".pi-dev-output/pi-workflow/checkpoint.json",
+      "timestamp": "2026-05-20T17:14:53.974Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "Cargo.toml",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "version.md",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "METRICS.md",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "lib.rs",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "update_logs/v2.0.0.md",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "src/lib.rs.bak",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "update_logs/v1.2.5.md",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "v1.3.0.md",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "src/lib.rs",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "server_config.rs",
+      "timestamp": "2026-05-20T17:15:03.830Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "client_config.rs",
+      "timestamp": "2026-05-20T17:15:03.831Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "FlowChart.png",
+      "timestamp": "2026-05-20T17:15:03.831Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "src/application/server/server_config.rs",
+      "timestamp": "2026-05-20T17:15:03.831Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "src/application/client/client_config.rs",
+      "timestamp": "2026-05-20T17:15:03.831Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "src/application/client/lynn_client.rs",
+      "timestamp": "2026-05-20T17:15:03.831Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "版本引用（v1.3",
+      "timestamp": "2026-05-20T17:15:03.836Z"
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "type": "edit",
+      "filePath": "v1.3.x",
+      "timestamp": "2026-05-20T17:15:03.836Z"
+    }
+  ],
+  "subAgentRuns": 3,
+  "filesModified": 17,
+  "filesCreated": 3,
+  "agentRunHistory": [
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "startedAt": "2026-05-20T17:10:13.856Z",
+      "durationMs": 9281,
+      "exitCode": 143,
+      "toolCount": 0
+    },
+    {
+      "agent": "planner",
+      "stepIndex": 0,
+      "startedAt": "2026-05-20T17:13:35.860Z",
+      "durationMs": 78060,
+      "exitCode": 0,
+      "toolCount": 0
+    },
+    {
+      "agent": "docWriter",
+      "stepIndex": 1,
+      "startedAt": "2026-05-20T17:14:53.976Z",
+      "durationMs": 9849,
+      "exitCode": 0,
+      "toolCount": 2
+    }
+  ],
+  "baseline": [
+    {
+      "path": ".pi-dev-output/pi-grill/answers/answer-mpebhy9p-20260521-0110.md",
+      "hash": "f70c8cab284ea4b475f76e1c01e73945dac24229"
+    },
+    {
+      "path": ".pi-dev-output/pi-grill/answers/answer-mpebmb1x-20260521-0113.md",
+      "hash": "1b195588d7932733e52c84af39d6871fd8eac264"
+    },
+    {
+      "path": ".pi-dev-output/pi-workflow/checkpoint-archive-mpebi9ov.json",
+      "hash": "c310c81dec7c8d058da4253455faa275215ab1f1"
+    },
+    {
+      "path": ".pi-dev-output/pi-workflow/checkpoint-archive-mpebmcol.json",
+      "hash": "fd2a54ecd9285c3d6efc8defc1816f3282335fe9"
+    }
+  ]
+}
