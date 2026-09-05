@@ -320,10 +320,7 @@ async fn per_ip_connection_limit_rejects_extra_connections() {
     // The first connection stays open, the second is closed by the limiter.
     let mut probe = [0u8; 1];
     let still_open = timeout(Duration::from_millis(300), first.read(&mut probe)).await;
-    assert!(
-        still_open.is_err(),
-        "first socket unexpectedly closed"
-    );
+    assert!(still_open.is_err(), "first socket unexpectedly closed");
     let closed = timeout(Duration::from_secs(3), second.read(&mut probe))
         .await
         .expect("waiting for EOF timed out");
