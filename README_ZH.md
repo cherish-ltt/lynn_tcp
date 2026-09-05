@@ -416,6 +416,14 @@ cargo bench --bench benchmark -- --json results.json
 # 自定义：--model all|1|2  --clients 64,256  --duration 15  --warmup 3  --payload 128
 ```
 
+**新版本 / 新机型的标准跑法（维护者）**
+
+```bash
+git pull && cargo bench --bench benchmark -- --json docs/benchmark/v<版本>-<机型>.json
+```
+
+运行前确认文件描述符上限能满足最高并发档位（`ulimit -n 65535`；基准启动时也会自动提升至硬上限）。跑完后将 JSON 存档到 `docs/benchmark/`（命名 `v<版本>-<机型>.json`），并在**同一提交**中更新两份 README 的结果表（见 [AGENTS.md](AGENTS.md) §10.3）。
+
 **lynn_tcp v2.0.0-rc.3** — Apple M1 Pro（8 逻辑核：6 性能核 + 2 能效核，16 GB）、macOS、回环链路 — 2026.09.05（[原始 JSON](docs/benchmark/v2.0.0-rc.3-apple-m1-pro.json)）
 
 | 模型 | 客户端 | 载荷 (B) | 吞吐 (resp/s) | 平均 RTT (ms) | p50 (ms) | p95 (ms) | p99 (ms) |

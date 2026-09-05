@@ -416,6 +416,14 @@ cargo bench --bench benchmark -- --json results.json
 # customize: --model all|1|2  --clients 64,256  --duration 15  --warmup 3  --payload 128
 ```
 
+**Standard run for a new version / machine (maintainers)**
+
+```bash
+git pull && cargo bench --bench benchmark -- --json docs/benchmark/v<version>-<machine>.json
+```
+
+Before running, make sure the file-descriptor limit allows the highest concurrency level (`ulimit -n 65535`; the harness also auto-raises it up to the hard limit). Archive the JSON under `docs/benchmark/` named `v<version>-<machine>.json`, then update the results table in **both** READMEs in the same commit (see [AGENTS.md](AGENTS.md) §10.3).
+
 **lynn_tcp v2.0.0-rc.3** — Apple M1 Pro (8 logical cores: 6 performance + 2 efficiency, 16 GB), macOS, loopback — 2026.09.05 ([raw JSON](docs/benchmark/v2.0.0-rc.3-apple-m1-pro.json))
 
 | Model | Clients | Payload (B) | Throughput (resp/s) | Avg RTT (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
