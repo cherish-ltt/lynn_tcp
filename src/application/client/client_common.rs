@@ -2,17 +2,45 @@ use std::time::Duration;
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
     sync::mpsc,
     task::JoinHandle,
     time::interval,
 };
 use tracing::{error, info, warn};
 
-use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::stream::LynnStream;
+use crate::{LynnError, const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE};
+
+/// Parameters for a single connection attempt.
+pub(super) struct ConnectParams<'a> {
+    /// The server address ("ip:port").
+    pub(super) addr: &'a str,
+    #[cfg(feature = "tls")]
+    /// Optional TLS endpoint (connector + resolved server name).
+    pub(super) tls: Option<&'a crate::infrastructure::tls::tls_provider::ClientTls>,
+}
+
+/// Performs one connection attempt, wrapping the TCP stream into a TLS 1.3
+/// session when a TLS endpoint is configured.
+pub(super) async fn connect_stream(params: ConnectParams<'_>) -> Result<LynnStream, LynnError> {
+    let tcp = TcpStream::connect(params.addr).await?;
+    #[cfg(feature = "tls")]
+    if let Some(tls) = params.tls {
+        let tls_stream = tls
+            .connector
+            .connect(tls.server_name.clone(), tcp)
+            .await
+            .map_err(|e| {
+                LynnError::tls(format!("TLS handshake with {} failed: {e}", params.addr))
+            })?;
+        return Ok(LynnStream::Tls(tls_stream.into()));
+    }
+    Ok(LynnStream::Plain(tcp))
+}
 
 #[inline(always)]
 pub(super) fn spawn_handle(
@@ -38,7 +66,10 @@ pub(super) fn spawn_handle(
                         }
                         if let Some(response) = handler_result.get_response_data() {
                             if let Err(e) = write_half.write_all(&response).await {
+                                // Connection is gone: stop writing, otherwise a
+                                // persistent transport error would spin this task.
                                 error!("write to server failed - e: {:?}", e);
+                                break;
                             }
                         } else {
                             warn!("nothing to send");
@@ -52,7 +83,7 @@ pub(super) fn spawn_handle(
         });
         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
         let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
-        loop {
+        'read_loop: loop {
             match read_half.read(&mut buf).await {
                 Ok(0) => {
                     break;
@@ -61,13 +92,18 @@ pub(super) fn spawn_handle(
                     big_buf.extend_from_slice(&buf[..n]);
                     while big_buf.is_complete() {
                         let input_buf_vo = InputBufVO::new_without_socket_addr(big_buf.get_data());
-                        if let Err(e) = tx_read.send(input_buf_vo).await {
-                            error!("send to channel failed - e: {:?}", e);
+                        if tx_read.send(input_buf_vo).await.is_err() {
+                            // Receiver dropped: stop feeding the connection.
+                            break 'read_loop;
                         }
                     }
                 },
                 Err(e) => {
+                    // A persistent read error (e.g. a torn-down TLS session
+                    // errors on every poll) must terminate the loop, otherwise
+                    // this task spins forever.
                     error!("read from server failed : {}", e);
+                    break;
                 },
             }
         }
