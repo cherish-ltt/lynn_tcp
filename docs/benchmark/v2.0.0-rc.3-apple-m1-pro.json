@@ -9,16 +9,16 @@
     "warmup_secs": 3,
     "duration_secs": 10,
     "client_channel_size": 8,
-    "unix_timestamp": 1788611677
+    "unix_timestamp": 1788616103
   },
   "results": [
-    {"model": 1, "clients": 64, "requests": 1294787, "responses": 1294787, "throughput_rps": 129478.7, "latency": {"avg_ms": 0.494, "p50_ms": 0.446, "p95_ms": 0.855, "p99_ms": 1.303}},
-    {"model": 1, "clients": 256, "requests": 1363503, "responses": 1363503, "throughput_rps": 136350.3, "latency": {"avg_ms": 1.877, "p50_ms": 1.682, "p95_ms": 3.503, "p99_ms": 5.064}},
-    {"model": 1, "clients": 1024, "requests": 1448729, "responses": 1448729, "throughput_rps": 144872.9, "latency": {"avg_ms": 7.067, "p50_ms": 5.679, "p95_ms": 16.497, "p99_ms": 22.707}},
-    {"model": 1, "clients": 4096, "requests": 1276803, "responses": 1276803, "throughput_rps": 127680.3, "latency": {"avg_ms": 32.065, "p50_ms": 29.457, "p95_ms": 80.264, "p99_ms": 112.598}},
-    {"model": 2, "clients": 64, "requests": 9284134, "responses": 1034589, "throughput_rps": 103458.9, "latency": null},
-    {"model": 2, "clients": 256, "requests": 10061790, "responses": 1314821, "throughput_rps": 131482.1, "latency": null},
-    {"model": 2, "clients": 1024, "requests": 10165312, "responses": 1132532, "throughput_rps": 113253.2, "latency": null},
-    {"model": 2, "clients": 4096, "requests": 7802856, "responses": 691448, "throughput_rps": 69144.8, "latency": null}
+    {"model": 1, "clients": 64, "requests": 1354732, "responses": 1354732, "throughput_rps": 135473.2, "latency": {"avg_ms": 0.472, "p50_ms": 0.439, "p95_ms": 0.791, "p99_ms": 1.046}},
+    {"model": 1, "clients": 256, "requests": 1427353, "responses": 1427353, "throughput_rps": 142735.3, "latency": {"avg_ms": 1.793, "p50_ms": 1.634, "p95_ms": 3.295, "p99_ms": 4.435}},
+    {"model": 1, "clients": 1024, "requests": 1475684, "responses": 1475684, "throughput_rps": 147568.4, "latency": {"avg_ms": 6.938, "p50_ms": 5.827, "p95_ms": 15.2, "p99_ms": 22.41}},
+    {"model": 1, "clients": 4096, "requests": 1380734, "responses": 1380734, "throughput_rps": 138073.4, "latency": {"avg_ms": 29.640, "p50_ms": 28.416, "p95_ms": 35.22, "p99_ms": 64.218}},
+    {"model": 2, "clients": 64, "requests": 11153590, "responses": 1516439, "throughput_rps": 151643.9, "latency": null},
+    {"model": 2, "clients": 256, "requests": 10147628, "responses": 1916072, "throughput_rps": 191607.2, "latency": null},
+    {"model": 2, "clients": 1024, "requests": 10113342, "responses": 1435690, "throughput_rps": 143569.0, "latency": null},
+    {"model": 2, "clients": 4096, "requests": 2652324, "responses": 319557, "throughput_rps": 31955.7, "latency": null}
   ]
 }

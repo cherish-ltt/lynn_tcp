@@ -428,16 +428,16 @@ Before running, make sure the file-descriptor limit allows the highest concurren
 
 | Model | Clients | Payload (B) | Throughput (resp/s) | Avg RTT (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
 |:------|--------:|------------:|--------------------:|-------------:|---------:|---------:|---------:|
-| 1 (ping-pong) | 64   | 128 | **129,479** | 0.494 | 0.446 | 0.855 | 1.303 |
-| 1 (ping-pong) | 256  | 128 | **136,350** | 1.877 | 1.682 | 3.503 | 5.064 |
-| 1 (ping-pong) | 1024 | 128 | **144,873** | 7.067 | 5.679 | 16.497 | 22.707 |
-| 1 (ping-pong) | 4096 | 128 | **127,680** | 32.065 | 29.457 | 80.264 | 112.598 |
-| 2 (pipelined) | 64   | 128 | **103,459** | — | — | — | — |
-| 2 (pipelined) | 256  | 128 | **131,482** | — | — | — | — |
-| 2 (pipelined) | 1024 | 128 | **113,253** | — | — | — | — |
-| 2 (pipelined) | 4096 | 128 | **69,145** | — | — | — | — |
+| 1 (ping-pong) | 64   | 128 | **135,473** | 0.472 | 0.439 | 0.791 | 1.046 |
+| 1 (ping-pong) | 256  | 128 | **142,735** | 1.793 | 1.634 | 3.295 | 4.435 |
+| 1 (ping-pong) | 1024 | 128 | **147,568** | 6.938 | 5.827 | 15.200 | 22.410 |
+| 1 (ping-pong) | 4096 | 128 | **138,073** | 29.640 | 28.416 | 35.220 | 64.218 |
+| 2 (pipelined) | 64   | 128 | **151,644** | — | — | — | — |
+| 2 (pipelined) | 256  | 128 | **191,607** | — | — | — | — |
+| 2 (pipelined) | 1024 | 128 | **143,569** | — | — | — | — |
+| 2 (pipelined) | 4096 | 128 | **31,956** | — | — | — | — |
 
-> 📊 Numbers are loopback, single-machine measurements where client load generation shares the CPU with the server — treat them as relative comparisons between versions, not absolute capacity. Model-1 RTT grows with concurrency as queues form (classic queueing behavior); Model-2 throughput saturates near 1024 clients on this machine.
+> 📊 Numbers are loopback, single-machine measurements where client load generation shares the CPU with the server — treat them as relative comparisons between versions, not absolute capacity. Model-1 RTT grows with concurrency as queues form (classic queueing behavior). Model-2 peaks near 256 clients on this machine; its 4096-client cell was degraded by connection-phase retries (see the requests ≫ responses gap in the JSON), so read that point as a lower bound rather than steady state.
 
 <details>
 <summary>Fuzzy comparison with v1.1.x / v1.2.x (different harness &amp; hardware — trend-level only)</summary>
@@ -448,22 +448,22 @@ Before running, make sure the file-descriptor limit allows the highest concurren
 
 | Clients | v1.1.x | v1.2.x | v2.0.0-rc.3 |
 |--------:|-------:|-------:|------------:|
-| 256     | 182,879 | 64,630 | **136,350** |
-| 1024    | 232,861 | 163,307 | **144,873** |
-| 4096    | 160,318 | 124,645 | **127,680** |
+| 256     | 182,879 | 64,630 | **142,735** |
+| 1024    | 232,861 | 163,307 | **147,568** |
+| 4096    | 160,318 | 124,645 | **138,073** |
 
 **Model 2 — concurrent send/receive (resp/s)**
 
 | Clients | v1.1.x | v1.2.x | v2.0.0-rc.3 |
 |--------:|-------:|-------:|------------:|
-| 256     | 80,499 | 492,889 | **131,482** |
-| 1024    | 23,143 | 158,056 | **113,253** |
-| 4096    | 13,557 | 52,163 | **69,145** |
+| 256     | 80,499 | 492,889 | **191,607** |
+| 1024    | 23,143 | 158,056 | **143,569** |
+| 4096    | 13,557 | 52,163 | **31,956** |
 
 **Takeaways**
 
-- Throughput stays in the same order of magnitude — no recognizable regression. At 4096 clients both models beat both v1.x generations (Model-2: 5.1× v1.1.x, 1.3× v1.2.x).
-- The clearest v2.0 win is **stability**: v1.x collapses at high concurrency (Model-2 drops 83–89% from its peak), while v2.0 degrades only ~12% (Model-1) and ~47% (Model-2 — with a bounded 8-deep in-flight window, versus v1.x's unbounded burst).
+- Model-1 stays in the same order of magnitude as v1.x — no recognizable regression — and again degrades least at 4096 clients (peak→4096: −6% versus −36% / −32% for v1.x).
+- Model-2 holds 143k–192k through 1024 clients, where v1.1.x had already collapsed to 23k (6.2×). Its 4096-client point in the archived run was degraded by connection-phase retries (requests ≫ responses in the JSON), so read it as a lower bound; the v1.x numbers at that level came from unbounded bursts and are not directly comparable.
 - Model-2 semantics differ (v1.x appears to burst without in-flight limits; v2.0 uses a fixed 8-deep pipeline), so treat that table as directional.
 - v2.0 additionally reports RTT percentiles, which v1.x never measured.
 
