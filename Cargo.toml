@@ -58,8 +58,13 @@ seaorm=["dep:sea-orm"]
 
 # 测试与示例专用依赖
 [dev-dependencies]
-# TLS 集成测试用的临时证书生成
+# TLS 集成测试与示例用的临时证书生成
 rcgen = "=0.14.10"
+
+# 按需编译的示例（依赖可选 feature）
+[[example]]
+name = "tls_example"
+required-features = ["tls"]
 
 # 编译优化配置
 [profile.dev]
