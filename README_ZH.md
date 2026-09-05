@@ -211,6 +211,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `echo_server_client` | `cargo run --example echo_server_client` | **完整请求-响应循环**（客户端 ↔ 服务器双向通信） |
 | `multi_route_service` | `cargo run --example multi_route_service` | **多路由分发与验证** |
 | `custom_protocol_full` | `cargo run --example custom_protocol_full` | 自定义协议客户端配套 |
+| `state_example` | `cargo run --example state_example` | **全局状态注入**（`AppState<T>`） |
+| `tls_example` | `cargo run --example tls_example --features tls` | **TLS 1.3 加密**服务器 ↔ 客户端 |
 | `metrics_example` | `cargo run --example metrics_example --features metrics` | Prometheus 指标集成演示 |
 
 建议从 **`echo_server_client`** 和 **`multi_route_service`** 入手，它们最能展示客户端 ↔ 服务器的通信模式。
@@ -222,10 +224,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 特性 | 说明 | 默认启用 |
 |------|------|---------|
 | `server` | TCP 服务器，支持多路由异步 Handler、心跳、连接管理 | ✅ |
-| `client` | TCP 客户端，支持消息收发 | ✅ |
+| `client` | TCP 客户端，支持消息收发与断线自动重连 | ✅ |
 | `metrics` | Prometheus 集成（17 个生产级指标，HTTP /metrics 端点） | ✅（由 `server` 启用） |
+| `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
+| `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
-> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`features = ["metrics"]`。
+> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
 
 ---
 
@@ -250,6 +254,101 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `with_write_timeout_secs()` | 写入超时（秒，0=禁用） | `0` |
 | `with_recv_buffer_size()` | 接收缓冲区（字节） | `65535` |
 | `with_send_buffer_size()` | 发送缓冲区（字节） | `65535` |
+| `with_tls()` *（feature `tls`）* | 使用 `TlsServerConfig` 开启 TLS 1.3 | 关闭 |
+| `with_tls_cert_paths()` *（feature `tls`）* | 从 PEM 证书/私钥路径开启 TLS 1.3 | 关闭 |
+
+### 可配置项（LynnClientConfigBuilder）
+
+| 方法 | 说明 | 默认值 |
+|------|------|--------|
+| `with_server_addr()` | 要连接的服务器地址 | — |
+| `with_server_single_channel_size()` | 单连接通道容量 | `64` |
+| `with_server_check_heart_interval()` | 心跳发送间隔（秒） | `5` |
+| `with_message_header_mark()` / `with_message_tail_mark()` | 自定义消息标记 | `9177` / `7719` |
+| `with_reconnect_max_attempts()` | 每轮连接尝试次数（初始连接与每次重连） | `3` |
+| `with_reconnect_interval_secs()` | 两次尝试的间隔（秒） | `1` |
+| `with_connect_timeout_secs()` | 单次连接/TLS 握手超时（秒） | `3` |
+| `with_tls()` *（feature `tls`）* | 使用 `TlsClientConfig` 开启 TLS 1.3（CA、SNI、mTLS） | 关闭 |
+
+---
+
+### TLS 1.3 传输加密（feature `tls`）
+
+TLS **默认关闭**。启用 `tls` feature 并配置证书即手动开启 —— 仅支持 TLS 1.3（rustls + ring）：
+
+```toml
+[dependencies]
+lynn_tcp = { version = "2", features = ["tls"] }
+```
+
+```rust
+use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_tls::*};
+
+// 服务端：配置证书链 + 私钥（PEM 文件）即开启。
+let config = LynnServerConfigBuilder::new()
+    .with_addr("0.0.0.0:9177")?
+    .with_tls_cert_paths("cert.pem", "key.pem") // 或：.with_tls(TlsServerConfig::new(...))
+    .build();
+// 双向 mTLS：TlsServerConfig::new("cert.pem", "key.pem").with_client_ca("client_ca.pem")
+```
+
+```rust
+use lynn_tcp::{lynn_client::*, lynn_tls::*};
+
+// 客户端：通过 CA 信任锚校验服务器证书。
+let config = LynnClientConfigBuilder::new()
+    .with_server_addr("127.0.0.1:9177")?
+    .with_tls(
+        TlsClientConfigBuilder::new()
+            .with_ca_cert_path("ca.pem")
+            .with_server_name("localhost") // 可选的 SNI 覆盖
+            .build(),
+    )?
+    .build();
+```
+
+TLS 配置错误（文件缺失、证书私钥不配对）会在启动时立即报错；握手失败的连接会被直接关闭。可运行演示：`cargo run --example tls_example --features tls`。
+
+---
+
+### 全局状态（依赖注入）
+
+通过 `with_state` 注册任意 `Send + Sync + 'static` 的共享值（如数据库句柄），Handler 参数声明 `AppState<T>` 即自动装配（类似 axum 的 State）。每个类型一个值，多个类型可共存。SeaORM 用户启用 `seaorm` feature 后可用 `with_db(...)` + `DbConn`：
+
+```rust
+use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_state::AppState};
+
+#[tokio::main]
+async fn main() {
+    let _ = LynnServer::new()
+        .await
+        .with_state(UserRepo::new()) // seaorm feature 下也可：.with_db(db)
+        .add_router(1, find_user)
+        .start()
+        .await;
+}
+
+// `repo` 直接解引用为 &UserRepo —— 无全局静态、无需手动传递 Arc。
+async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult {
+    let name = repo.find_user(42);
+    HandlerResult::new_with_send(1, name.into(), vec![input.get_input_addr().unwrap()])
+}
+```
+
+状态在请求处理时解析，因此 `with_state` 可以在 `add_router` 之前或之后调用 —— 只需在 `start()` 前注册即可。可运行演示：`cargo run --example state_example`。
+
+---
+
+### 客户端断线自动重连
+
+客户端内置连接监督者：连接断开后自动重连 —— **默认尝试 3 次**，间隔 1 秒（均可配置）。用户侧收发通道跨重连复用，断线期间积压的过期帧会被丢弃，连接状态可随时查询：
+
+```rust
+let mut client = LynnClient::new_with_addr("127.0.0.1:9177").await.start().await;
+if !client.is_connected() {
+    eprintln!("服务器不可达");
+}
+```
 
 ---
 
@@ -265,16 +364,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ Prometheus + Grafana 监控集成（v1.2.5）
 - ✅ DDD + 洋葱架构重构（v2.0.0）
 - ✅ 7 个可运行示例覆盖所有场景
+- ✅ 服务端与客户端 TLS 1.3 传输加密（v2.0.0-rc.3）
+- ✅ 客户端自动断线重连，尝试次数可配置（v2.0.0-rc.3）
+- ✅ 全局状态注入（`AppState<T>`）+ 内置 SeaORM 支持（v2.0.0-rc.3）
 
 #### 🔜 计划中
 
 | 功能 | 目标版本 | 状态 |
 |------|---------|------|
-| TLS 1.3 支持（rustls/tokio-rustls） | v2.1.0 | 🚧 规划中 |
-| 客户端自动断线重连 | v2.2.0 | 📝 设计中 |
-| 中间件支持 | v2.3.0 | 💡 构思中 |
+| 中间件支持 | v2.2.0 | 📝 设计中 |
 | 定时任务 | 待定 | 💡 构思中 |
-| 全局数据库句柄 | 待定 | 💡 构思中 |
 
 ---
 
@@ -352,6 +451,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 **问: 如何启用指标监控？**
 
 答: `server` 特性会自动启用 `metrics`。运行指标示例：`cargo run --example metrics_example --features metrics`。详细文档见 [METRICS.md](METRICS.md)。
+
+**问: 如何启用 TLS？**
+
+答: 启用 `tls` feature，服务端 Builder 调用 `.with_tls_cert_paths("cert.pem", "key.pem")`、客户端 Builder 调用 `.with_tls(...)` —— 仅支持 TLS 1.3，默认关闭。参见 [TLS 1.3 传输加密](#tls-13-传输加密feature-tls)。
+
+**问: 如何让 Handler 访问数据库句柄？**
+
+答: 在 `LynnServer` 上调用 `.with_state(db)`（`seaorm` feature 下也可用 `.with_db(db)`），Handler 声明 `AppState<T>` 参数即可。参见[全局状态](#全局状态依赖注入)。
+
+**问: 客户端会自动重连吗？**
+
+答: 会。断线后默认自动重试 3 次（间隔 1 秒），可通过 `with_reconnect_max_attempts` / `with_reconnect_interval_secs` 配置；用 `client.is_connected()` 实时查询连接状态。
 
 ---
 

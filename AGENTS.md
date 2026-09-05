@@ -95,6 +95,12 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
 
+      - name: Check all features
+        run: cargo check --all-features --all-targets
+
+      - name: Run tests (all features)
+        run: cargo test --all-features
+
 ```
 
 ---
@@ -300,5 +306,20 @@ docs/
 ### 10.5 追加内容xxx
 
 ### 10.6 追加内容xxx
+
+### 10.7 可选功能（feature flags）规范（v2.0.0-rc.3 起）
+
+新增重量级能力必须以**默认关闭**的可选 feature 提供，保持核心库轻量：
+
+| feature | 依赖 | 内容 | 默认 |
+|---------|------|------|------|
+| `tls` | `tokio-rustls` / `rustls` / `rustls-pemfile`（ring provider，仅 TLS 1.3） | 服务端与客户端 TLS 传输加密，需配置证书并手动开启（`with_tls` / `with_tls_cert_paths`） | ❌ |
+| `seaorm` | `sea-orm`（`runtime-tokio-rustls`） | 数据库句柄内置支持：`LynnServer::with_db(...)` + `lynn_seaorm::DbConn`（即 `AppState<DatabaseConnection>`） | ❌ |
+
+- **编译验证**：feature 门控代码不参与默认构建，CI 与本地提交前必须通过 `cargo check --all-features --all-targets` 与 `cargo test --all-features`（已加入 rust-ci.yml，见第 2 节）。
+- **禁止静默降级**：某能力依赖 feature 时，其配置 API（builder 方法、配置结构体）必须同门控，不允许"配置了但被忽略"。
+- **TLS 安全基线**：仅启用 TLS 1.3 协议版本；客户端默认必须校验服务端证书（CA 信任锚），跳过校验仅能通过显式的 `danger_accept_invalid_certs` 且必须打日志告警。
+- **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
+- **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
 
 ...

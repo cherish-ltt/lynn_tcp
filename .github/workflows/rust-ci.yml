@@ -62,3 +62,9 @@ jobs:
 
       - name: Run tests
         run: cargo test --verbose
+
+      - name: Check all features
+        run: cargo check --all-features --all-targets
+
+      - name: Run tests (all features)
+        run: cargo test --all-features

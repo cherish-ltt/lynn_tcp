@@ -211,6 +211,8 @@ All examples are located in the [`examples/`](examples/) directory. Run them wit
 | `echo_server_client` | `cargo run --example echo_server_client` | **Full request-response cycle** (Client ↔ Server) |
 | `multi_route_service` | `cargo run --example multi_route_service` | **Multi-route dispatch and verification** |
 | `custom_protocol_full` | `cargo run --example custom_protocol_full` | Custom protocol with client support |
+| `state_example` | `cargo run --example state_example` | **Global state injection** (`AppState<T>`) |
+| `tls_example` | `cargo run --example tls_example --features tls` | **TLS 1.3 encrypted** server ↔ client |
 | `metrics_example` | `cargo run --example metrics_example --features metrics` | Prometheus metrics integration |
 
 The **`echo_server_client`** and **`multi_route_service`** examples are the best starting points for understanding Client ↔ Server communication.
@@ -222,10 +224,12 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | Feature | Description | Default |
 |---------|-------------|---------|
 | `server` | TCP server with multi-route async handlers, heartbeat, connection management | ✅ |
-| `client` | TCP client for sending/receiving messages | ✅ |
+| `client` | TCP client for sending/receiving messages, automatic reconnection | ✅ |
 | `metrics` | Prometheus integration (17 production metrics, HTTP /metrics endpoint) | ✅ (via `server`) |
+| `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
+| `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
-> **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `features = ["metrics"]`.
+> **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `features = ["metrics"]`. `tls` and `seaorm` are disabled by default and must be enabled explicitly.
 
 ---
 
@@ -250,6 +254,101 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `with_write_timeout_secs()` | Write timeout (s, 0 = disabled) | `0` |
 | `with_recv_buffer_size()` | Receive buffer (bytes) | `65535` |
 | `with_send_buffer_size()` | Send buffer (bytes) | `65535` |
+| `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsServerConfig` | off |
+| `with_tls_cert_paths()` *(feature `tls`)* | Enable TLS 1.3 from PEM cert/key paths | off |
+
+### Available Configuration (LynnClientConfigBuilder)
+
+| Method | Description | Default |
+|--------|-------------|---------|
+| `with_server_addr()` | Server address to connect to | — |
+| `with_server_single_channel_size()` | Per-connection channel capacity | `64` |
+| `with_server_check_heart_interval()` | Heartbeat send interval (s) | `5` |
+| `with_message_header_mark()` / `with_message_tail_mark()` | Custom message marks | `9177` / `7719` |
+| `with_reconnect_max_attempts()` | Connect attempts per session (initial connect & each reconnect) | `3` |
+| `with_reconnect_interval_secs()` | Delay between attempts (s) | `1` |
+| `with_connect_timeout_secs()` | Per-attempt connect/TLS-handshake timeout (s) | `3` |
+| `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsClientConfig` (CA, SNI, mTLS) | off |
+
+---
+
+### TLS 1.3 Encryption (feature `tls`)
+
+TLS is **disabled by default**. Enable the `tls` feature and attach certificates — TLS 1.3 only (rustls + ring):
+
+```toml
+[dependencies]
+lynn_tcp = { version = "2", features = ["tls"] }
+```
+
+```rust
+use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_tls::*};
+
+// Server: opt in with a certificate chain + private key (PEM files).
+let config = LynnServerConfigBuilder::new()
+    .with_addr("0.0.0.0:9177")?
+    .with_tls_cert_paths("cert.pem", "key.pem") // or: .with_tls(TlsServerConfig::new(...))
+    .build();
+// Mutual TLS: TlsServerConfig::new("cert.pem", "key.pem").with_client_ca("client_ca.pem")
+```
+
+```rust
+use lynn_tcp::{lynn_client::*, lynn_tls::*};
+
+// Client: verify the server against a CA trust anchor.
+let config = LynnClientConfigBuilder::new()
+    .with_server_addr("127.0.0.1:9177")?
+    .with_tls(
+        TlsClientConfigBuilder::new()
+            .with_ca_cert_path("ca.pem")
+            .with_server_name("localhost") // optional SNI override
+            .build(),
+    )?
+    .build();
+```
+
+Miss-configured TLS fails fast (missing files, invalid pairs) and handshake failures simply drop the offending connection. Run the runnable demo: `cargo run --example tls_example --features tls`.
+
+---
+
+### Global State (Dependency Injection)
+
+Register any `Send + Sync + 'static` value once and extract it in handler parameters through `AppState<T>` (axum-style). One value per type; several types can coexist. SeaORM users can enable the `seaorm` feature and use `with_db(...)` + `DbConn`:
+
+```rust
+use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_state::AppState};
+
+#[tokio::main]
+async fn main() {
+    let _ = LynnServer::new()
+        .await
+        .with_state(UserRepo::new()) // or .with_db(db) with feature "seaorm"
+        .add_router(1, find_user)
+        .start()
+        .await;
+}
+
+// `repo` derefs to &UserRepo — no global statics, no manual Arc plumbing.
+async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult {
+    let name = repo.find_user(42);
+    HandlerResult::new_with_send(1, name.into(), vec![input.get_input_addr().unwrap()])
+}
+```
+
+State is resolved per request, so `with_state` may be called before or after `add_router` — just register before `start()`. Run the runnable demo: `cargo run --example state_example`.
+
+---
+
+### Client Automatic Reconnection
+
+The client supervises its own connection: when it drops, it reconnects automatically — **3 attempts by default**, 1s apart (configurable). User-facing channels survive reconnections, stale queued frames are discarded, and the live state is one call away:
+
+```rust
+let mut client = LynnClient::new_with_addr("127.0.0.1:9177").await.start().await;
+if !client.is_connected() {
+    eprintln!("server unreachable");
+}
+```
 
 ---
 
@@ -265,16 +364,16 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 - ✅ Prometheus + Grafana monitoring (v1.2.5)
 - ✅ DDD + Onion Architecture refactoring (v2.0.0)
 - ✅ 7 runnable examples covering all scenarios
+- ✅ TLS 1.3 transport encryption for server & client (v2.0.0-rc.3)
+- ✅ Client automatic reconnection with configurable attempts (v2.0.0-rc.3)
+- ✅ Global state injection (`AppState<T>`) + built-in SeaORM support (v2.0.0-rc.3)
 
 #### 🔜 Planned
 
 | Feature | Target Version | Status |
 |---------|---------------|--------|
-| TLS 1.3 support (rustls/tokio-rustls) | v2.1.0 | 🚧 Planning |
-| Client auto-reconnection | v2.2.0 | 📝 Design |
-| Middleware support | v2.3.0 | 💡 Idea |
+| Middleware support | v2.2.0 | 📝 Design |
 | Scheduled tasks | TBD | 💡 Idea |
-| Global database handle | TBD | 💡 Idea |
 
 ---
 
@@ -352,6 +451,18 @@ A: See the [Examples](#examples) section above. Each example can be run with `ca
 **Q: How do I enable metrics?**
 
 A: Metrics are automatically enabled with the `server` feature. To run the metrics example: `cargo run --example metrics_example --features metrics`. See [METRICS.md](METRICS.md) for detailed documentation.
+
+**Q: How do I enable TLS?**
+
+A: Enable the `tls` feature and call `.with_tls_cert_paths("cert.pem", "key.pem")` on the server builder and `.with_tls(...)` on the client builder — TLS 1.3 only, off by default. See the [TLS 1.3 Encryption](#tls-13-encryption-feature-tls) section.
+
+**Q: How do I share a database handle with handlers?**
+
+A: Call `.with_state(db)` (or `.with_db(db)` with the `seaorm` feature) on `LynnServer` and take an `AppState<T>` parameter in the handler. See [Global State](#global-state-dependency-injection).
+
+**Q: Does the client reconnect automatically?**
+
+A: Yes. After a disconnect it retries 3 times (1s apart) by default, configurable via `with_reconnect_max_attempts` / `with_reconnect_interval_secs`. Check the live state with `client.is_connected()`.
 
 ---
 

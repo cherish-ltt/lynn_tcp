@@ -1,5 +1,33 @@
 # Version Note
 
+### v2.0.0-rc.3
+
+#### v2.0.0-rc.3
+
+1.feat
+
+- **TLS 1.3 transport encryption** (optional feature `tls`, disabled by default): rustls + ring, TLS 1.3 only. Server opts in via `LynnServerConfigBuilder::with_tls(TlsServerConfig)` / `with_tls_cert_paths(cert, key)` (startup fails fast on bad certificates; handshakes run in reactor workers with a 10s cap); client opts in via `LynnClientConfigBuilder::with_tls(TlsClientConfig)` with a CA trust anchor (verification enforced by default), optional SNI override, mutual-TLS client certificates, and an explicit `danger_accept_invalid_certs` escape hatch for development. New `LynnError::Tls` variant and `lynn_tcp::lynn_tls` public module (re-exports `rustls`).
+- **Client automatic reconnection**: a connection supervisor retries the initial connect and every disconnect — 3 attempts, 1s apart by default, configurable via `with_reconnect_max_attempts` / `with_reconnect_interval_secs` / `with_connect_timeout_secs`. User-facing channels survive reconnections (stale queued frames are discarded), and `LynnClient::is_connected()` exposes the live state via a `watch` channel.
+- **Global state injection** (axum-style `AppState<T>`): `LynnServer::with_state(T)` / `with_state_arc(Arc<T>)` register per-`TypeId` shared state; handlers declare `AppState<T>` parameters (deref to `&T`, several state types can coexist, resolution happens per request so registration order does not matter). Optional feature `seaorm` adds `LynnServer::with_db(DatabaseConnection)` and the `lynn_seaorm::DbConn` alias (sea-orm 2.0.2).
+
+2.fix
+
+- Client read/write pumps no longer spin forever on transport errors: a torn-down TLS session returns the same error on every poll, which previously caused an infinite logging loop that wedged a tokio worker and blocked runtime shutdown. Read/write loops now terminate on persistent errors.
+
+3.refactor
+
+- Connection pipeline de-coupled from `TcpStream`: `LynnStream` (plain/TLS enum) plus boxed read/write halves (`LynnUser` no longer depends on the concrete transport); the reactor's 9-element event tuple became a `NewSocketTask` struct; handler execution moved into a nested task so a panicking handler (e.g. an unregistered `AppState`) cannot take down reactor workers.
+
+4.build / ci / docs
+
+- CI gained `cargo check --all-features --all-targets` and `cargo test --all-features` steps so feature-gated code is always verified; AGENTS.md documents the new optional-feature conventions (section 10.7).
+- New examples: `state_example` (global state) and `tls_example` (TLS 1.3, `required-features = ["tls"]`).
+- New integration suites: `state_injection.rs` (5 cases), `tls_integration.rs` (3 cases with rcgen-generated certificates), `client_reconnect.rs` (3 cases). README/README_ZH updated in sync (feature tables, client config table, TLS/state/reconnect sections, roadmap, FAQ).
+
+5.quality
+
+- Test count 88 → 109+; line coverage 91.91% → **92.16%** (`cargo llvm-cov`); clippy clean for both default and `--all-features`.
+
 ### v2.0.0-rc.2
 
 #### v2.0.0-rc.2
