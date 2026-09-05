@@ -1,3 +1,23 @@
-/target
-*.DS_Store
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock.bak
+
+# macOS
 .DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# AI 工具 / 本地产物
+.claude/
+.claude/*
+.pi-dev-output/
+.pi/
+.zcode/
+*.local.md
