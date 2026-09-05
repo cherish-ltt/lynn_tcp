@@ -32,7 +32,7 @@ cd prometheus-2.45.0.linux-amd64
 
 2. 使用项目提供的配置文件：
 ```bash
-cp /path/to/lynn_tcp/prometheus/prometheus.yml .
+cp /path/to/lynn_tcp/docs/monitoring/prometheus/prometheus.yml .
 ./prometheus --config.file=prometheus.yml
 ```
 
@@ -61,7 +61,7 @@ sudo systemctl start grafana-server
 
 4. 导入 Dashboard：
    - Dashboards → Import
-   - Upload `grafana/dashboard.json` 或粘贴内容
+   - Upload `docs/monitoring/grafana/dashboard.json` 或粘贴内容
    - 选择 Prometheus 数据源
    - 点击 "Import"
 
@@ -277,7 +277,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./docs/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -290,7 +290,7 @@ services:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./docs/monitoring/grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     restart: unless-stopped

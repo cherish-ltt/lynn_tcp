@@ -279,13 +279,13 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 
 ### Flow Chart
 
-[![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png?raw=true)
+[![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)
 
 ---
 
 ### Release Notes
 
-See [version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md) for full version history.
+See [docs/version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/version.md) for full version history.
 
 ---
 

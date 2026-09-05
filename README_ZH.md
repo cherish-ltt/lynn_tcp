@@ -279,13 +279,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 流程图
 
-[![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/FlowChart.png?raw=true)
+[![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)
 
 ---
 
 ### 版本介绍
 
-查看完整版本历史：[version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/version.md)
+查看完整版本历史：[docs/version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/version.md)
 
 ---
 
