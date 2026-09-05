@@ -1,0 +1,6 @@
+# ── Clippy Configuration ──
+cognitive-complexity-threshold = 15
+too-many-arguments-threshold = 5
+too-many-lines-threshold = 30
+allow-unwrap-in-tests = true
+msrv = "1.98.1"

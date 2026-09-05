@@ -1,0 +1,7 @@
+edition = "2024"
+max_width = 100
+tab_spaces = 4
+reorder_imports = true
+reorder_modules = true
+newline_style = "Auto"
+match_block_trailing_comma = true
