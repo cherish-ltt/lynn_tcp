@@ -54,6 +54,21 @@ async fn read_one_frame(conn: &mut TcpStream) -> Vec<u8> {
     frame
 }
 
+/// Reads user frames from a raw socket, discarding heartbeat frames the way a
+/// real server would (constructor_id 2), until a user frame (constructor_id 1)
+/// arrives. The client's first heartbeat tick fires immediately on start, so a
+/// queued heartbeat may race a reconnect and surface on the new connection.
+async fn read_user_frame(conn: &mut TcpStream) -> Vec<u8> {
+    for _ in 0..5 {
+        let frame = read_one_frame(conn).await;
+        let constructor_id = frame[10];
+        if constructor_id == 1 {
+            return frame;
+        }
+    }
+    panic!("no user frame arrived after 5 frames");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn client_reconnects_and_resumes_data_exchange() {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
@@ -80,7 +95,8 @@ async fn client_reconnects_and_resumes_data_exchange() {
         .expect("reconnect attempt failed");
     wait_until("reconnected", 5, || client.is_connected()).await;
 
-    // The reconnected session must carry data end to end: raw echo server.
+    // The reconnected session must carry data end to end: raw echo server
+    // (heartbeats, if any, are skipped like a real server would).
     client
         .send_data(HandlerResult::new_with_send_to_server(
             7,
@@ -88,7 +104,7 @@ async fn client_reconnects_and_resumes_data_exchange() {
         ))
         .await
         .expect("send must work after reconnect");
-    let frame = read_one_frame(&mut conn2).await;
+    let frame = read_user_frame(&mut conn2).await;
     conn2.write_all(&frame).await.expect("raw echo write");
 
     let response = timeout(Duration::from_secs(5), client.get_receive_data())
