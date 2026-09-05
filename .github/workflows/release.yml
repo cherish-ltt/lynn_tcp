@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release from update_logs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release notes from docs/update_logs
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"                 # e.g. v2.0.0-rc.2 / v1.2.5-release
+          NO_V="${TAG#v}"                          # 2.0.0-rc.2 / 1.2.5-release
+          NO_RELEASE="${NO_V%-release}"            # 2.0.0-rc.2 / 1.2.5
+          CANDIDATES=(
+            "docs/update_logs/${TAG}.md"
+            "docs/update_logs/${NO_V}.md"
+            "docs/update_logs/v${NO_RELEASE}.md"
+            "docs/update_logs/${NO_RELEASE}.md"
+          )
+          NOTES_FILE=""
+          for f in "${CANDIDATES[@]}"; do
+            if [ -f "$f" ]; then
+              NOTES_FILE="$f"
+              break
+            fi
+          done
+          if [ -z "$NOTES_FILE" ]; then
+            echo "::warning::未找到与 tag ${TAG} 对应的更新日志（已尝试 ${CANDIDATES[*]}），使用默认说明。"
+            printf '# %s\n\n> 未在 docs/update_logs/ 中找到与本 tag 对应的更新日志文件，请补充。\n' "$TAG" > release-notes.md
+          else
+            echo "使用更新日志: ${NOTES_FILE}"
+            cp "$NOTES_FILE" release-notes.md
+          fi
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release ${TAG} 已存在，更新其内容。"
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Release ${TAG}" \
+              --notes-file release-notes.md
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Release ${TAG}" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi
