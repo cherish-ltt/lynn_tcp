@@ -1,5 +1,32 @@
 # Version Note
 
+### v2.0.0-rc.2
+
+#### v2.0.0-rc.2
+
+1.fix
+
+- Server response frames now apply the configured custom message marks **before** encoding. Previously `check_handler_result` built the frame first and set the marks afterwards, so servers using custom header/tail marks (`with_message_header_mark` / `with_message_tail_mark`) always replied with the default marks (9177/7719), breaking custom-mark clients. Default-mark servers were unaffected.
+
+2.test
+
+- Line coverage raised from 19.65% to **91.91%** (`cargo llvm-cov`).
+- 15 end-to-end integration tests over real TCP: echo round trip, all handler signatures (0/1/2 params, both orders), broadcast, no-reply handlers, unknown method_id / constructor_id, invalid target addrs, zero process permit, per-IP connection limit, zero max connections, client heartbeat keep-alive, client error paths.
+- New unit tests: HandlerResult frame layout, InputBufVO sequential parsing & defensive reads, LynnRouter register/overwrite/concurrency, error types & `ToLynnError`, server/client config builders, BigBufReader framing (partial/sticky packets, bad header, oversized length), message format validation & SafeBuffer.
+
+3.build / ci
+
+- Added `AGENTS.md` as the project development constitution; `rust-ci.yml` updated (path filters, concurrency group, pinned toolchain 1.98.1, `clippy --all-targets -- -D warnings`); added `.rustfmt.toml` and `.clippy.toml`.
+- `Cargo.toml`: dependencies grouped by purpose and pinned with `=`; `[profile.dev]` optimization added.
+- New `release.yml`: pushing a `v*` tag publishes a GitHub Release using the matching `docs/update_logs/*.md` as release notes.
+- `.gitignore` extended (IDE, macOS, local AI tool artifacts).
+
+4.docs
+
+- New `docs/` layout: `update_logs/`, `version.md`, `FlowChart.png`, `FlowChart-v2.png` (new v2 DDD + Onion architecture diagram) and `monitoring/` (Grafana dashboard + Prometheus config moved here).
+- README.md / README_ZH.md kept in sync: project logo, dual-license badge, contribution guide referencing AGENTS.md, updated doc links and Rust badge (1.98.1+).
+- Dual license: added `LICENSE-APACHE`, crate license is now `MIT OR Apache-2.0`.
+
 ### v2.0.0 - release
 
 #### v2.0.0 - release
