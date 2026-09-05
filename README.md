@@ -424,7 +424,10 @@ git pull && cargo bench --bench benchmark -- --json docs/benchmark/v<version>-<m
 
 Before running, make sure the file-descriptor limit allows the highest concurrency level (`ulimit -n 65535`; the harness also auto-raises it up to the hard limit). Archive the JSON under `docs/benchmark/` named `v<version>-<machine>.json`, then update the results table in **both** READMEs in the same commit (see [AGENTS.md](AGENTS.md) §10.3).
 
-**lynn_tcp v2.0.0-rc.3** — Apple M1 Pro (8 logical cores: 6 performance + 2 efficiency, 16 GB), macOS, loopback — 2026.09.05 ([raw JSON](docs/benchmark/v2.0.0-rc.3-apple-m1-pro.json))
+<details>
+<summary>Results — Apple M1 Pro (8 logical cores: 6 performance + 2 efficiency, 16 GB, macOS, loopback) — 2026.09.05</summary>
+
+[raw JSON](docs/benchmark/v2.0.0-rc.3-apple-m1-pro.json)
 
 | Model | Clients | Payload (B) | Throughput (resp/s) | Avg RTT (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
 |:------|--------:|------------:|--------------------:|-------------:|---------:|---------:|---------:|
@@ -438,6 +441,28 @@ Before running, make sure the file-descriptor limit allows the highest concurren
 | 2 (pipelined) | 4096 | 128 | **31,956** | — | — | — | — |
 
 > 📊 Numbers are loopback, single-machine measurements where client load generation shares the CPU with the server — treat them as relative comparisons between versions, not absolute capacity. Model-1 RTT grows with concurrency as queues form (classic queueing behavior). Model-2 peaks near 256 clients on this machine; its 4096-client cell was degraded by connection-phase retries (see the requests ≫ responses gap in the JSON), so read that point as a lower bound rather than steady state.
+
+</details>
+
+<details>
+<summary>Results — Debian 13, arm64 (2 cores / 2 GB, loopback) — 2026.09.05</summary>
+
+[raw JSON](docs/benchmark/v2.0.0-rc.3-arm64-2c2g-debian13.json)
+
+| Model | Clients | Payload (B) | Throughput (resp/s) | Avg RTT (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
+|:------|--------:|------------:|--------------------:|-------------:|---------:|---------:|---------:|
+| 1 (ping-pong) | 64   | 128 | **128,206** | 0.499 | 0.232 | 0.988 | 5.099 |
+| 1 (ping-pong) | 256  | 128 | **140,197** | 1.826 | 0.835 | 3.504 | 35.898 |
+| 1 (ping-pong) | 1024 | 128 | **140,187** | 7.303 | 2.602 | 45.081 | 55.153 |
+| 1 (ping-pong) | 4096 | 128 | **130,003** | 31.445 | 6.305 | 111.846 | 167.948 |
+| 2 (pipelined) | 64   | 128 | **35,277** | — | — | — | — |
+| 2 (pipelined) | 256  | 128 | **142,922** | — | — | — | — |
+| 2 (pipelined) | 1024 | 128 | **360,433** | — | — | — | — |
+| 2 (pipelined) | 4096 | 128 | **7,125** | — | — | — | — |
+
+> 📊 Notable: Model-1 throughput is flat from 64 up to 4096 clients on just two cores (128k–140k), though the RTT tail grows sharply once queues form. Model-2 bursts to 360k @1024, but its 4096-client cell collapsed (7,125 resp/s, connection-phase retries) — on a 2 GB host that level is bounded by memory (kernel socket buffers + connection state), so read it as a host resource limit rather than a framework regression.
+
+</details>
 
 <details>
 <summary>Fuzzy comparison with v1.1.x / v1.2.x (different harness &amp; hardware — trend-level only)</summary>
