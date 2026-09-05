@@ -91,18 +91,21 @@ pub(crate) async fn check_handler_result(
 ) {
     // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
     if handler_result.get_is_send() {
+        // Marks must be applied before the frame is encoded, otherwise the
+        // response would fall back to the default marks even on servers
+        // configured with custom header/tail marks.
+        if !handler_result.is_with_mark() {
+            handler_result.set_marks(
+                *SERVER_MESSAGE_HEADER_MARK
+                    .get()
+                    .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
+                *SERVER_MESSAGE_TAIL_MARK
+                    .get()
+                    .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
+            );
+        }
         let response = handler_result.get_response_data();
         if let Some(response) = response {
-            if !handler_result.is_with_mark() {
-                handler_result.set_marks(
-                    *SERVER_MESSAGE_HEADER_MARK
-                        .get()
-                        .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
-                    *SERVER_MESSAGE_TAIL_MARK
-                        .get()
-                        .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
-                );
-            }
             if let Some(addrs) = handler_result.get_addrs() {
                 if let Some(delay_socket) = send_response(&response, &addrs, &clients).await {
                     if !delay_socket.is_empty() {
