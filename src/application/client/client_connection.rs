@@ -132,11 +132,14 @@ pub(super) async fn connection_supervisor(
         }
         match try_connect(&params).await {
             Ok(stream) => {
+                attempts = 0;
+                // Publish the connected state BEFORE resolving the start()
+                // notification, so `is_connected()` is guaranteed to observe
+                // `true` as soon as `start()` returns.
+                state_tx.send_replace(true);
                 if let Some(init) = init_tx.take() {
                     let _ = init.send(Ok(()));
                 }
-                attempts = 0;
-                state_tx.send_replace(true);
                 info!(
                     "Client - [connection supervisor] connected to [server_addr:{}]",
                     params.addr
