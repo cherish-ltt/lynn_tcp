@@ -60,11 +60,18 @@ seaorm=["dep:sea-orm"]
 [dev-dependencies]
 # TLS 集成测试与示例用的临时证书生成
 rcgen = "=0.14.10"
+# 基准测试中提升/检查文件描述符上限
+libc = "=0.2.189"
 
 # 按需编译的示例（依赖可选 feature）
 [[example]]
 name = "tls_example"
 required-features = ["tls"]
+
+# 标准化网络基准（harness=false，自管理 CLI 与计时）
+[[bench]]
+name = "benchmark"
+harness = false
 
 # 编译优化配置
 [profile.dev]
