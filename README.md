@@ -431,6 +431,36 @@ cargo bench --bench benchmark -- --json results.json
 
 > 📊 Numbers are loopback, single-machine measurements where client load generation shares the CPU with the server — treat them as relative comparisons between versions, not absolute capacity. Model-1 RTT grows with concurrency as queues form (classic queueing behavior); Model-2 throughput saturates near 1024 clients on this machine.
 
+<details>
+<summary>Fuzzy comparison with v1.1.x / v1.2.x (different harness &amp; hardware — trend-level only)</summary>
+
+> The v1.x numbers were produced by an unrecoverable one-off script on Debian 12 (4-core / 4 GB server); the v2.0 numbers come from the standardized harness above on Apple M1 Pro (8 logical cores / 16 GB). Hardware, OS and methodology all differ — read the tables as trends, not absolutes.
+
+**Model 1 — request/response (resp/s)**
+
+| Clients | v1.1.x | v1.2.x | v2.0.0-rc.3 |
+|--------:|-------:|-------:|------------:|
+| 256     | 182,879 | 64,630 | **136,350** |
+| 1024    | 232,861 | 163,307 | **144,873** |
+| 4096    | 160,318 | 124,645 | **127,680** |
+
+**Model 2 — concurrent send/receive (resp/s)**
+
+| Clients | v1.1.x | v1.2.x | v2.0.0-rc.3 |
+|--------:|-------:|-------:|------------:|
+| 256     | 80,499 | 492,889 | **131,482** |
+| 1024    | 23,143 | 158,056 | **113,253** |
+| 4096    | 13,557 | 52,163 | **69,145** |
+
+**Takeaways**
+
+- Throughput stays in the same order of magnitude — no recognizable regression. At 4096 clients both models beat both v1.x generations (Model-2: 5.1× v1.1.x, 1.3× v1.2.x).
+- The clearest v2.0 win is **stability**: v1.x collapses at high concurrency (Model-2 drops 83–89% from its peak), while v2.0 degrades only ~12% (Model-1) and ~47% (Model-2 — with a bounded 8-deep in-flight window, versus v1.x's unbounded burst).
+- Model-2 semantics differ (v1.x appears to burst without in-flight limits; v2.0 uses a fixed 8-deep pipeline), so treat that table as directional.
+- v2.0 additionally reports RTT percentiles, which v1.x never measured.
+
+</details>
+
 ---
 
 ### FAQ
