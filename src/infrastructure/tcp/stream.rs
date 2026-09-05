@@ -34,9 +34,10 @@ pub(crate) type BoxedReadHalf = Box<dyn AsyncRead + Send + Unpin>;
 pub(crate) enum LynnStream {
     /// Plain TCP stream (default, TLS feature disabled or not configured).
     Plain(TcpStream),
-    /// TLS 1.3 wrapped stream (requires the `tls` feature).
+    /// TLS 1.3 wrapped stream (requires the `tls` feature). Boxed because
+    /// the TLS session state is large compared to a plain socket.
     #[cfg(feature = "tls")]
-    Tls(tokio_rustls::TlsStream<TcpStream>),
+    Tls(Box<tokio_rustls::TlsStream<TcpStream>>),
 }
 
 impl AsyncRead for LynnStream {
@@ -48,7 +49,7 @@ impl AsyncRead for LynnStream {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
             #[cfg(feature = "tls")]
-            Self::Tls(stream) => Pin::new(stream).poll_read(cx, buf),
+            Self::Tls(stream) => Pin::new(stream.as_mut()).poll_read(cx, buf),
         }
     }
 }
@@ -62,7 +63,7 @@ impl AsyncWrite for LynnStream {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_write(cx, buf),
             #[cfg(feature = "tls")]
-            Self::Tls(stream) => Pin::new(stream).poll_write(cx, buf),
+            Self::Tls(stream) => Pin::new(stream.as_mut()).poll_write(cx, buf),
         }
     }
 
@@ -70,7 +71,7 @@ impl AsyncWrite for LynnStream {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_flush(cx),
             #[cfg(feature = "tls")]
-            Self::Tls(stream) => Pin::new(stream).poll_flush(cx),
+            Self::Tls(stream) => Pin::new(stream.as_mut()).poll_flush(cx),
         }
     }
 
@@ -78,7 +79,7 @@ impl AsyncWrite for LynnStream {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
             #[cfg(feature = "tls")]
-            Self::Tls(stream) => Pin::new(stream).poll_shutdown(cx),
+            Self::Tls(stream) => Pin::new(stream.as_mut()).poll_shutdown(cx),
         }
     }
 }
@@ -115,7 +116,7 @@ impl StreamAcceptor {
                     acceptor.accept(stream),
                 );
                 match handshake.await {
-                    Ok(Ok(tls_stream)) => Some(LynnStream::Tls(tls_stream.into())),
+                    Ok(Ok(tls_stream)) => Some(LynnStream::Tls(Box::new(tls_stream.into()))),
                     Ok(Err(e)) => {
                         warn!(
                             "TLS handshake with {} failed: {}, closing connection",

@@ -92,7 +92,7 @@ async fn try_connect(params: &ConnectionParams) -> Result<LynnStream, LynnError>
                 .map_err(|e| {
                     LynnError::tls(format!("TLS handshake with {} failed: {e}", params.addr))
                 })?;
-        return Ok(LynnStream::Tls(tls_stream.into()));
+        return Ok(LynnStream::Tls(Box::new(tls_stream.into())));
     }
     Ok(LynnStream::Plain(tcp))
 }
