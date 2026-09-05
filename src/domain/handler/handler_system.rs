@@ -1,20 +1,27 @@
-use std::{future::Future, marker::PhantomData, net::SocketAddr, pin::Pin};
+use std::{future::Future, marker::PhantomData, net::SocketAddr, pin::Pin, sync::Arc};
 
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::domain::model::lynn_user::ClientsStruct;
+use crate::domain::state::state_registry::StateRegistry;
 
 #[derive(Clone)]
 pub(crate) struct HandlerContext {
     pub(crate) input_buf_vo: InputBufVO,
     pub(crate) clients_context: ClientsContext,
+    pub(crate) states: Arc<StateRegistry>,
 }
 
 impl HandlerContext {
-    pub(crate) fn new(input_buf_vo: InputBufVO, clients_context: ClientsContext) -> Self {
+    pub(crate) fn new(
+        input_buf_vo: InputBufVO,
+        clients_context: ClientsContext,
+        states: Arc<StateRegistry>,
+    ) -> Self {
         HandlerContext {
             input_buf_vo,
             clients_context,
+            states,
         }
     }
 }

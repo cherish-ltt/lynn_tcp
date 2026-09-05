@@ -177,7 +177,7 @@ pub mod lynn_server {
     pub use super::domain::handler::handler_system::ClientsContext;
 }
 
-/// The TCP dependents module, containing common types used by both the server and client.
+/// The TCP dependents module, containing common types used by both the server and the client.
 #[cfg(any(feature = "server", feature = "client"))]
 pub mod lynn_tcp_dependents {
     /// The handler result type, used to represent the result of a request handler.
@@ -186,6 +186,31 @@ pub mod lynn_tcp_dependents {
     pub use super::domain::model::input_buf_vo::InputBufVO;
     /// The input buffer value object trait, defining the behavior of input buffer value objects.
     pub use super::domain::model::input_buf_vo::InputBufVOTrait;
+    /// The global state extractor (`AppState<T>`), injected into server handler parameters.
+    pub use super::domain::state::app_state::AppState;
+    /// Re-export of the state module for convenience.
+    pub use super::lynn_state;
+}
+
+/// The global state module: shared values injected into server handler
+/// parameters through `AppState<T>` (like axum's `State<T>`).
+#[cfg(any(feature = "server", feature = "client"))]
+pub mod lynn_state {
+    /// The global state extractor (`AppState<T>`), injected into server handler parameters.
+    pub use super::domain::state::app_state::AppState;
+    /// The type-keyed registry holding the shared state values of a server.
+    pub use super::domain::state::state_registry::StateRegistry;
+}
+
+/// Built-in SeaORM integration: register a database handle with
+/// `LynnServer::with_db(...)` (or `with_state`) and extract it in handlers
+/// through the [`DbConn`] alias. Requires the optional `seaorm` feature.
+#[cfg(feature = "seaorm")]
+pub mod lynn_seaorm {
+    /// Re-export of `sea_orm` for convenient access in handler code.
+    pub use sea_orm;
+    /// Alias of `AppState<sea_orm::DatabaseConnection>` for handler parameters.
+    pub type DbConn = super::domain::state::app_state::AppState<sea_orm::DatabaseConnection>;
 }
 
 /// The client module, containing the client configuration and client implementation.

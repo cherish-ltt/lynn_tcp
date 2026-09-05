@@ -110,12 +110,17 @@ impl StreamAcceptor {
             Self::Plain => Some(LynnStream::Plain(stream)),
             #[cfg(feature = "tls")]
             Self::Tls(acceptor) => {
-                let handshake =
-                    time::timeout(Duration::from_secs(TLS_HANDSHAKE_TIMEOUT_SECS), acceptor.accept(stream));
+                let handshake = time::timeout(
+                    Duration::from_secs(TLS_HANDSHAKE_TIMEOUT_SECS),
+                    acceptor.accept(stream),
+                );
                 match handshake.await {
                     Ok(Ok(tls_stream)) => Some(LynnStream::Tls(tls_stream)),
                     Ok(Err(e)) => {
-                        warn!("TLS handshake with {} failed: {}, closing connection", addr, e);
+                        warn!(
+                            "TLS handshake with {} failed: {}, closing connection",
+                            addr, e
+                        );
                         None
                     },
                     Err(_) => {

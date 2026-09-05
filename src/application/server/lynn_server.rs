@@ -15,6 +15,7 @@ use crate::const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK};
 use crate::domain::handler::handler_system::{AsyncFunc, HandlerContext, IHandler, IntoSystem};
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType, LynnUser};
 use crate::domain::routing::router::LynnRouter;
+use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::connection::connection_limiter::ConnectionLimiter;
 use crate::infrastructure::tcp::reactor::{ReactorEvent, TcpReactor};
 use crate::infrastructure::tcp::stream::StreamAcceptor;
@@ -115,6 +116,8 @@ pub struct LynnServer<'a> {
     lynn_config: LynnServerConfig<'a>,
     /// reactor
     reactor: TcpReactor,
+    /// Type-keyed shared state injected into handlers through `AppState<T>`.
+    state_registry: Arc<StateRegistry>,
 }
 
 /// Implementation of methods for the LynnServer struct.
@@ -126,11 +129,13 @@ impl<'a> LynnServer<'a> {
     /// A new instance of `LynnServer`.
     pub async fn new() -> Self {
         let lynn_config = LynnServerConfig::default();
+        let state_registry = Arc::new(StateRegistry::new());
         Self {
             clients: ClientsStruct(Arc::new(DashMap::new())),
             lynn_router: Arc::new(LynnRouter::new()),
             lynn_config,
-            reactor: TcpReactor::new(),
+            reactor: TcpReactor::new(state_registry.clone()),
+            state_registry,
         }
     }
 
@@ -222,6 +227,58 @@ impl<'a> LynnServer<'a> {
     pub fn add_router<Param>(mut self, method_id: u16, handler: impl IntoSystem<Param>) -> Self {
         self.lynn_router.add_router(method_id, handler);
         self
+    }
+
+    /// Registers a shared state value that handlers can extract through
+    /// `AppState<T>` parameters (like axum's `State<T>`).
+    ///
+    /// One value per type: registering the same type again replaces the
+    /// previous value. Multiple different types can coexist. Registration
+    /// order relative to `add_router` does not matter — the value is read
+    /// when a request is handled, so it only needs to be registered before
+    /// `start()`.
+    ///
+    /// # Parameters
+    ///
+    /// * `state` - The state value to share with all handlers.
+    ///
+    /// # Returns
+    ///
+    /// The modified `LynnServer` instance.
+    pub fn with_state<T: Send + Sync + 'static>(self, state: T) -> Self {
+        self.state_registry.set(state);
+        self
+    }
+
+    /// Registers an already shared `Arc<T>` as server state.
+    ///
+    /// # Parameters
+    ///
+    /// * `state` - The shared state value.
+    ///
+    /// # Returns
+    ///
+    /// The modified `LynnServer` instance.
+    pub fn with_state_arc<T: Send + Sync + 'static>(self, state: Arc<T>) -> Self {
+        self.state_registry.set_arc(state);
+        self
+    }
+
+    /// Registers a SeaORM database connection as the `AppState<DatabaseConnection>`
+    /// state, so handlers can take a `lynn_seaorm::DbConn` parameter directly.
+    ///
+    /// Requires the optional `seaorm` feature.
+    ///
+    /// # Parameters
+    ///
+    /// * `db` - A connected SeaORM `DatabaseConnection`.
+    ///
+    /// # Returns
+    ///
+    /// The modified `LynnServer` instance.
+    #[cfg(feature = "seaorm")]
+    pub fn with_db(self, db: sea_orm::DatabaseConnection) -> Self {
+        self.with_state(db)
     }
 
     /// Checks the heartbeat of connected clients and removes those that have not sent messages for a long time.

@@ -20,6 +20,7 @@ use crate::application::server::lynn_server::{ReactorEventSender, TaskBodyOutCha
 use crate::application::server::server_common::{add_client, check_handler_result, push_read_half};
 use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
+use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::connection::connection_limiter::ConnectionLimiter;
 use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, StreamAcceptor};
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
@@ -130,8 +131,7 @@ impl EventManager {
                             EventType::NewSocket((socket, addr)) => {
                                 // Perform the (optional) TLS handshake here, off the
                                 // accept loop, so handshakes never serialize accepts.
-                                let Some(stream) =
-                                    stream_acceptor.accept(socket, addr).await
+                                let Some(stream) = stream_acceptor.accept(socket, addr).await
                                 else {
                                     continue;
                                 };
@@ -165,8 +165,7 @@ impl EventManager {
                                 // Run the handler in a nested task so a panicking
                                 // handler (e.g. a missing AppState) cannot take
                                 // down this worker.
-                                match tokio::spawn(async move { task.handler(context).await })
-                                    .await
+                                match tokio::spawn(async move { task.handler(context).await }).await
                                 {
                                     Ok(result) => {
                                         check_handler_result(result, clients.clone()).await;
@@ -255,7 +254,7 @@ pub(crate) struct CoreReactor {
 }
 
 impl CoreReactor {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(states: Arc<StateRegistry>) -> Self {
         let (tx, mut rx) = mpsc::channel::<NewSocketTask>(64);
         tokio::spawn(async move {
             while let Some(task) = rx.recv().await {
@@ -269,6 +268,7 @@ impl CoreReactor {
                     task.lynn_router,
                     task.reactor_event_sender,
                     task.last_communicate_time,
+                    states.clone(),
                 )
                 .await;
             }
@@ -440,9 +440,9 @@ pub(crate) struct TcpReactor {
 }
 
 impl TcpReactor {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(states: Arc<StateRegistry>) -> Self {
         Self {
-            core_reactor: CoreReactor::new(),
+            core_reactor: CoreReactor::new(states),
             event_manager: EventManager::new(),
         }
     }

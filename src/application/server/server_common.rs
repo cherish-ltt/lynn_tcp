@@ -24,9 +24,12 @@ use crate::domain::model::input_buf_vo::{InputBufVO, InputBufVOTrait};
 use crate::domain::model::lynn_user::LynnUser;
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
 use crate::domain::routing::router::LynnRouter;
+use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
-use crate::infrastructure::tcp::stream::{BoxedReadHalf, BoxedWriteHalf, LynnStream, split_transport};
+use crate::infrastructure::tcp::stream::{
+    BoxedReadHalf, BoxedWriteHalf, LynnStream, split_transport,
+};
 
 #[inline(always)]
 pub(super) fn spawn_check_heart(
@@ -154,6 +157,7 @@ pub(crate) async fn input_dto_build(
     clients: ClientsStructType,
     handler_method: Arc<AsyncFunc>,
     reactor_event_sender: ReactorEventSender,
+    states: Arc<StateRegistry>,
 ) {
     // Attempt to acquire a permit from the semaphore.
     match process_permit.try_acquire() {
@@ -163,6 +167,7 @@ pub(crate) async fn input_dto_build(
                 HandlerContext::new(
                     input_buf_vo,
                     ClientsContext::new(ClientsStruct(clients.clone())),
+                    states,
                 ),
                 clients,
             )));
@@ -198,6 +203,7 @@ pub(crate) async fn push_read_half(
     lynn_router: Arc<LynnRouter>,
     reactor_event_sender: ReactorEventSender,
     last_communicate_time: Arc<RwLock<SystemTime>>,
+    states: Arc<StateRegistry>,
 ) {
     tokio::spawn(async move {
         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
@@ -231,6 +237,7 @@ pub(crate) async fn push_read_half(
                                                 clients.clone(),
                                                 handler_method.clone(),
                                                 reactor_event_sender.clone(),
+                                                states.clone(),
                                             )
                                             .await;
                                         } else {

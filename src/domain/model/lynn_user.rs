@@ -13,7 +13,9 @@ use tokio::{
 };
 use tracing::error;
 
-use crate::{const_config::DEFAULT_SYSTEM_CHANNEL_SIZE, infrastructure::tcp::stream::BoxedWriteHalf};
+use crate::{
+    const_config::DEFAULT_SYSTEM_CHANNEL_SIZE, infrastructure::tcp::stream::BoxedWriteHalf,
+};
 
 pub(crate) enum LynnUserSignal {
     SendResponse(BytesMut),
