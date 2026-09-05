@@ -22,7 +22,7 @@
 //!   1. method_id=1, payload="login:alice"  → handled by login_handler
 //!   2. method_id=2, payload="get_user_info" → handled by user_info_handler
 //!   3. method_id=99, payload="unknown"      → Server logs "router_map_async no method match,99"
-//!                                        → Client uses timeout to handle missing response
+//!      → Client uses timeout to handle missing response
 
 use std::time::Duration;
 
