@@ -398,35 +398,38 @@ See [docs/version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/ver
 
 ---
 
-### Test Results
+### Benchmarks
 
-Platform: Debian 12.12 (4H4G) — 2025.10.21
+Starting with v2.0.0-rc.3, Lynn_tcp ships a **standardized, reusable benchmark harness** (`benches/benchmark.rs` + the standalone `bench_echo_server` binary). The server runs as an independent process (like a real deployment), every concurrency level starts from a fresh server process, and each cell measures a fixed window after a discarded warmup. The pre-2.0 tables were produced by an unrecoverable one-off script and have been retired.
 
-- **model-1**: one request by one response
-- **model-2**: concurrent `send request` and `recv response`
-- total time: 15s
+**Traffic models**
 
-**lynn_tcp v1.1.x**
+- **Model 1 — request/response (ping-pong)**: each client keeps exactly one request in flight and measures every round-trip; reports throughput **and** RTT percentiles.
+- **Model 2 — concurrent send/receive (pipelined)**: each client runs one sending and one receiving task with a bounded in-flight window (8); reports sustained throughput.
 
-| Client Concurrency | model-1 (Responses/s) | model-2 (Responses/s) |
-| :----------------- | :-------------------- | --------------------- |
-| 256                | 182,879               | 80,499                |
-| 512                | 249,135               | 61,370                |
-| 1024               | 232,861               | 23,143                |
-| 2048               | 185,735               | 16,468                |
-| 4096               | 160,318               | 13,557                |
+**Standard matrix**: models 1+2 × client concurrency 64 / 256 / 1024 / 4096 (logarithmic 4× steps, covering the latency-bound and saturation regimes), echo payload 128 B, 3 s warmup + 10 s measured per cell.
 
-**lynn_tcp v1.2.x**
+**Reproduce**
 
-| Client Concurrency | model-1 (Responses/s) | model-2 (Responses/s) |
-| :----------------- | :-------------------- | --------------------- |
-| 256                | 64,630                | 492,889               |
-| 512                | 182,296               | 300,550               |
-| 1024               | 163,307               | 158,056               |
-| 2048               | 131,346               | 71,263                |
-| 4096               | 124,645               | 52,163                |
+```bash
+cargo bench --bench benchmark -- --json results.json
+# customize: --model all|1|2  --clients 64,256  --duration 15  --warmup 3  --payload 128
+```
 
-> 📊 Benchmarks for v2.0.0 are forthcoming. The architectural refactoring focuses on maintainability with no expected performance regression.
+**lynn_tcp v2.0.0-rc.3** — Apple M1 Pro (8 logical cores: 6 performance + 2 efficiency, 16 GB), macOS, loopback — 2026.09.05 ([raw JSON](docs/benchmark/v2.0.0-rc.3-apple-m1-pro.json))
+
+| Model | Clients | Payload (B) | Throughput (resp/s) | Avg RTT (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
+|:------|--------:|------------:|--------------------:|-------------:|---------:|---------:|---------:|
+| 1 (ping-pong) | 64   | 128 | **129,479** | 0.494 | 0.446 | 0.855 | 1.303 |
+| 1 (ping-pong) | 256  | 128 | **136,350** | 1.877 | 1.682 | 3.503 | 5.064 |
+| 1 (ping-pong) | 1024 | 128 | **144,873** | 7.067 | 5.679 | 16.497 | 22.707 |
+| 1 (ping-pong) | 4096 | 128 | **127,680** | 32.065 | 29.457 | 80.264 | 112.598 |
+| 2 (pipelined) | 64   | 128 | **103,459** | — | — | — | — |
+| 2 (pipelined) | 256  | 128 | **131,482** | — | — | — | — |
+| 2 (pipelined) | 1024 | 128 | **113,253** | — | — | — | — |
+| 2 (pipelined) | 4096 | 128 | **69,145** | — | — | — | — |
+
+> 📊 Numbers are loopback, single-machine measurements where client load generation shares the CPU with the server — treat them as relative comparisons between versions, not absolute capacity. Model-1 RTT grows with concurrency as queues form (classic queueing behavior); Model-2 throughput saturates near 1024 clients on this machine.
 
 ---
 

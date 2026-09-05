@@ -24,7 +24,11 @@
 - New examples: `state_example` (global state) and `tls_example` (TLS 1.3, `required-features = ["tls"]`).
 - New integration suites: `state_injection.rs` (5 cases), `tls_integration.rs` (3 cases with rcgen-generated certificates), `client_reconnect.rs` (3 cases). README/README_ZH updated in sync (feature tables, client config table, TLS/state/reconnect sections, roadmap, FAQ).
 
-5.quality
+5.bench
+
+- New standardized benchmark harness (`cargo bench --bench benchmark`): two traffic models (ping-pong with RTT percentiles, pipelined send/receive), per-cell fresh echo server **as an independent process** (`bench_echo_server` binary), parametric CLI, Markdown + JSON reporting. First reference run on Apple M1 Pro: Model-1 peak **144,873 resp/s** @1024 clients, Model-2 peak **131,482 resp/s** @256 clients. README gained a new "Benchmarks" section (pre-2.0 tables retired); raw results archived under `docs/benchmark/`.
+
+6.quality
 
 - Test count 88 → 109+; line coverage 91.91% → **92.16%** (`cargo llvm-cov`); clippy clean for both default and `--all-features`.
 

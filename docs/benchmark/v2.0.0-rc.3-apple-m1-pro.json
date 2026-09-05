@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "crate_version": "2.0.0-rc.3",
+    "os": "macos",
+    "arch": "aarch64",
+    "logical_cores": 8,
+    "topology": "loopback, echo server in an independent process (bench_echo_server binary)",
+    "payload_bytes": 128,
+    "warmup_secs": 3,
+    "duration_secs": 10,
+    "client_channel_size": 8,
+    "unix_timestamp": 1788611677
+  },
+  "results": [
+    {"model": 1, "clients": 64, "requests": 1294787, "responses": 1294787, "throughput_rps": 129478.7, "latency": {"avg_ms": 0.494, "p50_ms": 0.446, "p95_ms": 0.855, "p99_ms": 1.303}},
+    {"model": 1, "clients": 256, "requests": 1363503, "responses": 1363503, "throughput_rps": 136350.3, "latency": {"avg_ms": 1.877, "p50_ms": 1.682, "p95_ms": 3.503, "p99_ms": 5.064}},
+    {"model": 1, "clients": 1024, "requests": 1448729, "responses": 1448729, "throughput_rps": 144872.9, "latency": {"avg_ms": 7.067, "p50_ms": 5.679, "p95_ms": 16.497, "p99_ms": 22.707}},
+    {"model": 1, "clients": 4096, "requests": 1276803, "responses": 1276803, "throughput_rps": 127680.3, "latency": {"avg_ms": 32.065, "p50_ms": 29.457, "p95_ms": 80.264, "p99_ms": 112.598}},
+    {"model": 2, "clients": 64, "requests": 9284134, "responses": 1034589, "throughput_rps": 103458.9, "latency": null},
+    {"model": 2, "clients": 256, "requests": 10061790, "responses": 1314821, "throughput_rps": 131482.1, "latency": null},
+    {"model": 2, "clients": 1024, "requests": 10165312, "responses": 1132532, "throughput_rps": 113253.2, "latency": null},
+    {"model": 2, "clients": 4096, "requests": 7802856, "responses": 691448, "throughput_rps": 69144.8, "latency": null}
+  ]
+}

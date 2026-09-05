@@ -285,6 +285,7 @@ msrv = "1.98.1"
 docs/
 ├── update_logs/        # 每个版本的中文更新日志（vX.Y.Z.md）
 ├── version.md          # 全版本英文历史记录
+├── benchmark/          # 基准测试结果存档（JSON，按版本与机型命名）
 ├── FlowChart.png       # v1.x 架构流程图
 ├── FlowChart-v2.png    # v2.x（DDD + 洋葱架构）流程图
 └── monitoring/         # 监控配置（metrics feature 配套）
@@ -294,6 +295,13 @@ docs/
 
 - README / METRICS / 工作流中引用这些资源时，必须使用上述 `docs/` 路径。
 - 新增文档或图片资源时放入 `docs/` 并在本节登记，不得散落在仓库根目录。
+
+**基准测试（benches/）**：
+
+- 标准化基准由 `benches/benchmark.rs`（压测客户端，harness=false）与 `src/bin/bench_echo_server.rs`（独立进程 echo server）组成，`cargo bench --bench benchmark` 运行。
+- server 必须以**独立进程**运行（与真实部署一致），每格（cell）使用全新 server 进程；流量模型、并发梯度、预热/测量窗口见 README「Benchmarks」章节。
+- 基准运行时默认禁止初始化日志订阅者（日志会经 stdout 全局锁串行化并污染测量），调试用 `LYNN_BENCH_LOGS=1`。
+- 结果 JSON 存档至 `docs/benchmark/`，命名 `v<版本>-<机型>.json`；README 结果表更新时必须与 JSON 同步提交。
 
 ### 10.4 GitHub Release 自动发布流程
 
