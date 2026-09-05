@@ -80,5 +80,8 @@ async fn custom_marks_roundtrip() {
         .expect("timed out waiting for response")
         .expect("connection closed");
     assert_eq!(resp.get_method_id(), Some(1));
-    assert_eq!(String::from_utf8_lossy(&resp.get_all_bytes()), "Custom: marked");
+    assert_eq!(
+        String::from_utf8_lossy(&resp.get_all_bytes()),
+        "Custom: marked"
+    );
 }

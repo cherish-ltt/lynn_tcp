@@ -561,3 +561,96 @@ impl<'a> LynnServerConfigBuilder<'a> {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static MAX_CONN: usize = 7;
+    static POOL: usize = 8;
+    static PERMIT: usize = 9;
+    static HEART_INTERVAL: u64 = 11;
+    static HEART_TIMEOUT: u64 = 12;
+    static HEADER: u16 = 0xAABB;
+    static TAIL: u16 = 0xCCDD;
+    static PER_IP: usize = 15;
+    static RATE: u64 = 16;
+    static NODELAY: bool = true;
+    static KEEPALIVE: bool = true;
+    static KEEPALIVE_SECS: u64 = 17;
+    static READ_TO: u64 = 18;
+    static WRITE_TO: u64 = 19;
+    static RECV_BUF: usize = 20;
+    static SEND_BUF: usize = 21;
+
+    #[test]
+    fn builder_sets_every_field() {
+        let cfg = LynnServerConfigBuilder::new()
+            .with_addr("127.0.0.1:9999")
+            .expect("valid addr")
+            .with_server_max_connections(Some(&MAX_CONN))
+            .with_server_max_taskpool_size(&POOL)
+            .with_server_single_processs_permit(&PERMIT)
+            .with_server_check_heart_interval(&HEART_INTERVAL)
+            .with_server_check_heart_timeout_time(&HEART_TIMEOUT)
+            .with_message_header_mark(&HEADER)
+            .with_message_tail_mark(&TAIL)
+            .with_max_connections_per_ip(&PER_IP)
+            .with_connection_rate_limit(&RATE)
+            .with_tcp_nodelay(&NODELAY)
+            .with_tcp_keepalive_enabled(&KEEPALIVE)
+            .with_tcp_keepalive_time_secs(&KEEPALIVE_SECS)
+            .with_read_timeout_secs(&READ_TO)
+            .with_write_timeout_secs(&WRITE_TO)
+            .with_recv_buffer_size(&RECV_BUF)
+            .with_send_buffer_size(&SEND_BUF)
+            .build();
+
+        assert_eq!(cfg.get_server_addr(), "127.0.0.1:9999");
+        assert_eq!(cfg.get_server_max_connections(), Some(&MAX_CONN));
+        assert_eq!(cfg.get_server_max_reactor_taskpool_size(), &POOL);
+        assert_eq!(cfg.get_server_single_processs_permit(), &PERMIT);
+        assert_eq!(cfg.get_server_check_heart_interval(), &HEART_INTERVAL);
+        assert_eq!(cfg.get_server_check_heart_timeout_time(), &HEART_TIMEOUT);
+        assert_eq!(cfg.get_message_header_mark(), &HEADER);
+        assert_eq!(cfg.get_message_tail_mark(), &TAIL);
+        assert_eq!(cfg.get_server_max_connections_per_ip(), &PER_IP);
+        assert_eq!(cfg.get_server_connection_rate_limit(), &RATE);
+        assert_eq!(cfg.get_tcp_nodelay(), &NODELAY);
+        assert_eq!(cfg.get_tcp_keepalive_enabled(), &KEEPALIVE);
+        assert_eq!(cfg.get_tcp_keepalive_time_secs(), &KEEPALIVE_SECS);
+        assert_eq!(cfg.get_read_timeout_secs(), &READ_TO);
+        assert_eq!(cfg.get_write_timeout_secs(), &WRITE_TO);
+        assert_eq!(cfg.get_recv_buffer_size(), &RECV_BUF);
+        assert_eq!(cfg.get_send_buffer_size(), &SEND_BUF);
+    }
+
+    #[test]
+    fn max_connections_can_be_disabled() {
+        let cfg = LynnServerConfigBuilder::new()
+            .with_server_max_connections(None)
+            .build();
+        assert_eq!(cfg.get_server_max_connections(), None);
+    }
+
+    #[test]
+    fn invalid_addr_is_rejected() {
+        assert!(
+            LynnServerConfigBuilder::new()
+                .with_addr("not an address")
+                .is_err()
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn deprecated_setters_still_apply() {
+        let cfg = LynnServerConfigBuilder::new()
+            .with_server_ipv4("127.0.0.1:9998")
+            .expect("valid addr")
+            .with_server_max_threadpool_size(&POOL)
+            .build();
+        assert_eq!(cfg.get_server_addr(), "127.0.0.1:9998");
+        assert_eq!(cfg.get_server_max_reactor_taskpool_size(), &POOL);
+    }
+}

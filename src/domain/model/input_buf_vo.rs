@@ -271,3 +271,85 @@ impl InputBufVOTrait for InputBufVO {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::model::input_buf_vo::InputBufVOTrait;
+
+    fn sample_body() -> BytesMut {
+        // constructor_id=1, method_id=42, payload "hey"
+        let mut b = BytesMut::new();
+        b.extend_from_slice(&[1u8]);
+        b.extend_from_slice(&42u16.to_le_bytes());
+        b.extend_from_slice(b"hey");
+        b
+    }
+
+    #[test]
+    fn parses_fields_sequentially() {
+        let addr: SocketAddr = "127.0.0.1:1234".parse().unwrap();
+        let mut vo = InputBufVO::new(sample_body(), addr);
+        assert_eq!(vo.get_input_addr(), Some(addr));
+        assert_eq!(vo.get_constructor_id(), Some(1));
+        assert_eq!(vo.get_method_id(), Some(42));
+        assert_eq!(vo.next_str_with_len(3).as_deref(), Some("hey"));
+        assert_eq!(vo.get_remaining_data_len(), 0);
+    }
+
+    #[test]
+    fn reads_numbers_from_payload() {
+        let mut body = BytesMut::new();
+        body.extend_from_slice(&[1u8]);
+        body.extend_from_slice(&1u16.to_le_bytes());
+        body.extend_from_slice(&7u64.to_le_bytes());
+        body.extend_from_slice(&[9u8]);
+
+        let mut vo = InputBufVO::new(body, "127.0.0.1:1".parse().unwrap());
+        assert_eq!(vo.next_u64(), Some(7));
+        assert_eq!(vo.next_u8(), Some(9));
+        // Buffer exhausted: further reads return None instead of panicking.
+        assert_eq!(vo.next_u64(), None);
+        assert_eq!(vo.next_u8(), None);
+    }
+
+    #[test]
+    fn short_buffers_return_none() {
+        let mut vo = InputBufVO::new_without_socket_addr(BytesMut::from(&[1u8, 2][..]));
+        assert_eq!(vo.get_constructor_id(), Some(1));
+        assert_eq!(vo.get_method_id(), None, "method id needs 3 bytes");
+        assert_eq!(vo.next_u64(), None);
+        assert_eq!(vo.next_str_with_len(1), None);
+    }
+
+    #[test]
+    fn oversized_string_len_is_rejected() {
+        let mut vo = InputBufVO::new(sample_body(), "127.0.0.1:1".parse().unwrap());
+        assert_eq!(vo.next_str_with_len(u64::MAX), None);
+    }
+
+    #[test]
+    fn get_all_bytes_strips_the_frame_prefix() {
+        let vo = InputBufVO::new(sample_body(), "127.0.0.1:1".parse().unwrap());
+        assert_eq!(&vo.get_all_bytes()[..], b"hey");
+        // Non-destructive: repeated reads return the same payload.
+        assert_eq!(&vo.get_all_bytes()[..], b"hey");
+    }
+
+    #[test]
+    fn empty_vo_behaves_gracefully() {
+        let mut vo = InputBufVO::new_none();
+        assert_eq!(vo.get_input_addr(), None);
+        assert_eq!(vo.get_constructor_id(), None);
+        assert_eq!(vo.get_method_id(), None);
+        assert!(vo.get_all_bytes().is_empty());
+        assert_eq!(vo.get_remaining_data_len(), 0);
+    }
+
+    #[test]
+    fn without_socket_addr_has_no_addr() {
+        let vo = InputBufVO::new_without_socket_addr(sample_body());
+        assert_eq!(vo.get_input_addr(), None);
+        assert_eq!(vo.get_remaining_data_len(), 3);
+    }
+}

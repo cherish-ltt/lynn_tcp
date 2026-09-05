@@ -213,3 +213,50 @@ impl<'a> LynnClientConfigBuilder<'a> {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static CHANNEL: usize = 32;
+    static HEART: u64 = 3;
+    static HEADER: u16 = 0x1122;
+    static TAIL: u16 = 0x3344;
+
+    #[test]
+    fn builder_sets_every_field() {
+        let cfg = LynnClientConfigBuilder::new()
+            .with_server_addr("127.0.0.1:9999")
+            .expect("valid addr")
+            .with_server_single_channel_size(&CHANNEL)
+            .with_server_check_heart_interval(&HEART)
+            .with_message_header_mark(&HEADER)
+            .with_message_tail_mark(&TAIL)
+            .build();
+
+        assert_eq!(cfg.get_server_ipv4(), "127.0.0.1:9999");
+        assert_eq!(cfg.get_client_single_channel_size(), &CHANNEL);
+        assert_eq!(cfg.get_server_check_heart_interval(), &HEART);
+        assert_eq!(cfg.get_message_header_mark(), &HEADER);
+        assert_eq!(cfg.get_message_tail_mark(), &TAIL);
+    }
+
+    #[test]
+    fn invalid_addr_is_rejected() {
+        assert!(
+            LynnClientConfigBuilder::new()
+                .with_server_addr("??")
+                .is_err()
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn deprecated_addr_setter_still_applies() {
+        let cfg = LynnClientConfigBuilder::new()
+            .with_server_ipv4("127.0.0.1:9998")
+            .expect("valid addr")
+            .build();
+        assert_eq!(cfg.get_server_ipv4(), "127.0.0.1:9998");
+    }
+}

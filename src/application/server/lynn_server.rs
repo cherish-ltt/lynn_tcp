@@ -325,3 +325,35 @@ impl<'a> LynnServer<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn new_with_addr_resolves_the_address() {
+        let app = LynnServer::new_with_addr("127.0.0.1:9199").await;
+        assert_eq!(app.lynn_config.get_server_addr(), "127.0.0.1:9199");
+    }
+
+    #[tokio::test]
+    async fn default_server_uses_the_default_address() {
+        let app = LynnServer::new().await;
+        assert_eq!(app.lynn_config.get_server_addr(), "0.0.0.0:9177");
+    }
+
+    #[tokio::test]
+    #[allow(deprecated)]
+    async fn new_with_ipv4_still_resolves() {
+        let app = LynnServer::new_with_ipv4("127.0.0.1:9198").await;
+        assert_eq!(app.lynn_config.get_server_addr(), "127.0.0.1:9198");
+    }
+
+    #[test]
+    fn log_server_does_not_panic_on_repeated_init() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let app = rt.block_on(LynnServer::new());
+        app.log_server(); // first call may succeed...
+        app.log_server(); // ...second call must hit the warn branch, not panic
+    }
+}

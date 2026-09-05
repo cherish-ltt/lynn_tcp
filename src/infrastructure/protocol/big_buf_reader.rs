@@ -209,3 +209,120 @@ impl BigBufReader {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const HEADER: u16 = 0x1122;
+    const TAIL: u16 = 0x3344;
+
+    fn frame(constructor: u8, method: u16, body: &[u8]) -> BytesMut {
+        let msg_len = (1 + 2 + body.len() + 2) as u64;
+        let mut f = BytesMut::new();
+        f.extend_from_slice(&HEADER.to_le_bytes());
+        f.extend_from_slice(&msg_len.to_le_bytes());
+        f.extend_from_slice(&[constructor]);
+        f.extend_from_slice(&method.to_le_bytes());
+        f.extend_from_slice(body);
+        f.extend_from_slice(&TAIL.to_le_bytes());
+        f
+    }
+
+    #[test]
+    fn parses_a_single_frame() {
+        let mut r = BigBufReader::new(HEADER, TAIL);
+        r.extend_from_slice(&frame(1, 9, b"hello"));
+        assert!(r.is_complete());
+        assert!(!r.is_empty());
+        let data = r.get_data();
+        assert_eq!(
+            &data[..],
+            &[1, 9, 0, b'h', b'e', b'l', b'l', b'o'],
+            "payload must keep constructor id, method id and body"
+        );
+        // After extraction the reader is empty and ready for the next frame.
+        assert!(!r.is_complete());
+        assert!(r.is_empty());
+    }
+
+    #[test]
+    fn parses_byte_by_byte() {
+        let mut r = BigBufReader::new(HEADER, TAIL);
+        let f = frame(1, 5, b"payload");
+        for byte in f.iter() {
+            r.extend_from_slice(&[*byte]);
+        }
+        assert!(r.is_complete());
+        let data = r.get_data();
+        assert_eq!(
+            &data[..],
+            &[1, 5, 0, b'p', b'a', b'y', b'l', b'o', b'a', b'd']
+        );
+    }
+
+    #[test]
+    fn parses_two_frames_in_one_feed() {
+        let mut r = BigBufReader::new(HEADER, TAIL);
+        let mut both = frame(1, 1, b"a");
+        both.extend_from_slice(&frame(2, 0, &[])); // heart-shaped frame
+        r.extend_from_slice(&both);
+
+        let first = r.get_data();
+        assert_eq!(&first[..], &[1, 1, 0, b'a']);
+        assert!(r.is_complete(), "the second frame must already be buffered");
+        let second = r.get_data();
+        assert_eq!(&second[..], &[2, 0, 0]);
+        assert!(!r.is_complete());
+        assert!(r.is_empty());
+    }
+
+    #[test]
+    fn buffers_partial_frames() {
+        let mut r = BigBufReader::new(HEADER, TAIL);
+        let f = frame(1, 5, b"payload");
+        r.extend_from_slice(&f[..10]);
+        assert!(!r.is_complete());
+        assert_eq!(
+            r.get_next_extend_buf_len(),
+            Some(f.len() - 10),
+            "must report exactly how many bytes are still missing"
+        );
+        r.extend_from_slice(&f[10..]);
+        assert!(r.is_complete());
+    }
+
+    #[test]
+    fn wrong_header_clears_and_recovers() {
+        let mut r = BigBufReader::new(HEADER, TAIL);
+        let mut garbage = frame(1, 1, b"x");
+        garbage[0] = 0x99;
+        garbage[1] = 0x99;
+        r.extend_from_slice(&garbage);
+        assert!(r.is_empty(), "frames with a wrong header must be dropped");
+
+        r.extend_from_slice(&frame(1, 1, b"ok"));
+        assert!(r.is_complete(), "reader must recover after invalid data");
+    }
+
+    #[test]
+    fn oversized_length_clears_buffer() {
+        let mut r = BigBufReader::new(HEADER, TAIL);
+        let mut malicious = BytesMut::new();
+        malicious.extend_from_slice(&HEADER.to_le_bytes());
+        malicious.extend_from_slice(&u64::MAX.to_le_bytes());
+        r.extend_from_slice(&malicious);
+        assert!(r.is_empty(), "invalid lengths must not allocate");
+    }
+
+    #[test]
+    fn forced_clear_resets_everything() {
+        let mut r = BigBufReader::new(HEADER, TAIL);
+        r.extend_from_slice(&frame(1, 1, b"abc"));
+        assert!(r.is_complete());
+        r.forced_clear();
+        assert!(r.is_empty());
+        assert!(!r.is_complete());
+        assert_eq!(r.get_next_extend_buf_len(), None);
+    }
+}

@@ -186,4 +186,78 @@ mod tests {
         // Test overflow protection
         assert!(buffer.extend(&[0u8; 200]).is_err());
     }
+
+    #[test]
+    fn rejects_too_short_data() {
+        let err = validate_message_format(&[0u8; 9], 0x23E9, 0x1E27).unwrap_err();
+        assert!(err.to_string().contains("too short"));
+    }
+
+    #[test]
+    fn rejects_wrong_header_mark() {
+        let mut data = vec![0u8; 20];
+        data[0..2].copy_from_slice(&0x1234u16.to_le_bytes());
+        data[2..10].copy_from_slice(&6u64.to_le_bytes());
+        data[16..18].copy_from_slice(&0x1E27u16.to_le_bytes());
+
+        let err = validate_message_format(&data, 0x23E9, 0x1E27).unwrap_err();
+        assert!(err.to_string().contains("header mark"));
+    }
+
+    #[test]
+    fn rejects_incomplete_message() {
+        let mut data = vec![0u8; 17]; // missing the tail bytes
+        data[0..2].copy_from_slice(&0x23E9u16.to_le_bytes());
+        data[2..10].copy_from_slice(&6u64.to_le_bytes());
+
+        let err = validate_message_format(&data, 0x23E9, 0x1E27).unwrap_err();
+        assert!(err.to_string().contains("Incomplete"));
+    }
+
+    #[test]
+    fn rejects_wrong_tail_mark() {
+        let mut data = vec![0u8; 20];
+        data[0..2].copy_from_slice(&0x23E9u16.to_le_bytes());
+        data[2..10].copy_from_slice(&6u64.to_le_bytes());
+        data[16..18].copy_from_slice(&0x9999u16.to_le_bytes());
+
+        let err = validate_message_format(&data, 0x23E9, 0x1E27).unwrap_err();
+        assert!(err.to_string().contains("tail mark"));
+    }
+
+    #[test]
+    fn rejects_invalid_length_field() {
+        let mut data = vec![0u8; 20];
+        data[0..2].copy_from_slice(&0x23E9u16.to_le_bytes());
+        data[2..10].copy_from_slice(&u64::MAX.to_le_bytes());
+
+        assert!(validate_message_format(&data, 0x23E9, 0x1E27).is_err());
+    }
+
+    #[test]
+    fn safe_buffer_rejects_single_oversized_chunk() {
+        let mut buffer = SafeBuffer::new(10);
+        let err = buffer.extend(&[0u8; 11]).unwrap_err();
+        assert!(err.to_string().contains("chunk too large"));
+    }
+
+    #[test]
+    fn safe_buffer_rejects_cumulative_overflow() {
+        let mut buffer = SafeBuffer::new(10);
+        assert!(buffer.extend(&[0u8; 6]).is_ok());
+        assert!(buffer.extend(&[0u8; 6]).is_err());
+        assert_eq!(buffer.len(), 6, "failed extend must not mutate the buffer");
+    }
+
+    #[test]
+    fn safe_buffer_clear_and_inspect() {
+        let mut buffer = SafeBuffer::new(64);
+        assert!(buffer.is_empty());
+        assert_eq!(buffer.max_size(), 64);
+        assert!(buffer.extend(b"abc").is_ok());
+        assert_eq!(buffer.as_slice(), b"abc");
+        buffer.clear();
+        assert!(buffer.is_empty());
+        assert_eq!(buffer.len(), 0);
+    }
 }

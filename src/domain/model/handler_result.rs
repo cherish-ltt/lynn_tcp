@@ -163,3 +163,91 @@ impl HandlerResult {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn le(v: u16) -> Vec<u8> {
+        v.to_le_bytes().to_vec()
+    }
+
+    #[test]
+    fn without_send_has_no_payload() {
+        let r = HandlerResult::new_without_send();
+        assert!(!r.get_is_send());
+        assert!(r.get_response_data().is_none());
+        assert!(r.get_addrs().is_none());
+        assert!(!r.is_with_mark());
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn frame_layout_uses_explicit_marks() {
+        let mut r = HandlerResult::new_with_send(
+            7,
+            Bytes::from_static(b"abc"),
+            vec!["127.0.0.1:9177".parse().unwrap()],
+        );
+        assert!(r.get_is_send());
+        assert_eq!(r.get_addrs(), Some(vec!["127.0.0.1:9177".parse().unwrap()]));
+        assert!(!r.is_with_mark());
+
+        r.set_marks(0x1111, 0x2222);
+        assert!(r.is_with_mark());
+
+        let frame = r.get_response_data().unwrap();
+        assert_eq!(frame[0..2].to_vec(), le(0x1111));
+        let msg_len = u64::from_le_bytes(frame[2..10].try_into().unwrap());
+        assert_eq!(msg_len, 1 + 2 + 3 + 2);
+        assert_eq!(frame[10], 1); // constructor id: normal message
+        assert_eq!(frame[11..13].to_vec(), le(7));
+        assert_eq!(&frame[13..16], b"abc");
+        assert_eq!(frame[16..18].to_vec(), le(0x2222));
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn frame_falls_back_to_default_marks() {
+        let r = HandlerResult::new_with_send(1, Bytes::from_static(b""), vec![]);
+        let frame = r.get_response_data().unwrap();
+        assert_eq!(
+            frame[0..2].to_vec(),
+            le(DEFAULT_MESSAGE_HEADER_MARK),
+            "unset marks must fall back to the protocol defaults"
+        );
+        assert_eq!(
+            frame[frame.len() - 2..].to_vec(),
+            le(DEFAULT_MESSAGE_TAIL_MARK)
+        );
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn empty_payload_yields_none() {
+        // A result without payload data must not produce a frame.
+        let r = HandlerResult::new_without_send();
+        assert!(r.get_response_data().is_none());
+    }
+
+    #[cfg(feature = "client")]
+    #[test]
+    fn send_to_server_has_no_target_addrs() {
+        let r = HandlerResult::new_with_send_to_server(3, Bytes::from_static(b"xy"));
+        assert!(r.get_is_send());
+        assert!(r.get_addrs().is_none());
+        let frame = r.get_response_data().unwrap();
+        assert_eq!(frame[11..13].to_vec(), le(3));
+    }
+
+    #[cfg(feature = "client")]
+    #[test]
+    fn heart_frame_uses_constructor_id_2() {
+        let mut r = HandlerResult::new_with_send_heart_to_server();
+        r.set_marks(0xAAAA, 0xBBBB);
+        let frame = r.get_response_data().unwrap();
+        assert_eq!(frame[10], 2, "heartbeat frames use constructor id 2");
+        assert_eq!(frame[11..13].to_vec(), le(0));
+        assert!(frame[13..frame.len() - 2].is_empty());
+    }
+}

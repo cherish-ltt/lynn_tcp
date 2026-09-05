@@ -44,7 +44,10 @@ fn encode_frame(constructor_id: u8, method_id: u16, body: &[u8]) -> Vec<u8> {
 /// Reads one full frame (header + body) from a raw socket.
 async fn read_frame(stream: &mut TcpStream) -> (u8, u16, Vec<u8>) {
     let mut head = [0u8; 10];
-    stream.read_exact(&mut head).await.expect("read frame header");
+    stream
+        .read_exact(&mut head)
+        .await
+        .expect("read frame header");
     assert_eq!(
         u16::from_le_bytes([head[0], head[1]]),
         HEADER_MARK,
@@ -130,9 +133,11 @@ async fn echo_single_param(input_buf_vo: InputBufVO) -> HandlerResult {
         .get_input_addr()
         .map(|a: SocketAddr| a.to_string())
         .unwrap_or_else(|| "unknown".to_string());
-    HandlerResult::new_with_send(2, format!("Echo[{addr}]: {payload}").into(), vec![
-        input_buf_vo.get_input_addr().unwrap(),
-    ])
+    HandlerResult::new_with_send(
+        2,
+        format!("Echo[{addr}]: {payload}").into(),
+        vec![input_buf_vo.get_input_addr().unwrap()],
+    )
 }
 
 async fn broadcast(clients: ClientsContext) -> HandlerResult {
@@ -161,8 +166,11 @@ async fn echo_with_fake_addr(input_buf_vo: InputBufVO, clients: ClientsContext) 
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn echo_roundtrip_with_two_param_handler() {
-    let addr =
-        spawn_default_server(9301, |s| s.add_router(1, echo_two_params).add_router(9, broadcast_reversed)).await;
+    let addr = spawn_default_server(9301, |s| {
+        s.add_router(1, echo_two_params)
+            .add_router(9, broadcast_reversed)
+    })
+    .await;
     let mut client = start_client(&addr).await;
 
     send_payload(&mut client, 1, "hello lynn").await;
@@ -176,7 +184,10 @@ async fn echo_roundtrip_with_two_param_handler() {
         .expect("timeout")
         .expect("connection closed");
     assert_eq!(resp.get_method_id(), Some(1));
-    assert_eq!(String::from_utf8_lossy(&resp.get_all_bytes()), "Echo: again");
+    assert_eq!(
+        String::from_utf8_lossy(&resp.get_all_bytes()),
+        "Echo: again"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -240,7 +251,9 @@ async fn unknown_constructor_id_is_skipped() {
     let mut raw = TcpStream::connect(&addr).await.expect("connect");
     // constructor_id 5 is not defined by the protocol: must be skipped without
     // tearing down the connection.
-    raw.write_all(&encode_frame(5, 1, b"mystery")).await.unwrap();
+    raw.write_all(&encode_frame(5, 1, b"mystery"))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(150)).await;
     raw.write_all(&encode_frame(1, 1, b"real")).await.unwrap();
     let (_, method, body) = read_frame(&mut raw).await;
@@ -307,7 +320,10 @@ async fn per_ip_connection_limit_rejects_extra_connections() {
     // The first connection stays open, the second is closed by the limiter.
     let mut probe = [0u8; 1];
     let still_open = timeout(Duration::from_millis(300), first.read(&mut probe)).await;
-    assert!(matches!(still_open, Err(_)), "first socket unexpectedly closed");
+    assert!(
+        still_open.is_err(),
+        "first socket unexpectedly closed"
+    );
     let closed = timeout(Duration::from_secs(3), second.read(&mut probe))
         .await
         .expect("waiting for EOF timed out");
@@ -394,7 +410,10 @@ async fn client_connect_refused_leaves_client_unusable() {
     let err = client
         .send_data(HandlerResult::new_with_send_to_server(1, Bytes::new()))
         .await;
-    assert!(err.is_err(), "send must fail when the server is unreachable");
+    assert!(
+        err.is_err(),
+        "send must fail when the server is unreachable"
+    );
 }
 
 #[tokio::test]

@@ -254,3 +254,35 @@ impl<'a> LynnClient<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn new_with_addr_resolves_the_address() {
+        let client = LynnClient::new_with_addr("127.0.0.1:9197").await;
+        assert_eq!(
+            client.lynn_client_config.get_server_ipv4(),
+            "127.0.0.1:9197"
+        );
+    }
+
+    #[tokio::test]
+    #[allow(deprecated)]
+    async fn new_with_ipv4_still_resolves() {
+        let client = LynnClient::new_with_ipv4("127.0.0.1:9196").await;
+        assert_eq!(
+            client.lynn_client_config.get_server_ipv4(),
+            "127.0.0.1:9196"
+        );
+    }
+
+    #[test]
+    fn log_client_does_not_panic_on_repeated_init() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let client = rt.block_on(LynnClient::new_with_addr("127.0.0.1:9195"));
+        client.log_server(); // first call may succeed...
+        client.log_server(); // ...second call must hit the warn branch, not panic
+    }
+}

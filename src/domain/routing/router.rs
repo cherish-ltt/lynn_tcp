@@ -29,3 +29,47 @@ impl LynnRouter {
         self.map.get(method_id).map(|ref_| ref_.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::model::handler_result::HandlerResult;
+
+    async fn noop() -> HandlerResult {
+        HandlerResult::new_without_send()
+    }
+
+    #[test]
+    fn register_and_lookup() {
+        let router = LynnRouter::new();
+        assert!(router.get_handler_by_method_id(&1).is_none());
+
+        router.add_router(1, noop);
+        assert!(router.get_handler_by_method_id(&1).is_some());
+        assert!(router.get_handler_by_method_id(&2).is_none());
+    }
+
+    #[test]
+    fn duplicate_registration_overwrites_without_panicking() {
+        let router = LynnRouter::new();
+        router.add_router(1, noop);
+        router.add_router(1, noop); // triggers the duplicate warning path
+        assert!(router.get_handler_by_method_id(&1).is_some());
+    }
+
+    #[test]
+    fn concurrent_registration_and_lookup() {
+        let router = Arc::new(LynnRouter::new());
+        let mut handles = Vec::new();
+        for i in 0..8u16 {
+            let router = router.clone();
+            handles.push(std::thread::spawn(move || {
+                router.add_router(i, noop);
+                assert!(router.get_handler_by_method_id(&i).is_some());
+            }));
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+    }
+}
