@@ -1,4 +1,5 @@
 <div align="center">
+<img src="docs/logo.png" alt="lynn_tcp logo" width="280"/>
 <h1>Lynn_tcp</h1>
 <p>
   <a href="https://github.com/cherish-ltt/lynn_tcp/actions/workflows/rust-ci.yml">
@@ -11,10 +12,10 @@
     <img src="https://docs.rs/lynn_tcp/badge.svg" alt="documentation"/>
   </a>
   <a href="https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license"/>
+    <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="license: MIT OR Apache-2.0"/>
   </a>
   <a href="https://www.rust-lang.org">
-    <img src="https://img.shields.io/badge/rust-1.95.0+-orange.svg" alt="license"/>
+    <img src="https://img.shields.io/badge/rust-1.98.1+-orange.svg" alt="rust version"/>
   </a>
 </p>
 </div>
@@ -279,13 +280,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 流程图
 
+**v2.x — DDD + 洋葱架构**
+
+[![FlowChart v2](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart-v2.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart-v2.png?raw=true)
+
+<details>
+<summary>v1.x 架构（历史版本）</summary>
+
 [![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)
+
+</details>
 
 ---
 
 ### 版本介绍
 
-查看完整版本历史：[docs/version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/version.md)
+查看完整版本历史：[docs/version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/version.md)，各版本更新日志见 [docs/update_logs/](https://github.com/cherish-ltt/lynn_tcp/tree/main/docs/update_logs)。
 
 ---
 
@@ -347,8 +357,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ### 开源协议
 
-MIT license
+本项目采用双许可，您可任选其一：
+
+- MIT 协议（[LICENSE](LICENSE)）
+- Apache License, Version 2.0（[LICENSE-APACHE](LICENSE-APACHE)）
 
 ### 关于贡献
 
-除非您另有明确说明，否则您有意提交以包含在 Lynn_tcp 中的任何贡献都应被许可为 MIT，无需任何额外的条款或条件。
+- 提交前请先阅读 [AGENTS.md](AGENTS.md) —— 它是本项目的"开发宪法"，定义了提交规范、CI 标准、格式化与 lint 规则、测试要求（`cargo-llvm-cov` 覆盖率 ≥ 80%）以及发布流程。所有 pull request 与代码审查均参照其执行。
+- 提交前请在本地运行：`cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo test`。
+- 修改文档时请保持 `README.md` 与 `README_ZH.md` 同步。
+
+除非您另有明确说明，否则您有意提交以包含在 Lynn_tcp 中的任何贡献都应被许可为 MIT OR Apache-2.0，无需任何额外的条款或条件。

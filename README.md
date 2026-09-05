@@ -1,4 +1,5 @@
 <div align="center">
+<img src="docs/logo.png" alt="lynn_tcp logo" width="280"/>
 <h1>Lynn_tcp</h1>
 <p>
   <a href="https://github.com/cherish-ltt/lynn_tcp/actions/workflows/rust-ci.yml">
@@ -11,10 +12,10 @@
     <img src="https://docs.rs/lynn_tcp/badge.svg" alt="documentation"/>
   </a>
   <a href="https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license"/>
+    <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="license: MIT OR Apache-2.0"/>
   </a>
   <a href="https://www.rust-lang.org">
-    <img src="https://img.shields.io/badge/rust-1.95.0+-orange.svg" alt="license"/>
+    <img src="https://img.shields.io/badge/rust-1.98.1+-orange.svg" alt="rust version"/>
   </a>
 </p>
 </div>
@@ -279,13 +280,22 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 
 ### Flow Chart
 
+**v2.x — DDD + Onion Architecture**
+
+[![FlowChart v2](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart-v2.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart-v2.png?raw=true)
+
+<details>
+<summary>v1.x architecture (historical)</summary>
+
 [![FlowChart](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/FlowChart.png?raw=true)
+
+</details>
 
 ---
 
 ### Release Notes
 
-See [docs/version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/version.md) for full version history.
+See [docs/version.md](https://github.com/cherish-ltt/lynn_tcp/blob/main/docs/version.md) for full version history, and per-version changelogs under [docs/update_logs/](https://github.com/cherish-ltt/lynn_tcp/tree/main/docs/update_logs).
 
 ---
 
@@ -347,8 +357,17 @@ A: Metrics are automatically enabled with the `server` feature. To run the metri
 
 ### License
 
-This project is licensed under the MIT license.
+This project is dual-licensed under either of:
+
+- MIT license ([LICENSE](LICENSE))
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+
+at your option.
 
 ### Contribution
 
-Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Lynn_tcp by you shall be licensed as MIT, without any additional terms or conditions.
+- Please read [AGENTS.md](AGENTS.md) first — it is the project's development constitution, defining commit conventions, CI standards, formatting/lint rules, testing requirements (coverage ≥ 80% via `cargo-llvm-cov`), and the release workflow. All pull requests and code reviews are checked against it.
+- Before submitting, run locally: `cargo fmt --all`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
+- Keep `README.md` and `README_ZH.md` in sync when changing documentation.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Lynn_tcp by you shall be licensed as MIT OR Apache-2.0, without any additional terms or conditions.
