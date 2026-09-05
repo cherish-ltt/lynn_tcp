@@ -149,12 +149,12 @@ impl EventManager {
                                         last_communicate_time,
                                     ))
                                     .await;
-                            }
+                            },
                             EventType::ExcuteTask(task_body) => {
                                 let (task, context, clients) = task_body;
                                 let result = task.handler(context).await;
                                 check_handler_result(result, clients.clone()).await;
-                            }
+                            },
                         }
                     } else {
                         idle_count += 1;
@@ -218,7 +218,7 @@ fn get_event(
         match stealers_arc[0].steal() {
             Steal::Success(event) => return Some(event),
 
-            Steal::Empty | Steal::Retry => {}
+            Steal::Empty | Steal::Retry => {},
         }
     }
 
@@ -338,16 +338,16 @@ impl CoreReactor {
                                 match TcpStream::from_std(std_socket) {
                                     Ok(new_s) => {
                                         socket = Some(new_s);
-                                    }
+                                    },
                                     Err(e) => {
                                         warn!(
                                             "Failed to convert back to TcpStream for {}: {}, closing connection",
                                             addr, e
                                         );
                                         socket_permit = false;
-                                    }
+                                    },
                                 }
-                            }
+                            },
                             Err(e) => {
                                 warn!(
                                     "Failed to convert TcpStream for {}: {}, using default settings",
@@ -356,7 +356,7 @@ impl CoreReactor {
                                 // Note: We lost the socket here, but this is a very rare error case
                                 // In practice, this conversion should never fail
                                 socket_permit = false;
-                            }
+                            },
                         }
                     }
                 }

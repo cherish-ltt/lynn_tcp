@@ -165,11 +165,11 @@ impl BigBufReader {
                             self.remaining_data = Some(data)
                         }
                     }
-                }
+                },
                 // Either next_len is None or next_len >= buf_len, extend with full buffer
                 _ => {
                     self.data.extend_from_slice(buf);
-                }
+                },
             }
             if self.target_len.is_none() {
                 let data_len = self.data.len();
@@ -192,11 +192,11 @@ impl BigBufReader {
                             match validate_message_length(msg_len) {
                                 Ok(validated_len) => {
                                     self.target_len = Some(validated_len);
-                                }
+                                },
                                 Err(e) => {
                                     tracing::warn!("Invalid message length: {}", e);
                                     self.forced_clear();
-                                }
+                                },
                             }
                         }
                     } else {

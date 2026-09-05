@@ -158,7 +158,7 @@ impl HandlerResult {
                     bytes_mut.extend_from_slice(&DEFAULT_MESSAGE_TAIL_MARK.to_le_bytes());
                 }
                 Some(bytes_mut)
-            }
+            },
             None => None,
         }
     }

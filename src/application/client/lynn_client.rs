@@ -133,7 +133,7 @@ impl<'a> LynnClient<'a> {
             Err(e) => {
                 error!("{}", e);
                 self
-            }
+            },
         }
     }
 
@@ -175,11 +175,11 @@ impl<'a> LynnClient<'a> {
                         );
                         continue;
                     }
-                }
+                },
                 Err(e) => {
                     warn!("connect to server failed - timeout e: {:?}", e.to_string());
                     continue;
-                }
+                },
             }
         }
         Err("connect to server failed".into())
@@ -195,10 +195,10 @@ impl<'a> LynnClient<'a> {
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
                 info!("Client - [log server] start sucess!!!")
-            }
+            },
             Err(e) => {
                 warn!("set_global_default failed - e: {:?}", e.to_string())
-            }
+            },
         }
     }
 
@@ -213,7 +213,7 @@ impl<'a> LynnClient<'a> {
             None => {
                 error!("Client is not connected. Call start() first.");
                 None
-            }
+            },
         }
     }
 
@@ -239,7 +239,7 @@ impl<'a> LynnClient<'a> {
                 } else {
                     Ok(())
                 }
-            }
+            },
             None => Err("tx_write is None , No linked server".into()),
         }
     }

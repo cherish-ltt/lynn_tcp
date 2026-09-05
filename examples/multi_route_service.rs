@@ -188,16 +188,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let payload_str = String::from_utf8_lossy(&payload);
             // Unexpected — unknown routes might get a response in some implementations
             println!("⚠️  Unexpectedly received response: {:?}", payload_str);
-        }
+        },
         Ok(None) => {
             // Channel closed — this shouldn't normally happen
             println!("⚠️  Client channel closed (unexpected for unknown route behavior)");
-        }
+        },
         Err(_) => {
             // Timeout! This is the expected behavior:
             // unknown routes produce no response, so get_receive_data() never returns.
             println!("✅ [expected] Timeout — no response for unknown route 99 (as expected)");
-        }
+        },
     }
     println!();
 

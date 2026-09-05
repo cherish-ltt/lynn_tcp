@@ -166,7 +166,7 @@ impl InputBufVOTrait for InputBufVO {
                 Ok(value) => {
                     self.index += 8;
                     Some(u64::from_le_bytes(value))
-                }
+                },
                 Err(_) => None,
             }
         }
@@ -191,7 +191,7 @@ impl InputBufVOTrait for InputBufVO {
                 Ok(value) => {
                     self.index += 1;
                     Some(u8::from_le_bytes(value))
-                }
+                },
                 Err(_) => None,
             }
         }
@@ -218,7 +218,7 @@ impl InputBufVOTrait for InputBufVO {
             Err(e) => {
                 tracing::warn!("Invalid string length in next_str_with_len: {}", e);
                 return None;
-            }
+            },
         };
 
         let length = self.data.len();

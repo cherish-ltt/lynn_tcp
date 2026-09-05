@@ -40,10 +40,10 @@ pub async fn serve_metrics(bind_addr: &str) -> Result<(), Box<dyn std::error::Er
                         error!("Error handling connection from {}: {}", addr, e);
                     }
                 });
-            }
+            },
             Err(e) => {
                 error!("Error accepting connection: {}", e);
-            }
+            },
         }
     }
 }

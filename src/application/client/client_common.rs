@@ -56,7 +56,7 @@ pub(super) fn spawn_handle(
             match read_half.read(&mut buf).await {
                 Ok(0) => {
                     break;
-                }
+                },
                 Ok(n) => {
                     big_buf.extend_from_slice(&buf[..n]);
                     while big_buf.is_complete() {
@@ -65,10 +65,10 @@ pub(super) fn spawn_handle(
                             error!("send to channel failed - e: {:?}", e);
                         }
                     }
-                }
+                },
                 Err(e) => {
                     error!("read from server failed : {}", e);
-                }
+                },
             }
         }
         if let Ok(wirte_half) = write_handle.await

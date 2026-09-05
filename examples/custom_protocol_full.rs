@@ -149,11 +149,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 method_id, payload_str
             );
             println!("✅ Custom protocol communication successful!");
-        }
+        },
         Ok(None) => {
             // Channel closed
             println!("⚠️  Client channel closed");
-        }
+        },
         Err(_) => {
             // Timeout — server did process the message (see handler logs above)
             // but the response may not be parseable by the client due to
@@ -164,7 +164,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "⏱️  Timeout waiting for response (server processed the message - see handler logs above)"
             );
             println!("✅ Server-side message parsing with custom marks works correctly!");
-        }
+        },
     }
 
     // Give a moment for logs to flush, then exit

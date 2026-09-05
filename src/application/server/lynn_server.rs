@@ -153,11 +153,11 @@ impl<'a> LynnServer<'a> {
                     error!("Invalid IPv4 address: {}", ipv4);
                     panic!("Invalid IPv4 address: {}", ipv4);
                 }
-            }
+            },
             Err(e) => {
                 error!("Failed to parse IPv4 address '{}': {}", ipv4, e);
                 panic!("Failed to parse IPv4 address '{}': {}", ipv4, e);
-            }
+            },
         }
         app
     }
@@ -184,11 +184,11 @@ impl<'a> LynnServer<'a> {
                     error!("No valid addresses found");
                     panic!("No valid addresses found");
                 }
-            }
+            },
             Err(e) => {
                 error!("Failed to parse address: {}", e);
                 panic!("Failed to parse address: {}", e);
-            }
+            },
         }
         app
     }
@@ -318,10 +318,10 @@ impl<'a> LynnServer<'a> {
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
                 info!("Server - [log server] start sucess!!!")
-            }
+            },
             Err(e) => {
                 warn!("set_global_default failed - e: {:?}", e.to_string())
-            }
+            },
         }
     }
 }

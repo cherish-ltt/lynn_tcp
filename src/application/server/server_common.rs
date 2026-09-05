@@ -163,11 +163,11 @@ pub(crate) async fn input_dto_build(
                 ),
                 clients,
             )));
-        }
+        },
         Err(_) => {
             // If the permit cannot be acquired, log a warning.
             warn!("addr:{} PROCESS_PERMIT_SIZE is full", addr)
-        }
+        },
     }
 }
 
@@ -215,7 +215,7 @@ pub(crate) async fn push_read_half(
                                         *time_guard = SystemTime::now();
                                     }
                                     continue;
-                                }
+                                },
                                 1 => {
                                     if let Some(method_id) = input_buf_vo.get_method_id() {
                                         if let Some(handler_method) =
@@ -236,18 +236,18 @@ pub(crate) async fn push_read_half(
                                     } else {
                                         warn!("router_map_async input_buf_vo no method_id");
                                     }
-                                }
+                                },
                                 _ => {
                                     warn!("Unknown constructor_id: {}", constructor_id);
-                                }
+                                },
                             }
                         }
                     }
-                }
+                },
                 Err(e) => {
                     error!("Failed to read from socket: {}", e.to_string());
                     break;
-                }
+                },
             }
         }
     });
