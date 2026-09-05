@@ -6,7 +6,7 @@ use std::{
 
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use tokio::{
-    io::{AsyncWriteExt, ReadHalf},
+    io::AsyncWriteExt,
     net::{TcpListener, TcpStream},
     sync::{
         RwLock, Semaphore,
@@ -14,20 +14,15 @@ use tokio::{
     },
     task::yield_now,
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
-use crate::application::server::lynn_server::ReactorEventSender;
+use crate::application::server::lynn_server::{ReactorEventSender, TaskBodyOutChannel};
 use crate::application::server::server_common::{add_client, check_handler_result, push_read_half};
-use crate::domain::handler::handler_system::AsyncFunc;
-use crate::domain::handler::handler_system::{ClientsContext, HandlerContext};
-use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
 use crate::infrastructure::connection::connection_limiter::ConnectionLimiter;
+use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, StreamAcceptor};
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
-
-// Re-export types for compatibility
-use crate::application::server::lynn_server::TaskBodyOutChannel;
 
 /// Reactor event type
 enum EventType {
@@ -57,18 +52,23 @@ impl ReactorEvent {
     }
 }
 
+/// Per-connection setup payload handed from the event workers to the
+/// read-loop spawner task.
+pub(crate) struct NewSocketTask {
+    /// The boxed read half of the accepted (and possibly TLS-wrapped) stream.
+    pub(crate) read_half: BoxedReadHalf,
+    pub(crate) process_permit: Arc<Semaphore>,
+    pub(crate) addr: SocketAddr,
+    pub(crate) clients: ClientsStructType,
+    pub(crate) message_header_mark: u16,
+    pub(crate) message_tail_mark: u16,
+    pub(crate) lynn_router: Arc<LynnRouter>,
+    pub(crate) reactor_event_sender: ReactorEventSender,
+    pub(crate) last_communicate_time: Arc<RwLock<SystemTime>>,
+}
+
 /// New socket event sender type
-type NewSocketEventSender = Sender<(
-    ReadHalf<TcpStream>,
-    Arc<Semaphore>,
-    SocketAddr,
-    ClientsStructType,
-    u16,
-    u16,
-    Arc<LynnRouter>,
-    ReactorEventSender,
-    Arc<RwLock<SystemTime>>,
-)>;
+type NewSocketEventSender = Sender<NewSocketTask>;
 
 /// Event manager - manages the work-stealing event queue
 pub(crate) struct EventManager {
@@ -81,6 +81,7 @@ impl EventManager {
         EventManager { global_queue }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn run(
         &self,
         clients: ClientsStructType,
@@ -91,6 +92,7 @@ impl EventManager {
         reactor_event_sender: ReactorEventSender,
         tx: NewSocketEventSender,
         server_max_reactor_taskpool_size: &usize,
+        stream_acceptor: Arc<StreamAcceptor>,
     ) {
         let mut local_queues: Vec<Worker<ReactorEvent>> =
             Vec::with_capacity(*server_max_reactor_taskpool_size);
@@ -111,6 +113,7 @@ impl EventManager {
             let reactor_event_sender = reactor_event_sender.clone();
             let tx = tx.clone();
             let lynn_router = lynn_router.clone();
+            let stream_acceptor = stream_acceptor.clone();
             let mut idle_count: u16 = 0;
 
             tokio::spawn(async move {
@@ -125,11 +128,18 @@ impl EventManager {
                         idle_count = 0;
                         match event.event_type {
                             EventType::NewSocket((socket, addr)) => {
+                                // Perform the (optional) TLS handshake here, off the
+                                // accept loop, so handshakes never serialize accepts.
+                                let Some(stream) =
+                                    stream_acceptor.accept(socket, addr).await
+                                else {
+                                    continue;
+                                };
                                 let last_communicate_time =
                                     Arc::new(RwLock::new(SystemTime::now()));
                                 let read_half = add_client(
                                     clients.clone(),
-                                    socket,
+                                    stream,
                                     addr,
                                     last_communicate_time.clone(),
                                 )
@@ -137,23 +147,37 @@ impl EventManager {
                                 let process_permit =
                                     Arc::new(Semaphore::new(server_single_processs_permit));
                                 let _ = tx
-                                    .send((
+                                    .send(NewSocketTask {
                                         read_half,
                                         process_permit,
                                         addr,
-                                        clients.clone(),
+                                        clients: clients.clone(),
                                         message_header_mark,
                                         message_tail_mark,
-                                        lynn_router.clone(),
-                                        reactor_event_sender.clone(),
+                                        lynn_router: lynn_router.clone(),
+                                        reactor_event_sender: reactor_event_sender.clone(),
                                         last_communicate_time,
-                                    ))
+                                    })
                                     .await;
                             },
                             EventType::ExcuteTask(task_body) => {
                                 let (task, context, clients) = task_body;
-                                let result = task.handler(context).await;
-                                check_handler_result(result, clients.clone()).await;
+                                // Run the handler in a nested task so a panicking
+                                // handler (e.g. a missing AppState) cannot take
+                                // down this worker.
+                                match tokio::spawn(async move { task.handler(context).await })
+                                    .await
+                                {
+                                    Ok(result) => {
+                                        check_handler_result(result, clients.clone()).await;
+                                    },
+                                    Err(join_error) => {
+                                        error!(
+                                            "Handler task panicked or was cancelled: {}",
+                                            join_error
+                                        );
+                                    },
+                                }
                             },
                         }
                     } else {
@@ -232,20 +256,21 @@ pub(crate) struct CoreReactor {
 
 impl CoreReactor {
     pub(crate) fn new() -> Self {
-        let (tx, mut rx) = mpsc::channel::<(
-            ReadHalf<TcpStream>,
-            Arc<Semaphore>,
-            SocketAddr,
-            ClientsStructType,
-            u16,
-            u16,
-            Arc<LynnRouter>,
-            ReactorEventSender,
-            Arc<RwLock<SystemTime>>,
-        )>(64);
+        let (tx, mut rx) = mpsc::channel::<NewSocketTask>(64);
         tokio::spawn(async move {
-            while let Some(a) = rx.recv().await {
-                push_read_half(a.0, a.1, a.2, a.3, a.4, a.5, a.6, a.7, a.8).await;
+            while let Some(task) = rx.recv().await {
+                push_read_half(
+                    task.read_half,
+                    task.process_permit,
+                    task.addr,
+                    task.clients,
+                    task.message_header_mark,
+                    task.message_tail_mark,
+                    task.lynn_router,
+                    task.reactor_event_sender,
+                    task.last_communicate_time,
+                )
+                .await;
             }
         });
 
@@ -422,6 +447,7 @@ impl TcpReactor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn start(
         &self,
         clients: ClientsStructType,
@@ -438,6 +464,7 @@ impl TcpReactor {
             Arc<ConnectionLimiter>,
         )>,
         tcp_config: TcpSocketConfig,
+        stream_acceptor: Arc<StreamAcceptor>,
     ) {
         self.event_manager.run(
             clients.clone(),
@@ -448,6 +475,7 @@ impl TcpReactor {
             self.event_manager.get_global_queue(),
             self.core_reactor.tx.clone(),
             server_max_reactor_taskpool_size,
+            stream_acceptor,
         );
 
         // Spawn cleanup task for connection limiter if rate limiting is enabled

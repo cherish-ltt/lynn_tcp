@@ -6,8 +6,7 @@ use std::{
 
 use bytes::BytesMut;
 use tokio::{
-    io::{AsyncReadExt, ReadHalf, split},
-    net::TcpStream,
+    io::AsyncReadExt,
     sync::{RwLock, Semaphore},
     time::interval,
 };
@@ -27,6 +26,7 @@ use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
 use crate::domain::routing::router::LynnRouter;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
+use crate::infrastructure::tcp::stream::{BoxedReadHalf, BoxedWriteHalf, LynnStream, split_transport};
 
 #[inline(always)]
 pub(super) fn spawn_check_heart(
@@ -177,11 +177,11 @@ pub(crate) async fn input_dto_build(
 #[inline(always)]
 pub(crate) async fn add_client(
     clients: ClientsStructType,
-    socket: TcpStream,
+    stream: LynnStream,
     addr: SocketAddr,
     last_communicate_time: Arc<RwLock<SystemTime>>,
-) -> ReadHalf<TcpStream> {
-    let (read_half, write_half) = split(socket);
+) -> BoxedReadHalf {
+    let (read_half, write_half): (BoxedReadHalf, BoxedWriteHalf) = split_transport(stream);
     let lynn_user = LynnUser::new(write_half, last_communicate_time);
     clients.insert(addr, lynn_user);
     read_half
@@ -189,7 +189,7 @@ pub(crate) async fn add_client(
 
 #[inline(always)]
 pub(crate) async fn push_read_half(
-    mut read_half: ReadHalf<TcpStream>,
+    mut read_half: BoxedReadHalf,
     process_permit: Arc<Semaphore>,
     addr: SocketAddr,
     clients: ClientsStructType,

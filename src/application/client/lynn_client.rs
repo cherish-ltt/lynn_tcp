@@ -8,6 +8,7 @@ use crate::application::client::client_common::{spawn_check_heart, spawn_handle}
 use crate::application::client::client_config::{LynnClientConfig, LynnClientConfigBuilder};
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
+use crate::infrastructure::tcp::stream::LynnStream;
 
 /// A client for communicating with a server over TCP.
 ///
@@ -154,7 +155,7 @@ impl<'a> LynnClient<'a> {
                 Ok(stream) => {
                     if let Ok(stream) = stream {
                         let (tx_write, rx_read, join_handle) = spawn_handle(
-                            stream,
+                            LynnStream::Plain(stream),
                             channel_size,
                             message_header_mark,
                             message_tail_mark,

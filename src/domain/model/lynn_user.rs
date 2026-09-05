@@ -4,8 +4,7 @@ use dashmap::DashMap;
 
 use bytes::BytesMut;
 use tokio::{
-    io::{AsyncWriteExt, WriteHalf},
-    net::TcpStream,
+    io::AsyncWriteExt,
     sync::{
         RwLock,
         mpsc::{Sender, channel},
@@ -14,7 +13,7 @@ use tokio::{
 };
 use tracing::error;
 
-use crate::const_config::DEFAULT_SYSTEM_CHANNEL_SIZE;
+use crate::{const_config::DEFAULT_SYSTEM_CHANNEL_SIZE, infrastructure::tcp::stream::BoxedWriteHalf};
 
 pub(crate) enum LynnUserSignal {
     SendResponse(BytesMut),
@@ -38,16 +37,14 @@ impl LynnUser {
     ///
     /// # Parameters
     ///
-    /// * `sender` - The sender channel for sending data to the client.
-    /// * `process_permit` - The process permit for the user.
-    /// * `join_handle` - The join handle for the user's thread.
+    /// * `write_half` - The boxed write half of the connection transport.
     /// * `last_communicate_time` - The last time the user communicated.
     ///
     /// # Returns
     ///
     /// A new instance of LynnUser.
     pub(crate) fn new(
-        write_half: WriteHalf<TcpStream>,
+        write_half: BoxedWriteHalf,
         last_communicate_time: Arc<RwLock<SystemTime>>,
     ) -> Self {
         let (tx, mut rx) = channel(DEFAULT_SYSTEM_CHANNEL_SIZE);

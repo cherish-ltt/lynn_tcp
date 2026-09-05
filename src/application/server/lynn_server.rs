@@ -17,6 +17,7 @@ use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType, LynnUser
 use crate::domain::routing::router::LynnRouter;
 use crate::infrastructure::connection::connection_limiter::ConnectionLimiter;
 use crate::infrastructure::tcp::reactor::{ReactorEvent, TcpReactor};
+use crate::infrastructure::tcp::stream::StreamAcceptor;
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
 /// Task body sent through the channel: (handler, context, clients).
@@ -298,6 +299,7 @@ impl<'a> LynnServer<'a> {
                     )
                 }),
                 tcp_config,
+                Arc::new(StreamAcceptor::Plain),
             )
             .await;
         Ok(())

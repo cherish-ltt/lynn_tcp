@@ -48,3 +48,13 @@ pub(crate) const DEFAULT_WRITE_TIMEOUT_SECS: u64 = 0;
 pub(crate) const DEFAULT_RECV_BUFFER_SIZE: usize = 8192;
 /// The default send buffer size in bytes.
 pub(crate) const DEFAULT_SEND_BUFFER_SIZE: usize = 8192;
+/// The default maximum number of connection attempts per connection session
+/// (initial connect and each automatic reconnect), used by the client.
+pub(crate) const DEFAULT_RECONNECT_MAX_ATTEMPTS: usize = 3;
+/// The default delay in seconds between two client connection attempts.
+pub(crate) const DEFAULT_RECONNECT_INTERVAL_SECS: u64 = 1;
+/// The default connect (and TLS handshake) timeout for the client in seconds.
+pub(crate) const DEFAULT_CONNECT_TIMEOUT_SECS: u64 = 3;
+/// The maximum time in seconds a server-side TLS handshake may take before
+/// the connection is dropped.
+pub(crate) const TLS_HANDSHAKE_TIMEOUT_SECS: u64 = 10;

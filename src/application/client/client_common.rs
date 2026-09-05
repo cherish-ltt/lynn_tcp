@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
     sync::mpsc,
     task::JoinHandle,
     time::interval,
@@ -13,10 +12,11 @@ use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
+use crate::infrastructure::tcp::stream::LynnStream;
 
 #[inline(always)]
 pub(super) fn spawn_handle(
-    stream: TcpStream,
+    stream: LynnStream,
     channel_size: usize,
     message_header_mark: u16,
     message_tail_mark: u16,
@@ -29,7 +29,7 @@ pub(super) fn spawn_handle(
     let (tx_write, mut rx_write) = mpsc::channel::<HandlerResult>(channel_size);
     let join_handle = tokio::spawn(async move {
         let (mut read_half, mut write_half) = tokio::io::split(stream);
-        let write_handle: JoinHandle<tokio::io::WriteHalf<TcpStream>> = tokio::spawn(async move {
+        let write_handle: JoinHandle<tokio::io::WriteHalf<LynnStream>> = tokio::spawn(async move {
             loop {
                 if !rx_write.is_closed() {
                     if let Some(mut handler_result) = rx_write.recv().await {
