@@ -23,6 +23,9 @@ pub struct LynnClientConfig<'a> {
     message_header_mark: &'a u16,
     /// The mark for the message tail.
     message_tail_mark: &'a u16,
+    /// Optional TLS 1.3 configuration. `None` keeps TLS disabled (default).
+    #[cfg(feature = "tls")]
+    tls: Option<crate::infrastructure::tls::tls_config::TlsClientConfig>,
 }
 
 impl<'a> LynnClientConfig<'a> {
@@ -38,6 +41,8 @@ impl<'a> LynnClientConfig<'a> {
             client_check_heart_interval: &DEFAULT_CHECK_HEART_INTERVAL,
             message_header_mark: &DEFAULT_MESSAGE_HEADER_MARK,
             message_tail_mark: &DEFAULT_MESSAGE_TAIL_MARK,
+            #[cfg(feature = "tls")]
+            tls: None,
         }
     }
 
@@ -84,6 +89,18 @@ impl<'a> LynnClientConfig<'a> {
     /// The mark for the message tail.
     pub(crate) fn get_message_tail_mark(&self) -> &u16 {
         self.message_tail_mark
+    }
+
+    /// Returns the optional TLS configuration (feature `tls`).
+    ///
+    /// # Returns
+    ///
+    /// `Some(&TlsClientConfig)` when TLS is enabled, `None` otherwise.
+    #[cfg(feature = "tls")]
+    pub(crate) fn get_tls(
+        &self,
+    ) -> Option<&crate::infrastructure::tls::tls_config::TlsClientConfig> {
+        self.tls.as_ref()
     }
 }
 
@@ -210,6 +227,26 @@ impl<'a> LynnClientConfigBuilder<'a> {
     /// The `LynnClientConfigBuilder` instance.
     pub fn with_message_tail_mark(mut self, msg_tail_mark: &'a u16) -> Self {
         self.lynn_config.message_tail_mark = msg_tail_mark;
+        self
+    }
+
+    /// Enables TLS 1.3 with the given client-side TLS configuration
+    /// (requires the `tls` feature). TLS stays disabled unless this is called.
+    ///
+    /// # Parameters
+    ///
+    /// - `tls`: The client TLS configuration (CA trust anchor, optional SNI
+    ///   name and optional client certificate for mutual TLS).
+    ///
+    /// # Returns
+    ///
+    /// The `LynnClientConfigBuilder` instance.
+    #[cfg(feature = "tls")]
+    pub fn with_tls(
+        mut self,
+        tls: crate::infrastructure::tls::tls_config::TlsClientConfig,
+    ) -> Self {
+        self.lynn_config.tls = Some(tls);
         self
     }
 }

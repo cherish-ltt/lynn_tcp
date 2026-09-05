@@ -52,6 +52,10 @@ pub enum LynnError {
     #[error("Server error: {0}")]
     Server(String),
 
+    /// TLS handshake/configuration errors (feature `tls`)
+    #[error("TLS error: {0}")]
+    Tls(String),
+
     /// Generic errors
     #[error("Error: {0}")]
     Generic(String),
@@ -109,6 +113,11 @@ impl LynnError {
     /// Create a server error
     pub fn server<S: Into<String>>(msg: S) -> Self {
         Self::Server(msg.into())
+    }
+
+    /// Create a TLS error
+    pub fn tls<S: Into<String>>(msg: S) -> Self {
+        Self::Tls(msg.into())
     }
 }
 

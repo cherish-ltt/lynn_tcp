@@ -50,6 +50,9 @@ pub struct LynnServerConfig<'a> {
     recv_buffer_size: &'a usize,
     // The send buffer size in bytes.
     send_buffer_size: &'a usize,
+    /// Optional TLS 1.3 configuration. `None` keeps TLS disabled (default).
+    #[cfg(feature = "tls")]
+    tls: Option<crate::infrastructure::tls::tls_config::TlsServerConfig>,
 }
 
 /// Implementation for LynnServerConfig, providing methods to create and get the configuration.
@@ -80,6 +83,8 @@ impl<'a> LynnServerConfig<'a> {
             write_timeout_secs: &DEFAULT_WRITE_TIMEOUT_SECS,
             recv_buffer_size: &DEFAULT_RECV_BUFFER_SIZE,
             send_buffer_size: &DEFAULT_SEND_BUFFER_SIZE,
+            #[cfg(feature = "tls")]
+            tls: None,
         }
     }
 
@@ -229,6 +234,18 @@ impl<'a> LynnServerConfig<'a> {
     /// The send buffer size.
     pub(crate) fn get_send_buffer_size(&self) -> &usize {
         self.send_buffer_size
+    }
+
+    /// Gets the optional TLS configuration (feature `tls`).
+    ///
+    /// # Returns
+    ///
+    /// `Some(&TlsServerConfig)` when TLS is enabled, `None` otherwise.
+    #[cfg(feature = "tls")]
+    pub(crate) fn get_tls(
+        &self,
+    ) -> Option<&crate::infrastructure::tls::tls_config::TlsServerConfig> {
+        self.tls.as_ref()
     }
 }
 
@@ -558,6 +575,49 @@ impl<'a> LynnServerConfigBuilder<'a> {
     /// The updated `LynnServerConfigBuilder` instance.
     pub fn with_send_buffer_size(mut self, send_buffer_size: &'a usize) -> Self {
         self.lynn_config.send_buffer_size = send_buffer_size;
+        self
+    }
+
+    /// Enables TLS 1.3 with the given server-side TLS configuration
+    /// (requires the `tls` feature). TLS stays disabled unless this (or
+    /// `with_tls_cert_paths`) is called.
+    ///
+    /// # Parameters
+    ///
+    /// * `tls` - The server TLS configuration (certificate chain, private
+    ///   key and optional client CA for mutual TLS).
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    #[cfg(feature = "tls")]
+    pub fn with_tls(
+        mut self,
+        tls: crate::infrastructure::tls::tls_config::TlsServerConfig,
+    ) -> Self {
+        self.lynn_config.tls = Some(tls);
+        self
+    }
+
+    /// Enables TLS 1.3 from PEM file paths (requires the `tls` feature).
+    /// Convenience shorthand for `with_tls(TlsServerConfig::new(cert, key))`.
+    ///
+    /// # Parameters
+    ///
+    /// * `cert_path` - PEM encoded certificate chain file.
+    /// * `key_path` - PEM encoded private key file.
+    ///
+    /// # Returns
+    ///
+    /// The updated `LynnServerConfigBuilder` instance.
+    #[cfg(feature = "tls")]
+    pub fn with_tls_cert_paths(
+        mut self,
+        cert_path: impl Into<String>,
+        key_path: impl Into<String>,
+    ) -> Self {
+        self.lynn_config.tls =
+            Some(crate::infrastructure::tls::tls_config::TlsServerConfig::new(cert_path, key_path));
         self
     }
 }

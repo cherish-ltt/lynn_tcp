@@ -213,6 +213,23 @@ pub mod lynn_seaorm {
     pub type DbConn = super::domain::state::app_state::AppState<sea_orm::DatabaseConnection>;
 }
 
+/// Optional TLS 1.3 transport security (feature `tls`, disabled by default).
+///
+/// Servers enable TLS through `LynnServerConfigBuilder::with_tls(...)`,
+/// clients through `LynnClientConfigBuilder::with_tls(...)`. Both sides are
+/// restricted to TLS 1.3 (rustls + ring).
+#[cfg(feature = "tls")]
+pub mod lynn_tls {
+    /// Client-side TLS configuration.
+    pub use super::infrastructure::tls::tls_config::TlsClientConfig;
+    /// Builder for [`TlsClientConfig`].
+    pub use super::infrastructure::tls::tls_config::TlsClientConfigBuilder;
+    /// Server-side TLS configuration (certificate chain, private key, optional client CA).
+    pub use super::infrastructure::tls::tls_config::TlsServerConfig;
+    /// Re-export of `rustls` for advanced TLS customization.
+    pub use rustls;
+}
+
 /// The client module, containing the client configuration and client implementation.
 #[cfg(feature = "client")]
 pub mod lynn_client {

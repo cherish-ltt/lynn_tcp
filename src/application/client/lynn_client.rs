@@ -1,14 +1,15 @@
 use std::{net::ToSocketAddrs, time::Duration};
 
-use tokio::{net::TcpStream, sync::mpsc, task::JoinHandle, time};
+use tokio::{sync::mpsc, task::JoinHandle, time};
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
-use crate::application::client::client_common::{spawn_check_heart, spawn_handle};
+use crate::application::client::client_common::{
+    ConnectParams, connect_stream, spawn_check_heart, spawn_handle,
+};
 use crate::application::client::client_config::{LynnClientConfig, LynnClientConfigBuilder};
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
-use crate::infrastructure::tcp::stream::LynnStream;
 
 /// A client for communicating with a server over TCP.
 ///
@@ -150,12 +151,30 @@ impl<'a> LynnClient<'a> {
         let channel_size = *self.lynn_client_config.get_client_single_channel_size();
         let message_header_mark = *self.lynn_client_config.get_message_header_mark();
         let message_tail_mark = *self.lynn_client_config.get_message_tail_mark();
+
+        // Build the TLS endpoint once (feature `tls`): a bad configuration
+        // (missing CA file, invalid name) fails fast before any connect.
+        #[cfg(feature = "tls")]
+        let client_tls = match self.lynn_client_config.get_tls() {
+            Some(tls_config) => Some(crate::infrastructure::tls::tls_provider::build_client_tls(
+                tls_config, &ip_v4,
+            )?),
+            None => None,
+        };
+        #[cfg(not(feature = "tls"))]
+        let client_tls: Option<()> = None;
+
         for _ in 0..retry_count {
-            match time::timeout(timeout, TcpStream::connect(ip_v4.clone())).await {
+            let params = crate::application::client::client_common::ConnectParams {
+                addr: &ip_v4,
+                #[cfg(feature = "tls")]
+                tls: client_tls.as_ref(),
+            };
+            match time::timeout(timeout, connect_stream(params)).await {
                 Ok(stream) => {
                     if let Ok(stream) = stream {
                         let (tx_write, rx_read, join_handle) = spawn_handle(
-                            LynnStream::Plain(stream),
+                            stream,
                             channel_size,
                             message_header_mark,
                             message_tail_mark,
@@ -170,10 +189,7 @@ impl<'a> LynnClient<'a> {
                         );
                         return Ok(());
                     } else if let Err(e) = stream {
-                        warn!(
-                            "connect to server failed - TcpStream e: {:?}",
-                            e.to_string()
-                        );
+                        warn!("connect to server failed - stream e: {:?}", e.to_string());
                         continue;
                     }
                 },

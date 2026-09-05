@@ -311,8 +311,9 @@ impl<'a> LynnServer<'a> {
         // Binds a TCP listener to the local address.
         let listener = TcpListener::bind(self.lynn_config.get_server_addr()).await?;
         info!(
-            "Server - [Main-LynnServer] start success!!! with [server_addr:{}]",
-            self.lynn_config.get_server_addr()
+            "Server - [Main-LynnServer] start success!!! with [server_addr:{}]{}",
+            self.lynn_config.get_server_addr(),
+            tls_state_note(&self.lynn_config)
         );
 
         self.check_heart().await;
@@ -338,6 +339,18 @@ impl<'a> LynnServer<'a> {
             send_buffer_size: *self.lynn_config.get_send_buffer_size(),
         };
 
+        // Build the transport acceptor: plain TCP, or TLS 1.3 when configured
+        // (requires the `tls` feature and a valid certificate/key pair).
+        #[cfg(feature = "tls")]
+        let stream_acceptor = match self.lynn_config.get_tls() {
+            Some(tls_config) => Arc::new(StreamAcceptor::Tls(Arc::new(
+                crate::infrastructure::tls::tls_provider::build_server_acceptor(tls_config)?,
+            ))),
+            None => Arc::new(StreamAcceptor::Plain),
+        };
+        #[cfg(not(feature = "tls"))]
+        let stream_acceptor = Arc::new(StreamAcceptor::Plain);
+
         self.reactor
             .start(
                 self.clients.0.clone(),
@@ -356,7 +369,7 @@ impl<'a> LynnServer<'a> {
                     )
                 }),
                 tcp_config,
-                Arc::new(StreamAcceptor::Plain),
+                stream_acceptor,
             )
             .await;
         Ok(())
@@ -383,6 +396,21 @@ impl<'a> LynnServer<'a> {
             },
         }
     }
+}
+
+/// Human-readable note about the TLS state for the startup log line.
+#[cfg(feature = "tls")]
+fn tls_state_note(config: &LynnServerConfig<'_>) -> String {
+    if config.get_tls().is_some() {
+        " [tls:TLS1.3 enabled]".to_string()
+    } else {
+        " [tls:disabled]".to_string()
+    }
+}
+
+#[cfg(not(feature = "tls"))]
+fn tls_state_note(_config: &LynnServerConfig<'_>) -> String {
+    String::new()
 }
 
 #[cfg(test)]

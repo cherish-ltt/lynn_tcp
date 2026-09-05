@@ -115,7 +115,7 @@ impl StreamAcceptor {
                     acceptor.accept(stream),
                 );
                 match handshake.await {
-                    Ok(Ok(tls_stream)) => Some(LynnStream::Tls(tls_stream)),
+                    Ok(Ok(tls_stream)) => Some(LynnStream::Tls(tls_stream.into())),
                     Ok(Err(e)) => {
                         warn!(
                             "TLS handshake with {} failed: {}, closing connection",
