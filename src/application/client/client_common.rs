@@ -1,84 +1,139 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::mpsc,
+    net::TcpStream,
+    sync::{
+        Mutex,
+        mpsc::{self, Sender},
+        watch,
+    },
     task::JoinHandle,
     time::interval,
 };
 use tracing::{error, info, warn};
 
-use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::stream::LynnStream;
+use crate::{LynnError, const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE};
 
+/// The shared write-side receiver, owned by the connection supervisor and
+/// borrowed by each connection's write pump, so the user-facing
+/// `mpsc::Sender<HandlerResult>` stays valid across reconnections.
+pub(super) type SharedWriteReceiver = Arc<Mutex<mpsc::Receiver<HandlerResult>>>;
+
+/// Spawns the read and write pumps for one connection.
+///
+/// Returns the read pump's handle: it resolves as soon as the connection is
+/// considered dead (read EOF/error or the user-side receiver was dropped).
+/// The write pump exits independently once `close_rx` fires or the write
+/// channel closes, and shuts its half down on the way out.
 #[inline(always)]
-pub(super) fn spawn_handle(
+pub(super) fn spawn_connection_pumps(
     stream: LynnStream,
-    channel_size: usize,
     message_header_mark: u16,
     message_tail_mark: u16,
-) -> (
-    mpsc::Sender<HandlerResult>,
-    mpsc::Receiver<InputBufVO>,
-    JoinHandle<()>,
+    tx_read: Sender<InputBufVO>,
+    rx_write: SharedWriteReceiver,
+    close_rx: watch::Receiver<bool>,
+) -> JoinHandle<()> {
+    let (read_half, write_half) = tokio::io::split(stream);
+    let write_handle = tokio::spawn(write_pump(
+        write_half,
+        message_header_mark,
+        message_tail_mark,
+        rx_write,
+        close_rx,
+    ));
+    let read_handle = tokio::spawn(read_pump(
+        read_half,
+        message_header_mark,
+        message_tail_mark,
+        tx_read,
+    ));
+    let _ = write_handle; // exits via close_rx / channel closure
+    read_handle
+}
+
+/// Reads frames from the connection and forwards them to the user channel.
+async fn read_pump(
+    mut read_half: tokio::io::ReadHalf<LynnStream>,
+    message_header_mark: u16,
+    message_tail_mark: u16,
+    tx_read: Sender<InputBufVO>,
 ) {
-    let (tx_read, rx_read) = mpsc::channel::<InputBufVO>(channel_size);
-    let (tx_write, mut rx_write) = mpsc::channel::<HandlerResult>(channel_size);
-    let join_handle = tokio::spawn(async move {
-        let (mut read_half, mut write_half) = tokio::io::split(stream);
-        let write_handle: JoinHandle<tokio::io::WriteHalf<LynnStream>> = tokio::spawn(async move {
-            loop {
-                if !rx_write.is_closed() {
-                    if let Some(mut handler_result) = rx_write.recv().await {
-                        if !handler_result.is_with_mark() {
-                            handler_result.set_marks(message_header_mark, message_tail_mark);
-                        }
-                        if let Some(response) = handler_result.get_response_data() {
-                            if let Err(e) = write_half.write_all(&response).await {
-                                error!("write to server failed - e: {:?}", e);
-                            }
-                        } else {
-                            warn!("nothing to send");
-                        }
+    let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
+    let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
+    'read_loop: loop {
+        match read_half.read(&mut buf).await {
+            Ok(0) => {
+                break;
+            },
+            Ok(n) => {
+                big_buf.extend_from_slice(&buf[..n]);
+                while big_buf.is_complete() {
+                    let input_buf_vo = InputBufVO::new_without_socket_addr(big_buf.get_data());
+                    if tx_read.send(input_buf_vo).await.is_err() {
+                        // Receiver dropped: stop feeding the connection.
+                        break 'read_loop;
                     }
-                } else {
+                }
+            },
+            Err(e) => {
+                // A persistent read error (e.g. a torn-down TLS session
+                // errors on every poll) must terminate the loop, otherwise
+                // this task spins forever.
+                error!("read from server failed : {}", e);
+                break;
+            },
+        }
+    }
+}
+
+/// Writes queued frames to the connection until it is closed or told to stop.
+async fn write_pump(
+    mut write_half: tokio::io::WriteHalf<LynnStream>,
+    message_header_mark: u16,
+    message_tail_mark: u16,
+    rx_write: SharedWriteReceiver,
+    mut close_rx: watch::Receiver<bool>,
+) {
+    loop {
+        let received = tokio::select! {
+            changed = close_rx.changed() => {
+                if changed.is_err() || *close_rx.borrow() {
+                    let _ = write_half.shutdown().await;
                     break;
                 }
-            }
-            write_half
-        });
-        let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
-        let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
-        loop {
-            match read_half.read(&mut buf).await {
-                Ok(0) => {
-                    break;
-                },
-                Ok(n) => {
-                    big_buf.extend_from_slice(&buf[..n]);
-                    while big_buf.is_complete() {
-                        let input_buf_vo = InputBufVO::new_without_socket_addr(big_buf.get_data());
-                        if let Err(e) = tx_read.send(input_buf_vo).await {
-                            error!("send to channel failed - e: {:?}", e);
-                        }
+                continue;
+            },
+            received = async { rx_write.lock().await.recv().await } => received,
+        };
+        match received {
+            Some(mut handler_result) => {
+                if !handler_result.is_with_mark() {
+                    handler_result.set_marks(message_header_mark, message_tail_mark);
+                }
+                if let Some(response) = handler_result.get_response_data() {
+                    if let Err(e) = write_half.write_all(&response).await {
+                        // Connection is gone: stop writing, otherwise a
+                        // persistent transport error would spin this task.
+                        error!("write to server failed - e: {:?}", e);
+                        break;
                     }
-                },
-                Err(e) => {
-                    error!("read from server failed : {}", e);
-                },
-            }
+                } else {
+                    warn!("nothing to send");
+                }
+            },
+            None => {
+                // All user-side senders dropped: client is gone.
+                let _ = write_half.shutdown().await;
+                break;
+            },
         }
-        if let Ok(wirte_half) = write_handle.await
-            && read_half.is_pair_of(&wirte_half)
-        {
-            let mut socket = read_half.unsplit(wirte_half);
-            let _ = socket.shutdown();
-        }
-    });
-    (tx_write, rx_read, join_handle)
+    }
 }
 
 #[inline(always)]

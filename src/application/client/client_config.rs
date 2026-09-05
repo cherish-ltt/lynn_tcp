@@ -1,8 +1,9 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 
 use crate::const_config::{
-    DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_MESSAGE_HEADER_MARK,
-    DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_SYSTEM_CHANNEL_SIZE,
+    DEFAULT_ADDR, DEFAULT_CHECK_HEART_INTERVAL, DEFAULT_CONNECT_TIMEOUT_SECS,
+    DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK, DEFAULT_RECONNECT_INTERVAL_SECS,
+    DEFAULT_RECONNECT_MAX_ATTEMPTS, DEFAULT_SYSTEM_CHANNEL_SIZE,
 };
 use crate::{LynnError, Result};
 
@@ -23,6 +24,13 @@ pub struct LynnClientConfig<'a> {
     message_header_mark: &'a u16,
     /// The mark for the message tail.
     message_tail_mark: &'a u16,
+    /// Connect attempts per connection session (initial connect and each
+    /// automatic reconnect). Default: 3.
+    reconnect_max_attempts: &'a usize,
+    /// Delay in seconds between two connect attempts. Default: 1.
+    reconnect_interval_secs: &'a u64,
+    /// Per-attempt connect (and TLS handshake) timeout in seconds. Default: 3.
+    connect_timeout_secs: &'a u64,
     /// Optional TLS 1.3 configuration. `None` keeps TLS disabled (default).
     #[cfg(feature = "tls")]
     tls: Option<crate::infrastructure::tls::tls_config::TlsClientConfig>,
@@ -41,6 +49,9 @@ impl<'a> LynnClientConfig<'a> {
             client_check_heart_interval: &DEFAULT_CHECK_HEART_INTERVAL,
             message_header_mark: &DEFAULT_MESSAGE_HEADER_MARK,
             message_tail_mark: &DEFAULT_MESSAGE_TAIL_MARK,
+            reconnect_max_attempts: &DEFAULT_RECONNECT_MAX_ATTEMPTS,
+            reconnect_interval_secs: &DEFAULT_RECONNECT_INTERVAL_SECS,
+            connect_timeout_secs: &DEFAULT_CONNECT_TIMEOUT_SECS,
             #[cfg(feature = "tls")]
             tls: None,
         }
@@ -89,6 +100,21 @@ impl<'a> LynnClientConfig<'a> {
     /// The mark for the message tail.
     pub(crate) fn get_message_tail_mark(&self) -> &u16 {
         self.message_tail_mark
+    }
+
+    /// Returns the connect attempts per connection session.
+    pub(crate) fn get_reconnect_max_attempts(&self) -> &usize {
+        self.reconnect_max_attempts
+    }
+
+    /// Returns the delay in seconds between two connect attempts.
+    pub(crate) fn get_reconnect_interval_secs(&self) -> &u64 {
+        self.reconnect_interval_secs
+    }
+
+    /// Returns the per-attempt connect timeout in seconds.
+    pub(crate) fn get_connect_timeout_secs(&self) -> &u64 {
+        self.connect_timeout_secs
     }
 
     /// Returns the optional TLS configuration (feature `tls`).
@@ -249,6 +275,50 @@ impl<'a> LynnClientConfigBuilder<'a> {
         self.lynn_config.tls = Some(tls);
         self
     }
+
+    /// Sets how many connect attempts are made per connection session: the
+    /// initial connect and every automatic reconnect after a disconnect.
+    /// Minimum effective value is 1.
+    ///
+    /// # Parameters
+    ///
+    /// - `reconnect_max_attempts`: Attempts per session. Default: 3.
+    ///
+    /// # Returns
+    ///
+    /// The `LynnClientConfigBuilder` instance.
+    pub fn with_reconnect_max_attempts(mut self, reconnect_max_attempts: &'a usize) -> Self {
+        self.lynn_config.reconnect_max_attempts = reconnect_max_attempts;
+        self
+    }
+
+    /// Sets the delay in seconds between two connect attempts.
+    ///
+    /// # Parameters
+    ///
+    /// - `reconnect_interval_secs`: Delay in seconds. Default: 1.
+    ///
+    /// # Returns
+    ///
+    /// The `LynnClientConfigBuilder` instance.
+    pub fn with_reconnect_interval_secs(mut self, reconnect_interval_secs: &'a u64) -> Self {
+        self.lynn_config.reconnect_interval_secs = reconnect_interval_secs;
+        self
+    }
+
+    /// Sets the per-attempt connect (and TLS handshake) timeout in seconds.
+    ///
+    /// # Parameters
+    ///
+    /// - `connect_timeout_secs`: Timeout in seconds. Default: 3.
+    ///
+    /// # Returns
+    ///
+    /// The `LynnClientConfigBuilder` instance.
+    pub fn with_connect_timeout_secs(mut self, connect_timeout_secs: &'a u64) -> Self {
+        self.lynn_config.connect_timeout_secs = connect_timeout_secs;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -259,6 +329,9 @@ mod tests {
     static HEART: u64 = 3;
     static HEADER: u16 = 0x1122;
     static TAIL: u16 = 0x3344;
+    static ATTEMPTS: usize = 5;
+    static INTERVAL: u64 = 7;
+    static CONNECT_TIMEOUT: u64 = 9;
 
     #[test]
     fn builder_sets_every_field() {
@@ -269,6 +342,9 @@ mod tests {
             .with_server_check_heart_interval(&HEART)
             .with_message_header_mark(&HEADER)
             .with_message_tail_mark(&TAIL)
+            .with_reconnect_max_attempts(&ATTEMPTS)
+            .with_reconnect_interval_secs(&INTERVAL)
+            .with_connect_timeout_secs(&CONNECT_TIMEOUT)
             .build();
 
         assert_eq!(cfg.get_server_ipv4(), "127.0.0.1:9999");
@@ -276,6 +352,17 @@ mod tests {
         assert_eq!(cfg.get_server_check_heart_interval(), &HEART);
         assert_eq!(cfg.get_message_header_mark(), &HEADER);
         assert_eq!(cfg.get_message_tail_mark(), &TAIL);
+        assert_eq!(cfg.get_reconnect_max_attempts(), &ATTEMPTS);
+        assert_eq!(cfg.get_reconnect_interval_secs(), &INTERVAL);
+        assert_eq!(cfg.get_connect_timeout_secs(), &CONNECT_TIMEOUT);
+    }
+
+    #[test]
+    fn defaults_enable_three_reconnect_attempts() {
+        let cfg = LynnClientConfig::default();
+        assert_eq!(*cfg.get_reconnect_max_attempts(), 3);
+        assert_eq!(*cfg.get_reconnect_interval_secs(), 1);
+        assert_eq!(*cfg.get_connect_timeout_secs(), 3);
     }
 
     #[test]
