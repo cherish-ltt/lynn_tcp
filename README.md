@@ -364,9 +364,9 @@ if !client.is_connected() {
 - ✅ Prometheus + Grafana monitoring (v1.2.5)
 - ✅ DDD + Onion Architecture refactoring (v2.0.0)
 - ✅ 7 runnable examples covering all scenarios
-- ✅ TLS 1.3 transport encryption for server & client (v2.0.0-rc.3)
-- ✅ Client automatic reconnection with configurable attempts (v2.0.0-rc.3)
-- ✅ Global state injection (`AppState<T>`) + built-in SeaORM support (v2.0.0-rc.3)
+- ✅ TLS 1.3 transport encryption for server & client (v2.0.0)
+- ✅ Client automatic reconnection with configurable attempts (v2.0.0)
+- ✅ Global state injection (`AppState<T>`) + built-in SeaORM support (v2.0.0)
 
 #### 🔜 Planned
 

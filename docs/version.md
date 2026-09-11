@@ -1,5 +1,46 @@
 # Version Note
 
+### v2.0.0
+
+#### v2.0.0
+
+Final release consolidating all `v2.0.0-rc.1` ~ `v2.0.0-rc.3` content: the DDD + Onion architecture refactor, the engineering/quality hardening, and the production capabilities (TLS 1.3, client reconnection, global state injection). Fully backward compatible with default usage.
+
+1.refactor — architecture
+
+- Reorganized the crate into domain / application / infrastructure (DDD + Onion) layers while keeping `lib.rs` (the public API) unchanged. `LynnServer`, `ServerConfig`/Builder, `LynnClient`, `ClientConfig`/Builder, `HandlerResult`, `InputBufVO`, `LynnRouter`, the handler system, `TcpReactor`, `BigBufReader`, `ConnectionLimiter`, validation, metrics and macros all moved into their new layers; internal module paths changed, public module paths (`lynn_server::*`, `lynn_client::*`, `lynn_tcp_dependents::*`) did not.
+- Toolchain upgraded: edition 2021 → 2024, Rust 1.88 → 1.98.1, Tokio 1.47.1 → 1.53.1, all dependencies updated and pinned with `=`.
+- 7 runnable examples added (basic_server, custom_config_server, custom_protocol, echo_server_client, multi_route_service, custom_protocol_full, metrics_example).
+
+2.fix
+
+- **Custom message marks on response frames** (rc.2): `check_handler_result` encoded the response before `set_marks`, so servers configured with `with_message_header_mark` / `with_message_tail_mark` always replied with the default marks (9177/7719) and custom-mark clients could not parse responses. Marks are now applied before encoding.
+- **Client read/write pumps spinning forever on transport errors** (rc.3): a torn-down TLS session returns the same error on every poll, which previously caused an infinite logging loop that wedged a tokio worker and blocked runtime shutdown. Read/write loops now terminate on persistent errors.
+
+3.feat — production capabilities (all optional, disabled by default)
+
+- **TLS 1.3 transport encryption** (feature `tls`): rustls + ring, TLS 1.3 only. Server opts in via `LynnServerConfigBuilder::with_tls(TlsServerConfig)` / `with_tls_cert_paths(cert, key)` (startup fails fast on bad certificates; handshakes run in reactor workers with a 10s cap); client opts in via `LynnClientConfigBuilder::with_tls(TlsClientConfig)` with a CA trust anchor (verification enforced by default), optional SNI override, mutual-TLS client certificates, and an explicit `danger_accept_invalid_certs` escape hatch for development. New `LynnError::Tls` variant and `lynn_tcp::lynn_tls` public module (re-exports `rustls`).
+- **Client automatic reconnection**: a connection supervisor retries the initial connect and every disconnect — 3 attempts, 1s apart by default, configurable via `with_reconnect_max_attempts` / `with_reconnect_interval_secs` / `with_connect_timeout_secs`. User-facing channels survive reconnections (stale queued frames are discarded), and `LynnClient::is_connected()` exposes the live state via a `watch` channel.
+- **Global state injection** (axum-style `AppState<T>`): `LynnServer::with_state(T)` / `with_state_arc(Arc<T>)` register per-`TypeId` shared state; handlers declare `AppState<T>` parameters (deref to `&T`, several state types can coexist, resolution happens per request so registration order does not matter). Optional feature `seaorm` adds `LynnServer::with_db(DatabaseConnection)` and the `lynn_seaorm::DbConn` alias (sea-orm 2.0.2).
+
+4.refactor — robustness
+
+- Connection pipeline de-coupled from `TcpStream`: `LynnStream` (plain/TLS enum) plus boxed read/write halves (`LynnUser` no longer depends on the concrete transport); the reactor's 9-element event tuple became a `NewSocketTask` struct; handler execution moved into a nested task so a panicking handler (e.g. an unregistered `AppState`) cannot take down reactor workers.
+
+5.bench
+
+- New standardized benchmark harness (`cargo bench --bench benchmark`): two traffic models (ping-pong with RTT percentiles, pipelined send/receive), per-cell fresh echo server **as an independent process** (`bench_echo_server` binary), parametric CLI, Markdown + JSON reporting. Reference run on Apple M1 Pro: Model-1 peak **144,873 resp/s** @1024 clients, Model-2 peak **131,482 resp/s** @256 clients. Raw results archived under `docs/benchmark/`.
+
+6.test / build / ci / docs
+
+- 15 end-to-end integration tests over real TCP plus new unit tests (frame layout, `InputBufVO` parsing, `LynnRouter`, `BigBufReader` framing, config builders) and feature suites (`state_injection.rs`, `tls_integration.rs`, `client_reconnect.rs`).
+- Added `AGENTS.md` as the project development constitution; `rust-ci.yml` updated (path filters, concurrency group, pinned toolchain 1.98.1, `clippy --all-targets -- -D warnings`, `--all-features` check/test); added `.rustfmt.toml` and `.clippy.toml`; `release.yml` publishes GitHub Releases from `docs/update_logs/`.
+- New `docs/` layout (`update_logs/`, `version.md`, `FlowChart.png`, `FlowChart-v2.png`, `benchmark/`, `monitoring/`); README.md / README_ZH.md kept in sync; dual license `MIT OR Apache-2.0` with `LICENSE-APACHE`.
+
+7.quality
+
+- Test count 16 → 109+; line coverage 19.65% → **92.16%** (`cargo llvm-cov`); clippy clean for both default and `--all-features`.
+
 ### v2.0.0-rc.3
 
 #### v2.0.0-rc.3
