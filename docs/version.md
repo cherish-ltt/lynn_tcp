@@ -1,5 +1,28 @@
 # Version Note
 
+### v2.1.0
+
+#### v2.1.0
+
+Engineering hardening release focused on static scanning, safer protocol parsing, clearer internal type boundaries, and dependency refreshes. The public TCP server/client APIs remain compatible with `v2.0.0` default usage.
+
+1.build — quality gates
+
+- Added pre-commit checks for whitespace, conflict markers, oversized files, TOML/YAML/JSON syntax, private keys, secret leakage, spelling, AST rules, and local Rust formatting/check/clippy/tests.
+- Kept the commit-stage test command to integration targets (`cargo test --tests --all-features`) so long-running benchmarks do not block ordinary commits.
+- Added reasoned Clippy suppressions and a `.typos.toml` exemption for the `wrk` tool name.
+
+2.refactor — protocol and internals
+
+- Rebuilt protocol length/header parsing around fixed-size slices, added short-message boundary coverage, and removed per-byte array construction.
+- Converted internal state/routing/function-system containers to tuple newtypes or private representations while preserving behavior.
+- Propagated benchmark echo-server setup errors explicitly instead of panicking in fallbacks.
+
+3.build — dependencies and release
+
+- Updated the crate to `2.1.0`; pinned `crossbeam-deque = 0.8.8`, `rustls = 0.23.45`, and `sea-orm = 2.0.3`.
+- Fixed spelling in configuration APIs, logs, README tables, and version history.
+
 ### v2.0.0
 
 #### v2.0.0
