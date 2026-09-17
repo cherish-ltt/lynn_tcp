@@ -50,7 +50,7 @@ const DRAIN: Duration = Duration::from_millis(500);
 /// Connection attempts per client (benchmarks must fail fast, not reconnect).
 const CONNECT_ATTEMPTS: usize = 1;
 
-// ── CLI ─────────────────────────────────────────────────────────────────
+// CLI
 
 struct Args {
     models: Vec<u8>,
@@ -149,7 +149,7 @@ fn parse_secs(value: &Option<String>, flag: &str) -> Result<Duration, String> {
     Ok(Duration::from_secs(secs))
 }
 
-// ── harness plumbing ────────────────────────────────────────────────────
+// harness plumbing
 
 /// One completed benchmark cell.
 struct CellResult {
@@ -231,31 +231,35 @@ async fn wait_server(addr: SocketAddr) {
 
 /// Spawns the echo server (`bench_echo_server` binary) as an independent
 /// process and waits for its `READY <port>` announcement.
-fn spawn_echo_server(max_connections: usize) -> BenchServer {
+fn spawn_echo_server(max_connections: usize) -> Result<BenchServer, String> {
     let _ = max_connections; // the server binary owns its capacity settings
     let exe = env!("CARGO_BIN_EXE_bench_echo_server");
     let mut child = std::process::Command::new(exe)
         .stdout(std::process::Stdio::piped())
         .spawn()
-        .expect("spawn bench_echo_server");
-    let stdout = child.stdout.take().expect("server stdout");
+        .map_err(|error| format!("spawn bench_echo_server failed: {error}"))?;
+    let Some(stdout) = child.stdout.take() else {
+        return Err("bench_echo_server did not expose stdout".to_string());
+    };
     let mut ready_line = String::new();
     {
         use std::io::BufRead as _;
         let mut reader = std::io::BufReader::new(stdout);
-        reader
-            .read_line(&mut ready_line)
-            .expect("read READY line from server");
+        reader.read_line(&mut ready_line)
+            .map_err(|error| format!("read READY line from server failed: {error}"))?;
     }
     let port: u16 = ready_line
         .trim()
         .strip_prefix("READY ")
         .and_then(|rest| rest.parse().ok())
-        .unwrap_or_else(|| panic!("unexpected server handshake line: '{ready_line}'"));
-    BenchServer {
-        addr: format!("127.0.0.1:{port}").parse().expect("addr"),
+        .ok_or_else(|| format!("unexpected server handshake line: '{ready_line}'"))?;
+    let addr: SocketAddr = format!("127.0.0.1:{port}")
+        .parse()
+        .map_err(|error| format!("invalid server address 127.0.0.1:{port}: {error}"))?;
+    Ok(BenchServer {
+        addr,
         child,
-    }
+    })
 }
 
 async fn connect_client(addr: SocketAddr) -> LynnClient<'static> {
@@ -300,7 +304,7 @@ fn build_request(payload: usize) -> HandlerResult {
     HandlerResult::new_with_send_to_server(METHOD_ID, Bytes::from(vec![b'a'; payload]))
 }
 
-// ── model 1: ping-pong ──────────────────────────────────────────────────
+// model 1: ping-pong
 
 /// Runs one model-1 client: one request in flight, measure every RTT.
 async fn model1_client(
@@ -370,7 +374,7 @@ async fn run_model1_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
     result
 }
 
-// ── model 2: concurrent send/receive ────────────────────────────────────
+// model 2: concurrent send/receive
 
 /// Sends requests as fast as the bounded write channel allows.
 async fn model2_sender(
@@ -465,7 +469,7 @@ async fn run_model2_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
     result
 }
 
-// ── reporting ───────────────────────────────────────────────────────────
+// reporting
 
 fn print_markdown(results: &[CellResult], args: &Args) {
     println!();
@@ -547,7 +551,7 @@ fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Resul
     std::fs::write(path, out)
 }
 
-// ── main ────────────────────────────────────────────────────────────────
+// main
 
 #[tokio::main]
 async fn main() {
@@ -588,7 +592,10 @@ async fn main() {
                 args.duration.as_secs()
             );
             let started = Instant::now();
-            let server = spawn_echo_server(server_capacity);
+            let Ok(server) = spawn_echo_server(server_capacity) else {
+                eprintln!("benchmark setup failed");
+                std::process::exit(1);
+            };
             let addr = server.addr;
             wait_server(addr).await;
             let result = if model == 1 {
