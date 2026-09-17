@@ -6,27 +6,23 @@ use dashmap::DashMap;
 ///
 /// Handlers extract registered values through `AppState<T>` parameters; the
 /// registry itself is shared with every request context via `Arc`.
-pub struct StateRegistry {
-    map: DashMap<std::any::TypeId, Arc<dyn Any + Send + Sync>>,
-}
+pub struct StateRegistry(DashMap<std::any::TypeId, Arc<dyn Any + Send + Sync>>);
 
 impl StateRegistry {
     /// Creates an empty registry.
     pub fn new() -> Self {
-        Self {
-            map: DashMap::new(),
-        }
+        Self(DashMap::new())
     }
 
     /// Stores (or replaces) the state value of type `T`.
     pub fn set<T: Send + Sync + 'static>(&self, value: T) {
-        self.map
+        self.0
             .insert(std::any::TypeId::of::<T>(), Arc::new(value));
     }
 
     /// Stores (or replaces) an already shared state value of type `T`.
     pub fn set_arc<T: Send + Sync + 'static>(&self, value: Arc<T>) {
-        self.map.insert(
+        self.0.insert(
             std::any::TypeId::of::<T>(),
             value as Arc<dyn Any + Send + Sync>,
         );
@@ -34,7 +30,7 @@ impl StateRegistry {
 
     /// Returns a clone of the shared state value of type `T`, if registered.
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
-        self.map
+        self.0
             .get(&std::any::TypeId::of::<T>())?
             .value()
             .clone()
@@ -44,7 +40,7 @@ impl StateRegistry {
 
     /// Returns `true` when a state value of type `T` is registered.
     pub fn contains<T: Send + Sync + 'static>(&self) -> bool {
-        self.map.contains_key(&std::any::TypeId::of::<T>())
+        self.0.contains_key(&std::any::TypeId::of::<T>())
     }
 }
 

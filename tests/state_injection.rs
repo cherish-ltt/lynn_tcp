@@ -17,7 +17,7 @@ use lynn_tcp::{
 /// Static constants used to satisfy the `&'a` config builder lifetimes.
 static MAX_CONN: usize = 1000;
 
-// ── fake service state ──────────────────────────────────────────────────
+// fake service state
 
 #[derive(Clone)]
 struct UserRepo {
@@ -34,7 +34,7 @@ struct AppConfig {
     greeting: String,
 }
 
-// ── handlers ────────────────────────────────────────────────────────────
+// handlers
 
 async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult {
     let id: u64 = String::from_utf8_lossy(&input.get_all_bytes())
@@ -75,7 +75,7 @@ async fn still_alive(input: InputBufVO) -> HandlerResult {
     HandlerResult::new_with_send(9, "alive".into(), vec![input.get_input_addr().unwrap()])
 }
 
-// ── helpers ─────────────────────────────────────────────────────────────
+// helpers
 
 fn free_port() -> u16 {
     std::net::TcpListener::bind("127.0.0.1:0")
@@ -152,7 +152,7 @@ async fn ask(port: u16, method_id: u16, payload: &str) -> Option<String> {
     Some(String::from_utf8_lossy(&rest[3..body_len - 2]).to_string())
 }
 
-// ── tests ───────────────────────────────────────────────────────────────
+// tests
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn state_is_injected_into_handler_params() {

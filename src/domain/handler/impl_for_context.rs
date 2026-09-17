@@ -40,9 +40,7 @@ impl SystemParamState for ClientsContext {
 /// Zero-sized per-system state for the `AppState<T>` extractor. The actual
 /// value lives in the server's `StateRegistry` and is resolved per request,
 /// so registration order relative to `add_router` does not matter.
-pub(crate) struct AppStateParamState<T> {
-    _marker: PhantomData<T>,
-}
+pub(crate) struct AppStateParamState<T>(PhantomData<T>);
 
 impl<T: Send + Sync + 'static> SystemParam for AppState<T> {
     type State = AppStateParamState<T>;
@@ -52,12 +50,12 @@ impl<T: Send + Sync + 'static> SystemParamState for AppStateParamState<T> {
     type Item = AppState<T>;
 
     fn init() -> Self {
-        Self {
-            _marker: PhantomData,
-        }
+        Self(PhantomData)
     }
 
     fn get_param(_state: &Self, context: &HandlerContext) -> Self::Item {
+        // ast-grep-ignore: rust-no-panicking-match-arm
+        // Startup configuration is fail-fast; the reactor isolates handler panics.
         match context.states.get::<T>() {
             Some(value) => AppState::new(value),
             None => panic!(

@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Lynn TCP global-state example...");
     println!();
 
-    // ===== Step 1: start the server with two registered states =====
+    // Step 1: start the server with two registered states
     let _server_handle = tokio::spawn(async {
         let _server = LynnServer::new()
             .await
@@ -92,14 +92,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // ===== Step 2: connect the client =====
+    // Step 2: connect the client
     let mut client = LynnClient::new_with_addr("127.0.0.1:9177")
         .await
         .start()
         .await;
     println!("🔌 [client] connected = {}", client.is_connected());
 
-    // ===== Step 3: query the "database" through the injected state =====
+    // Step 3: query the "database" through the injected state
     client
         .send_data(HandlerResult::new_with_send_to_server(1, "1".into()))
         .await?;
@@ -110,7 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // ===== Step 4: query the second state type =====
+    // Step 4: query the second state type
     client
         .send_data(HandlerResult::new_with_send_to_server(2, "info".into()))
         .await?;

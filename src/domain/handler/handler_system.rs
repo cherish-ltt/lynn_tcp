@@ -70,8 +70,8 @@ impl<Param: SystemParam, F: SystemParamFunction<Param>> IHandler for FunctionSys
         &self,
         context: HandlerContext,
     ) -> Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>> {
-        let param = Param::State::get_param(&self.state, &context);
-        Box::pin(self.func.run(param))
+        let param = Param::State::get_param(&self.1, &context);
+        Box::pin(self.0.run(param))
     }
 }
 
@@ -88,15 +88,10 @@ pub(crate) trait SystemParamState: Send + Sync + 'static {
 }
 
 #[derive(Clone)]
-pub(crate) struct FunctionSystem<F, Param>
+pub(crate) struct FunctionSystem<F, Param>(F, Param::State, PhantomData<Param>)
 where
     Param: SystemParam + 'static,
-    F: SystemParamFunction<Param> + 'static,
-{
-    func: F,
-    state: Param::State,
-    _maker: PhantomData<Param>,
-}
+    F: SystemParamFunction<Param> + 'static;
 
 pub(crate) trait SystemParamFunction<Param>: Send + Sync + 'static {
     fn run(&self, params: Param) -> Pin<Box<dyn Future<Output = HandlerResult> + Send + 'static>>;
@@ -113,10 +108,6 @@ impl<Param: SystemParam + 'static, F: SystemParamFunction<Param> + 'static> Into
     type System = FunctionSystem<F, Param>;
 
     fn to_system(self) -> Self::System {
-        FunctionSystem {
-            func: self,
-            state: Param::State::init(),
-            _maker: PhantomData,
-        }
+        FunctionSystem(self, Param::State::init(), PhantomData)
     }
 }
