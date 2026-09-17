@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Lynn TCP echo server-client example...");
     println!();
 
-    // ===== Step 1: Start the server in a background task =====
+    // Step 1: Start the server in a background task
     let _server_handle = tokio::spawn(async {
         let _server = LynnServer::new()
             .await
@@ -79,13 +79,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Give the server time to start listening
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // ===== Step 2: Create and start the client =====
+    // Step 2: Create and start the client
     let mut client = LynnClient::new_with_addr("127.0.0.1:9177")
         .await
         .start()
         .await;
 
-    // ===== Step 3: Send a message to the server =====
+    // Step 3: Send a message to the server
     let message = "Hello Lynn!";
     println!(
         "📤 [client] Sending to server: method_id=1, payload={:?}",
@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send_data(HandlerResult::new_with_send_to_server(1, message.into()))
         .await?;
 
-    // ===== Step 4: Wait for and receive the server's response =====
+    // Step 4: Wait for and receive the server's response
     println!("⏳ [client] Waiting for server response...");
     if let Some(mut response) = client.get_receive_data().await {
         let method_id = response.get_method_id();

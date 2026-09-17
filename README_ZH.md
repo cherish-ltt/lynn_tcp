@@ -541,6 +541,8 @@ git pull && cargo bench --bench benchmark -- --json docs/benchmark/v<版本>-<�
 
 ### 关于贡献
 
+- 运行 `prek run --all-files` 并处理全部 warning 与 error。章节注释使用普通标题，保留的 Clippy 抑制必须提供 `reason`。
+
 - 提交前请先阅读 [AGENTS.md](AGENTS.md) —— 它是本项目的"开发宪法"，定义了提交规范、CI 标准、格式化与 lint 规则、测试要求（`cargo-llvm-cov` 覆盖率 ≥ 80%）以及发布流程。所有 pull request 与代码审查均参照其执行。
 - 提交前请在本地运行：`cargo fmt --all`、`cargo clippy --all-targets -- -D warnings`、`cargo test`。
 - 修改文档时请保持 `README.md` 与 `README_ZH.md` 同步。

@@ -543,6 +543,8 @@ at your option.
 
 ### Contribution
 
+- Run `prek run --all-files` and resolve both warnings and errors. Use plain section comments and provide a `reason` for retained Clippy suppressions.
+
 - Please read [AGENTS.md](AGENTS.md) first — it is the project's development constitution, defining commit conventions, CI standards, formatting/lint rules, testing requirements (coverage ≥ 80% via `cargo-llvm-cov`), and the release workflow. All pull requests and code reviews are checked against it.
 - Before submitting, run locally: `cargo fmt --all`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 - Keep `README.md` and `README_ZH.md` in sync when changing documentation.

@@ -311,7 +311,11 @@ docs/
   2. `release.yml`：从 `docs/update_logs/` 查找与 tag 对应的 md 文件（自动尝试 `v<tag>`、去掉 `-release` 后缀、去掉 `v` 前缀等候选名），以其内容作为 Release Notes 创建 GitHub Release；找不到对应日志时使用默认说明并告警。
 - 因此**发布前必须确保**：`Cargo.toml` 版本号、tag 名、`docs/update_logs/` 日志文件三者一致。
 
-### 10.5 追加内容xxx
+### 10.5 静态扫描规范
+
+- 提交前执行 `prek run --all-files`，处理 warning 与 error，不得仅处理错误级诊断。
+- 分隔注释使用普通章节标题，不使用装饰线；Clippy 抑制必须通过 `reason` 说明保留原因。
+- 扫描修复按逻辑分类提交，公共 API 变化必须同步两份 README 与测试。
 
 ### 10.6 追加内容xxx
 
