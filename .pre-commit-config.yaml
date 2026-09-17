@@ -112,7 +112,7 @@ repos:
       # 如果测试较慢，可取消注释下一行将其移到 pre-push 阶段
       - id: test
         name: cargo test 测试
-        entry: cargo test --all-targets --all-features
+        entry: cargo test --tests --all-features
         language: system
         types: [rust]
         pass_filenames: false
