@@ -27,7 +27,7 @@ static MAX_CONN_ZERO: usize = 0;
 static PERMIT_ZERO: usize = 0;
 static RATE_ZERO: u64 = 0;
 
-// ── helpers ─────────────────────────────────────────────────────────────
+// helpers
 
 fn encode_frame(constructor_id: u8, method_id: u16, body: &[u8]) -> Vec<u8> {
     let msg_len = (1 + 2 + body.len() + 2) as u64;
@@ -58,7 +58,7 @@ async fn read_frame(stream: &mut TcpStream) -> (u8, u16, Vec<u8>) {
     let mut rest = vec![0u8; msg_len];
     stream.read_exact(&mut rest).await.expect("read frame body");
     let constructor_id = rest[0];
-    let method_id = u16::from_le_bytes([rest[1], rest[2]]);
+    let method_id = u16::from_le_bytes(rest[1..3].try_into().unwrap());
     (constructor_id, method_id, rest[3..msg_len - 2].to_vec())
 }
 
@@ -119,7 +119,7 @@ async fn spawn_default_server(
     addr
 }
 
-// ── handlers used across tests ──────────────────────────────────────────
+// handlers used across tests
 
 async fn echo_two_params(input_buf_vo: InputBufVO, clients: ClientsContext) -> HandlerResult {
     let payload = String::from_utf8_lossy(&input_buf_vo.get_all_bytes()).to_string();
@@ -162,7 +162,7 @@ async fn echo_with_fake_addr(input_buf_vo: InputBufVO, clients: ClientsContext) 
     HandlerResult::new_with_send(1, format!("Echo: {payload}").into(), addrs)
 }
 
-// ── tests ───────────────────────────────────────────────────────────────
+// tests
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn echo_roundtrip_with_two_param_handler() {

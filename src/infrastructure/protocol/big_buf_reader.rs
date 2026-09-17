@@ -172,21 +172,11 @@ impl BigBufReader {
                 },
             }
             if self.target_len.is_none() {
-                let data_len = self.data.len();
-                if data_len >= 2 {
-                    let header_mark = u16::from_le_bytes([self.data[0], self.data[1]]);
+                if let Some((header_bytes, remaining)) = self.data.split_first_chunk::<2>() {
+                    let header_mark = u16::from_le_bytes(*header_bytes);
                     if header_mark == self.message_header_mark {
-                        if data_len >= 10 {
-                            let msg_len = u64::from_le_bytes([
-                                self.data[2],
-                                self.data[3],
-                                self.data[4],
-                                self.data[5],
-                                self.data[6],
-                                self.data[7],
-                                self.data[8],
-                                self.data[9],
-                            ]);
+                        if let Some((length_bytes, _)) = remaining.split_first_chunk::<8>() {
+                            let msg_len = u64::from_le_bytes(*length_bytes);
 
                             // Validate message length to prevent memory exhaustion attacks
                             match validate_message_length(msg_len) {

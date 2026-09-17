@@ -30,15 +30,16 @@ pub fn validate_message_format(
     message_tail_mark: u16,
 ) -> Result<usize, LynnError> {
     // Check minimum size for header + length field
-    if data.len() < 10 {
+    let Some((prefix, _)) = data.split_first_chunk::<10>() else {
         return Err(LynnError::protocol(format!(
             "Message too short: {} bytes (minimum 10 for header+length)",
             data.len()
         )));
-    }
+    };
 
     // Validate header mark (bytes 0-1)
-    let header = u16::from_le_bytes([data[0], data[1]]);
+    let (header_bytes, length_bytes) = prefix.split_at(2);
+    let header = u16::from_le_bytes(header_bytes.try_into().unwrap());
     if header != message_header_mark {
         return Err(LynnError::protocol(format!(
             "Invalid header mark: 0x{:04X} (expected 0x{:04X})",
@@ -47,9 +48,7 @@ pub fn validate_message_format(
     }
 
     // Extract message length (bytes 2-9)
-    let msg_len = u64::from_le_bytes([
-        data[2], data[3], data[4], data[5], data[6], data[7], data[8], data[9],
-    ]);
+    let msg_len = u64::from_le_bytes(length_bytes.try_into().unwrap());
 
     // Validate message length
     let body_len = validate_message_length(msg_len)?;
@@ -189,8 +188,11 @@ mod tests {
 
     #[test]
     fn rejects_too_short_data() {
-        let err = validate_message_format(&[0u8; 9], 0x23E9, 0x1E27).unwrap_err();
-        assert!(err.to_string().contains("too short"));
+        for length in 0..10 {
+            let data = vec![0u8; length];
+            let err = validate_message_format(&data, 0x23E9, 0x1E27).unwrap_err();
+            assert!(err.to_string().contains("too short"));
+        }
     }
 
     #[test]
