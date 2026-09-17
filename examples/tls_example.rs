@@ -44,14 +44,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting Lynn TCP TLS 1.3 example...");
     println!();
 
-    // ===== Step 1: generate a self-signed certificate for localhost (dev only) =====
+    // Step 1: generate a self-signed certificate for localhost (dev only)
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(vec!["localhost".to_string()])?;
     let cert_path = write_temp_file("cert.pem", &cert.pem());
     let key_path = write_temp_file("key.pem", &signing_key.serialize_pem());
     println!("🔐 Generated temporary self-signed certificate for 'localhost'");
 
-    // ===== Step 2: start a TLS-enabled server on a free port =====
+    // Step 2: start a TLS-enabled server on a free port
     let port = std::net::TcpListener::bind("127.0.0.1:0")?
         .local_addr()?
         .port();
@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // ===== Step 3: connect a TLS client (verifies the server certificate) =====
+    // Step 3: connect a TLS client (verifies the server certificate)
     let client_config = LynnClientConfigBuilder::new()
         .with_server_addr(&addr)
         .expect("valid addr")
@@ -98,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client.is_connected()
     );
 
-    // ===== Step 4: exchange a message over the encrypted channel =====
+    // Step 4: exchange a message over the encrypted channel
     client
         .send_data(HandlerResult::new_with_send_to_server(
             1,

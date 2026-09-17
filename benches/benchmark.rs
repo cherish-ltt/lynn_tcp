@@ -245,7 +245,8 @@ fn spawn_echo_server(max_connections: usize) -> Result<BenchServer, String> {
     {
         use std::io::BufRead as _;
         let mut reader = std::io::BufReader::new(stdout);
-        reader.read_line(&mut ready_line)
+        reader
+            .read_line(&mut ready_line)
             .map_err(|error| format!("read READY line from server failed: {error}"))?;
     }
     let port: u16 = ready_line
@@ -256,10 +257,7 @@ fn spawn_echo_server(max_connections: usize) -> Result<BenchServer, String> {
     let addr: SocketAddr = format!("127.0.0.1:{port}")
         .parse()
         .map_err(|error| format!("invalid server address 127.0.0.1:{port}: {error}"))?;
-    Ok(BenchServer {
-        addr,
-        child,
-    })
+    Ok(BenchServer { addr, child })
 }
 
 async fn connect_client(addr: SocketAddr) -> LynnClient<'static> {

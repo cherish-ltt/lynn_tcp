@@ -16,7 +16,7 @@ use lynn_tcp::{
     tokio::{io::AsyncReadExt, net::TcpStream, time::timeout},
 };
 
-// ── helpers ─────────────────────────────────────────────────────────────
+// helpers
 
 /// Writes `contents` to a uniquely named temp file and returns its path.
 fn temp_file(name: &str, contents: &str) -> String {
@@ -81,7 +81,7 @@ async fn wait_server(addr: &str) {
     panic!("server never became reachable at {addr}");
 }
 
-// ── tests ───────────────────────────────────────────────────────────────
+// tests
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tls_roundtrip_with_configured_certificates() {

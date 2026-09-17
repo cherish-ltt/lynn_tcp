@@ -4,17 +4,50 @@
 #![allow(non_snake_case)]
 #![allow(deprecated)]
 // Clippy: allow style warnings that don't affect correctness
-#![allow(clippy::module_inception)]
-#![allow(clippy::doc_lazy_continuation)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::declare_interior_mutable_const)]
-#![allow(clippy::borrow_interior_mutable_const)]
-#![allow(clippy::new_without_default)]
-#![allow(clippy::let_underscore_future)]
-#![allow(clippy::redundant_guards)]
-#![allow(clippy::collapsible_if)]
-#![allow(clippy::unused_unit)]
-#![allow(clippy::unnecessary_cast)]
+#![allow(
+    clippy::module_inception,
+    reason = "DDD layers retain their established module paths"
+)]
+#![allow(
+    clippy::doc_lazy_continuation,
+    reason = "Retain the existing public API documentation layout"
+)]
+#![allow(
+    clippy::too_many_arguments,
+    reason = "Transport orchestration passes independent connection resources explicitly"
+)]
+#![allow(
+    clippy::declare_interior_mutable_const,
+    reason = "Default atomics are templates for independent owned configuration values"
+)]
+#![allow(
+    clippy::borrow_interior_mutable_const,
+    reason = "Builders snapshot default atomic templates rather than sharing mutable globals"
+)]
+#![allow(
+    clippy::new_without_default,
+    reason = "Existing constructors include async and lifetime-bound initialization"
+)]
+#![allow(
+    clippy::let_underscore_future,
+    reason = "Background Tokio tasks intentionally outlive their detached join handles"
+)]
+#![allow(
+    clippy::redundant_guards,
+    reason = "Protocol branches retain explicit guards for readability"
+)]
+#![allow(
+    clippy::collapsible_if,
+    reason = "Nested protocol checks keep validation and recovery stages distinct"
+)]
+#![allow(
+    clippy::unused_unit,
+    reason = "System parameter macros support the zero-argument handler case"
+)]
+#![allow(
+    clippy::unnecessary_cast,
+    reason = "Platform-dependent socket and benchmark types use explicit conversions"
+)]
 //! # Lynn_tcp
 //! `Lynn_tcp` is a lightweight TCP server framework
 //! ## Keywords
@@ -104,7 +137,7 @@
 //!     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 //! }
 //! ```
-//! ## Clinet
+//! ## Client
 //! A client for communicating with a server over TCP.
 //!
 //! The `LynnClient` struct represents a client that can connect to a server, send data, and receive data.
@@ -130,7 +163,7 @@
 //! }
 //! ```
 
-// ===== 分层架构模块注册 =====
+// 分层架构模块注册
 
 /// 应用层（编排层）
 pub(crate) mod application;

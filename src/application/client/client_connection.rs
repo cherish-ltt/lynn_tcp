@@ -27,18 +27,18 @@ use crate::{
 /// Everything the supervisor needs for one connection session.
 pub(super) struct ConnectionParams {
     /// The server address ("ip:port").
-    pub(super) addr: String,
+    addr: String,
     /// Per-attempt connect (and TLS handshake) timeout in seconds.
-    pub(super) connect_timeout_secs: u64,
+    connect_timeout_secs: u64,
     /// Connect attempts per session (initial connect or after a disconnect).
-    pub(super) reconnect_max_attempts: usize,
+    reconnect_max_attempts: usize,
     /// Delay in seconds between two attempts.
-    pub(super) reconnect_interval_secs: u64,
-    pub(super) message_header_mark: u16,
-    pub(super) message_tail_mark: u16,
+    reconnect_interval_secs: u64,
+    message_header_mark: u16,
+    message_tail_mark: u16,
     /// Optional TLS endpoint (connector + resolved server name).
     #[cfg(feature = "tls")]
-    pub(super) tls: Option<crate::infrastructure::tls::tls_provider::ClientTls>,
+    tls: Option<crate::infrastructure::tls::tls_provider::ClientTls>,
 }
 
 impl ConnectionParams {

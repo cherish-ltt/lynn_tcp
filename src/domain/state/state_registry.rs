@@ -16,8 +16,7 @@ impl StateRegistry {
 
     /// Stores (or replaces) the state value of type `T`.
     pub fn set<T: Send + Sync + 'static>(&self, value: T) {
-        self.0
-            .insert(std::any::TypeId::of::<T>(), Arc::new(value));
+        self.0.insert(std::any::TypeId::of::<T>(), Arc::new(value));
     }
 
     /// Stores (or replaces) an already shared state value of type `T`.

@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Address:      0.0.0.0:9178");
     println!();
 
-    // ===== Step 1: Start the server with custom protocol configuration =====
+    // Step 1: Start the server with custom protocol configuration
     let server_config = LynnServerConfigBuilder::new()
         .with_addr("0.0.0.0:9178")?
         .with_message_header_mark(header_mark)
@@ -112,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Give the server time to start listening
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // ===== Step 2: Create and start the client with matching custom protocol =====
+    // Step 2: Create and start the client with matching custom protocol
     let client_config = LynnClientConfigBuilder::new()
         .with_server_addr("127.0.0.1:9178")?
         .with_message_header_mark(header_mark)
@@ -124,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .start()
         .await;
 
-    // ===== Step 3: Send a message using the custom protocol =====
+    // Step 3: Send a message using the custom protocol
     let payload = "custom_protocol_payload";
     println!(
         "📤 [client] Sending via custom protocol: method_id=1, payload={:?}",
@@ -134,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send_data(HandlerResult::new_with_send_to_server(1, payload.into()))
         .await?;
 
-    // ===== Step 4: Receive and parse the server's response =====
+    // Step 4: Receive and parse the server's response
     // Note: Due to a library behavior where the server may send the response
     // with default marks instead of the custom marks, we use a timeout here
     // to gracefully handle cases where the response cannot be parsed.

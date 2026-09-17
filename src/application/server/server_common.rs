@@ -162,7 +162,7 @@ pub(crate) async fn input_dto_build(
     // Attempt to acquire a permit from the semaphore.
     match process_permit.try_acquire() {
         Ok(_permit) => {
-            reactor_event_sender.push(ReactorEvent::crate_excute_task_event((
+            reactor_event_sender.push(ReactorEvent::crate_execute_task_event((
                 handler_method,
                 HandlerContext::new(
                     input_buf_vo,

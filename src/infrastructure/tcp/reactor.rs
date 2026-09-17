@@ -28,7 +28,7 @@ use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 /// Reactor event type
 enum EventType {
     NewSocket((TcpStream, core::net::SocketAddr)),
-    ExcuteTask(TaskBodyOutChannel),
+    ExecuteTask(TaskBodyOutChannel),
 }
 
 /// Event for the reactor system
@@ -48,8 +48,8 @@ impl ReactorEvent {
     }
 
     #[inline(always)]
-    pub(crate) fn crate_excute_task_event(task_body: TaskBodyOutChannel) -> Self {
-        ReactorEvent::new_with_event_type(EventType::ExcuteTask(task_body))
+    pub(crate) fn crate_execute_task_event(task_body: TaskBodyOutChannel) -> Self {
+        ReactorEvent::new_with_event_type(EventType::ExecuteTask(task_body))
     }
 }
 
@@ -82,11 +82,14 @@ impl EventManager {
         EventManager { global_queue }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Transport orchestration passes independent connection resources explicitly"
+    )]
     pub(crate) fn run(
         &self,
         clients: ClientsStructType,
-        server_single_processs_permit: &usize,
+        server_single_process_permit: &usize,
         message_header_mark: u16,
         message_tail_mark: u16,
         lynn_router: Arc<LynnRouter>,
@@ -110,7 +113,7 @@ impl EventManager {
             let global_queue_clone = global_queue.clone();
             let stealers_arc_clone = stealers_arc.clone();
             let clients_clone = clients.clone();
-            let server_single_processs_permit = *server_single_processs_permit;
+            let server_single_process_permit = *server_single_process_permit;
             let reactor_event_sender = reactor_event_sender.clone();
             let tx = tx.clone();
             let lynn_router = lynn_router.clone();
@@ -145,7 +148,7 @@ impl EventManager {
                                 )
                                 .await;
                                 let process_permit =
-                                    Arc::new(Semaphore::new(server_single_processs_permit));
+                                    Arc::new(Semaphore::new(server_single_process_permit));
                                 let _ = tx
                                     .send(NewSocketTask {
                                         read_half,
@@ -160,7 +163,7 @@ impl EventManager {
                                     })
                                     .await;
                             },
-                            EventType::ExcuteTask(task_body) => {
+                            EventType::ExecuteTask(task_body) => {
                                 let (task, context, clients) = task_body;
                                 // Run the handler in a nested task so a panicking
                                 // handler (e.g. a missing AppState) cannot take
@@ -281,7 +284,7 @@ impl CoreReactor {
         &self,
         tcp_listener: TcpListener,
         clients: ClientsStructType,
-        alow_max_connections: Option<&usize>,
+        allow_max_connections: Option<&usize>,
         global_queue: ReactorEventSender,
         connection_limiter: Option<(
             &u64,   // rate_limit
@@ -292,8 +295,8 @@ impl CoreReactor {
     ) {
         loop {
             // Waiting for a new link
-            let clinet_result = tcp_listener.accept().await;
-            if let Ok((socket, addr)) = clinet_result {
+            let client_result = tcp_listener.accept().await;
+            if let Ok((socket, addr)) = client_result {
                 let mut socket_permit = true;
                 let mut socket = Some(socket);
 
@@ -387,7 +390,7 @@ impl CoreReactor {
                 }
 
                 // Check global max connections
-                if let Some(max_connections) = alow_max_connections {
+                if let Some(max_connections) = allow_max_connections {
                     if clients.len() >= *max_connections {
                         socket_permit = false;
                         warn!(
@@ -422,7 +425,7 @@ impl CoreReactor {
                     }
                 }
             } else {
-                if let Err(e) = clinet_result {
+                if let Err(e) = client_result {
                     warn!(
                         "Failed to accept connection, server run next, e :{}",
                         e.to_string()
@@ -447,16 +450,19 @@ impl TcpReactor {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Transport orchestration passes independent connection resources explicitly"
+    )]
     pub(crate) async fn start(
         &self,
         clients: ClientsStructType,
-        server_single_processs_permit: &usize,
+        server_single_process_permit: &usize,
         message_header_mark: u16,
         message_tail_mark: u16,
         lynn_router: Arc<LynnRouter>,
         tcp_listener: TcpListener,
-        alow_max_connections: Option<&usize>,
+        allow_max_connections: Option<&usize>,
         server_max_reactor_taskpool_size: &usize,
         connection_limiter: Option<(
             &u64,   // rate_limit
@@ -468,7 +474,7 @@ impl TcpReactor {
     ) {
         self.event_manager.run(
             clients.clone(),
-            server_single_processs_permit,
+            server_single_process_permit,
             message_header_mark,
             message_tail_mark,
             lynn_router,
@@ -489,7 +495,7 @@ impl TcpReactor {
             .run(
                 tcp_listener,
                 clients,
-                alow_max_connections,
+                allow_max_connections,
                 self.event_manager.get_global_queue(),
                 connection_limiter,
                 tcp_config,
