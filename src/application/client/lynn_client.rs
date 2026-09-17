@@ -212,7 +212,7 @@ impl<'a> LynnClient<'a> {
             .finish();
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
-                info!("Client - [log server] start sucess!!!")
+                info!("Client - [log server] start success!!!")
             },
             Err(e) => {
                 warn!("set_global_default failed - e: {:?}", e.to_string())

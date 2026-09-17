@@ -278,7 +278,7 @@ async fn zero_process_permit_drops_requests() {
         let config = LynnServerConfigBuilder::new()
             .with_addr(server_addr)
             .expect("addr")
-            .with_server_single_processs_permit(&PERMIT_ZERO)
+            .with_server_single_process_permit(&PERMIT_ZERO)
             .build();
         LynnServer::new_with_config(config)
             .await

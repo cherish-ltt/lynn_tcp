@@ -140,7 +140,7 @@ async fn write_pump(
 pub(super) fn spawn_check_heart(interval_time: u64, sender: mpsc::Sender<HandlerResult>) {
     tokio::spawn(async move {
         info!(
-            "Client - [check heart] start sucess!!! with [client_check_heart_interval:{}s]",
+            "Client - [check heart] start success!!! with [client_check_heart_interval:{}s]",
             interval_time
         );
         let mut interval = interval(Duration::from_secs(interval_time));

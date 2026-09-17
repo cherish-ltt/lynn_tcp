@@ -354,7 +354,7 @@ impl<'a> LynnServer<'a> {
         self.reactor
             .start(
                 self.clients.0.clone(),
-                self.lynn_config.get_server_single_processs_permit(),
+                self.lynn_config.get_server_single_process_permit(),
                 *self.lynn_config.get_message_header_mark(),
                 *self.lynn_config.get_message_tail_mark(),
                 self.lynn_router.clone(),
@@ -389,7 +389,7 @@ impl<'a> LynnServer<'a> {
             .finish();
         match tracing::subscriber::set_global_default(subscriber) {
             Ok(_) => {
-                info!("Server - [log server] start sucess!!!")
+                info!("Server - [log server] start success!!!")
             },
             Err(e) => {
                 warn!("set_global_default failed - e: {:?}", e.to_string())

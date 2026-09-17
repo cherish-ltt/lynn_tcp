@@ -23,7 +23,7 @@ pub struct LynnServerConfig<'a> {
     // The maximum number of threads for the server.
     server_max_reactor_taskpool_size: &'a usize,
     // The permit size for a single process.
-    server_single_processs_permit: &'a usize,
+    server_single_process_permit: &'a usize,
     // The interval for checking heartbeats.
     server_check_heart_interval: &'a u64,
     // The timeout time for checking heartbeats.
@@ -69,7 +69,7 @@ impl<'a> LynnServerConfig<'a> {
             server_addr: *DEFAULT_ADDR,
             server_max_connections: Some(&DEFAULT_MAX_CONNECTIONS),
             server_max_reactor_taskpool_size: &DEFAULT_MAX_REACTOR_TASKPOOL_SIZE,
-            server_single_processs_permit: &DEFAULT_PROCESS_PERMIT_SIZE,
+            server_single_process_permit: &DEFAULT_PROCESS_PERMIT_SIZE,
             server_check_heart_interval: &DEFAULT_CHECK_HEART_INTERVAL,
             server_check_heart_timeout_time: &DEFAULT_CHECK_HEART_TIMEOUT_TIME,
             message_header_mark: &DEFAULT_MESSAGE_HEADER_MARK,
@@ -102,8 +102,8 @@ impl<'a> LynnServerConfig<'a> {
     /// # Returns
     ///
     /// The permit size for a single process.
-    pub(crate) fn get_server_single_processs_permit(&self) -> &usize {
-        self.server_single_processs_permit
+    pub(crate) fn get_server_single_process_permit(&self) -> &usize {
+        self.server_single_process_permit
     }
 
     /// Gets the interval for checking heartbeats.
@@ -308,16 +308,16 @@ impl<'a> LynnServerConfigBuilder<'a> {
     ///
     /// # Parameters
     ///
-    /// * `server_single_processs_permit` - The permit size for a single process.
+    /// * `server_single_process_permit` - The permit size for a single process.
     ///
     /// # Returns
     ///
     /// The updated `LynnServerConfigBuilder` instance.
-    pub fn with_server_single_processs_permit(
+    pub fn with_server_single_process_permit(
         mut self,
-        server_single_processs_permit: &'a usize,
+        server_single_process_permit: &'a usize,
     ) -> Self {
-        self.lynn_config.server_single_processs_permit = server_single_processs_permit;
+        self.lynn_config.server_single_process_permit = server_single_process_permit;
         self
     }
 
@@ -650,7 +650,7 @@ mod tests {
             .expect("valid addr")
             .with_server_max_connections(Some(&MAX_CONN))
             .with_server_max_taskpool_size(&POOL)
-            .with_server_single_processs_permit(&PERMIT)
+            .with_server_single_process_permit(&PERMIT)
             .with_server_check_heart_interval(&HEART_INTERVAL)
             .with_server_check_heart_timeout_time(&HEART_TIMEOUT)
             .with_message_header_mark(&HEADER)
@@ -669,7 +669,7 @@ mod tests {
         assert_eq!(cfg.get_server_addr(), "127.0.0.1:9999");
         assert_eq!(cfg.get_server_max_connections(), Some(&MAX_CONN));
         assert_eq!(cfg.get_server_max_reactor_taskpool_size(), &POOL);
-        assert_eq!(cfg.get_server_single_processs_permit(), &PERMIT);
+        assert_eq!(cfg.get_server_single_process_permit(), &PERMIT);
         assert_eq!(cfg.get_server_check_heart_interval(), &HEART_INTERVAL);
         assert_eq!(cfg.get_server_check_heart_timeout_time(), &HEART_TIMEOUT);
         assert_eq!(cfg.get_message_header_mark(), &HEADER);
