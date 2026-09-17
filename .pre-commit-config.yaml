@@ -1,7 +1,7 @@
 # .pre-commit-config.yaml
 # 优先使用 prek run --all-files 命令扫描 or 通过 git 自动触发
 repos:
-    # ============================================================
+  # ============================================================
   # 1. 通用文件检查（pre-commit-hooks v6.0.0）
   # 官方仓库：https://github.com/pre-commit/pre-commit-hooks
   # 注意：v6.0.0 要求 Python >= 3.9，并移除了
@@ -28,18 +28,42 @@ repos:
         args: ['--maxkb=10240']
         files: '\.(jpeg|jpg|png)$'
 
+      # 检查 TOML 语法是否正确（如 Cargo.toml、rust-toolchain.toml 等）
+      - id: check-toml
+        name: 检查 TOML 语法
+
+      # 检查 YAML 语法是否正确（如 CI 配置、docker-compose 等）
+      - id: check-yaml
+        name: 检查 YAML 语法
+
+      # 检查 JSON 语法是否正确（如 package.json、tsconfig.json 等）
+      - id: check-json
+        name: 检查 JSON 语法
+
+      # 检测私钥文件（SSH / PGP / RSA 等）是否被误提交
+      # 防止敏感私钥泄漏到仓库
+      - id: detect-private-key
+        name: 检测私钥文件
+
   # ============================================================
-  # 2. 拼写检查（typos）
-  # 官方仓库：https://github.com/crate-ci/typos
-  # 最新版本：v1.48.0（2026-06-30 发布）
-  # 说明：args 留空表示仅报告拼写错误，不自动修复
+  # 2. 密钥泄露检测（Betterleaks，使用本机已安装版本）
+  # 官方仓库：https://github.com/betterleaks/betterleaks
+  # 版本：v1.8.1（2026-08-18 发布）
+  # 说明：
+  #   - Gitleaks 已进入仅安全补丁维护阶段，Betterleaks 为其官方继任者
+  #   - 由 Gitleaks 原作者 Zach Rice 及原班人马维护
+  #   - 完全兼容原有的 .gitleaks.toml 配置和 .gitleaksignore 文件
+  #   - 检测 800+ 种密钥类型，支持 Expr 过滤、密钥有效性验证等高级功能
+  #   - 改用 local + system，直接调用本机 PATH 中的 betterleaks，
+  #     避免 prek 下载 Go 工具链并重新编译安装
   # ============================================================
-  - repo: https://github.com/crate-ci/typos
-    rev: v1.48.0
+  - repo: local
     hooks:
-      - id: typos
-        name: 检查拼写错误
-        args: []  # 仅报告，不自动修复（默认行为）
+      - id: betterleaks
+        name: 检测密钥泄露
+        entry: betterleaks git --pre-commit --staged --verbose
+        language: system
+        pass_filenames: false
 
   # ============================================================
   # 3. ast-grep 结构化规则检查
