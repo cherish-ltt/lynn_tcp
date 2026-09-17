@@ -240,7 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `with_addr()` | 服务器监听地址 | `0.0.0.0:9177` |
 | `with_server_max_connections()` | 最大并发连接数 | `100_000` |
 | `with_server_max_taskpool_size()` | 异步任务池大小（吞吐量） | `512` |
-| `with_server_single_processs_permit()` | 最大并发处理任务数 | `1024` |
+| `with_server_single_process_permit()` | 最大并发处理任务数 | `1024` |
 | `with_server_check_heart_interval()` | 心跳检测间隔（秒） | `60` |
 | `with_server_check_heart_timeout_time()` | 心跳超时时间（秒） | `180` |
 | `with_tcp_nodelay()` | TCP_NODELAY（禁用 Nagle 算法） | `true` |

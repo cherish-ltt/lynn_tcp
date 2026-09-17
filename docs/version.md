@@ -310,7 +310,7 @@ We are testing and using `AI agent-GLM4.6` for the first time to optimize and de
 
 1.perf
 
-- logserver(Server and Clinet) Now users need to manually initialize the logs
+- logserver(Server and Client) Now users need to manually initialize the logs
 
 #### v1.1.7 - release
 

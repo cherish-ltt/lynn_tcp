@@ -240,7 +240,7 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `with_addr()` | Server listen address | `0.0.0.0:9177` |
 | `with_server_max_connections()` | Max concurrent connections | `100_000` |
 | `with_server_max_taskpool_size()` | Async task pool size (throughput) | `512` |
-| `with_server_single_processs_permit()` | Max concurrent processing tasks | `1024` |
+| `with_server_single_process_permit()` | Max concurrent processing tasks | `1024` |
 | `with_server_check_heart_interval()` | Heartbeat check interval (s) | `60` |
 | `with_server_check_heart_timeout_time()` | Heartbeat timeout (s) | `180` |
 | `with_tcp_nodelay()` | TCP_NODELAY (disable Nagle) | `true` |
