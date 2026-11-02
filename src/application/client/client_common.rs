@@ -1,58 +1,36 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-    sync::{
-        Mutex,
-        mpsc::{self, Sender},
-        watch,
-    },
+    sync::mpsc::{self, Sender},
     task::JoinHandle,
     time::interval,
 };
 use tracing::{error, info, warn};
 
+use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::stream::LynnStream;
-use crate::{LynnError, const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE};
 
-/// The shared write-side receiver, owned by the connection supervisor and
-/// borrowed by each connection's write pump, so the user-facing
-/// `mpsc::Sender<HandlerResult>` stays valid across reconnections.
-pub(super) type SharedWriteReceiver = Arc<Mutex<mpsc::Receiver<HandlerResult>>>;
-
-/// Spawns the read and write pumps for one connection.
+/// Runs the read and write pumps for one connection.
 ///
-/// Returns the read pump's handle: it resolves as soon as the connection is
-/// considered dead (read EOF/error or the user-side receiver was dropped).
-/// The write pump is cancelled when reading ends, including while its I/O is blocked.
-/// It also exits independently on `close_rx` or write channel closure.
+/// Both pumps belong to the supervisor future. Ending either pump or
+/// cancelling the supervisor drops both halves, including blocked I/O.
 #[inline(always)]
-pub(super) fn spawn_connection_pumps(
+pub(super) async fn run_connection_pumps(
     stream: LynnStream,
     message_header_mark: u16,
     message_tail_mark: u16,
     tx_read: Sender<InputBufVO>,
-    rx_write: SharedWriteReceiver,
-    close_rx: watch::Receiver<bool>,
-) -> JoinHandle<()> {
+    rx_write: &mut mpsc::Receiver<HandlerResult>,
+) {
     let (read_half, write_half) = tokio::io::split(stream);
-    let write_handle = tokio::spawn(write_pump(
-        write_half,
-        message_header_mark,
-        message_tail_mark,
-        rx_write,
-        close_rx,
-    ));
-    tokio::spawn(async move {
-        read_pump(read_half, message_header_mark, message_tail_mark, tx_read).await;
-        // A blocked write cannot observe close_rx; a terminal read must still close both halves.
-        write_handle.abort();
-        let _ = write_handle.await;
-    })
+    tokio::select! {
+        () = write_pump(write_half, message_header_mark, message_tail_mark, rx_write) => {},
+        () = read_pump(read_half, message_header_mark, message_tail_mark, tx_read) => {},
+    }
 }
 
 /// Reads frames from the connection and forwards them to the user channel.
@@ -101,25 +79,15 @@ async fn read_pump(
     }
 }
 
-/// Writes queued frames to the connection until it is closed or told to stop.
+/// Writes queued frames until the channel closes or a transport error occurs.
 async fn write_pump(
     mut write_half: tokio::io::WriteHalf<LynnStream>,
     message_header_mark: u16,
     message_tail_mark: u16,
-    rx_write: SharedWriteReceiver,
-    mut close_rx: watch::Receiver<bool>,
+    rx_write: &mut mpsc::Receiver<HandlerResult>,
 ) {
     loop {
-        let received = tokio::select! {
-            changed = close_rx.changed() => {
-                if changed.is_err() || *close_rx.borrow() {
-                    let _ = write_half.shutdown().await;
-                    break;
-                }
-                continue;
-            },
-            received = async { rx_write.lock().await.recv().await } => received,
-        };
+        let received = rx_write.recv().await;
         match received {
             Some(mut handler_result) => {
                 if !handler_result.is_with_mark() {
@@ -146,7 +114,10 @@ async fn write_pump(
 }
 
 #[inline(always)]
-pub(super) fn spawn_check_heart(interval_time: u64, sender: mpsc::Sender<HandlerResult>) {
+pub(super) fn spawn_check_heart(
+    interval_time: u64,
+    sender: mpsc::Sender<HandlerResult>,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         info!(
             "Client - [check heart] start success!!! with [client_check_heart_interval:{}s]",
@@ -166,5 +137,5 @@ pub(super) fn spawn_check_heart(interval_time: u64, sender: mpsc::Sender<Handler
                 break;
             }
         }
-    });
+    })
 }
