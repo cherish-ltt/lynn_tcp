@@ -342,6 +342,8 @@ impl<'a> LynnServer<'a> {
             keepalive_time_secs: *self.lynn_config.get_tcp_keepalive_time_secs(),
             recv_buffer_size: *self.lynn_config.get_recv_buffer_size(),
             send_buffer_size: *self.lynn_config.get_send_buffer_size(),
+            read_timeout_secs: *self.lynn_config.get_read_timeout_secs(),
+            write_timeout_secs: *self.lynn_config.get_write_timeout_secs(),
         };
 
         // Build the transport acceptor: plain TCP, or TLS 1.3 when configured

@@ -28,6 +28,7 @@ use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::connection::connection_limiter::ConnectionPermit;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
+use crate::infrastructure::tcp::io_timeout::with_io_timeout;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
 use crate::infrastructure::tcp::stream::{
     BoxedReadHalf, BoxedWriteHalf, LynnStream, split_transport,
@@ -197,9 +198,14 @@ pub(crate) async fn add_client(
     addr: SocketAddr,
     last_communicate_time: Arc<RwLock<SystemTime>>,
     permit: Option<ConnectionPermit>,
+    write_timeout_secs: u64,
 ) -> (BoxedReadHalf, ConnectionSession) {
     let (read_half, write_half): (BoxedReadHalf, BoxedWriteHalf) = split_transport(stream);
-    let (lynn_user, writer, closed) = LynnUser::new(write_half, last_communicate_time.clone());
+    let (lynn_user, writer, closed) = LynnUser::new(
+        write_half,
+        last_communicate_time.clone(),
+        write_timeout_secs,
+    );
     clients.insert(addr, lynn_user);
     (
         read_half,
@@ -228,6 +234,7 @@ pub(crate) async fn push_read_half(
     states: Arc<StateRegistry>,
     mut session: ConnectionSession,
     process_limit: usize,
+    read_timeout_secs: u64,
 ) {
     tokio::spawn(async move {
         let read = async {
@@ -235,7 +242,7 @@ pub(crate) async fn push_read_half(
             let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
 
             'read_loop: loop {
-                let result = read_half.read(&mut buf).await;
+                let result = with_io_timeout(read_timeout_secs, read_half.read(&mut buf)).await;
                 match result {
                     Ok(0) => break true,
                     Ok(n) => {
