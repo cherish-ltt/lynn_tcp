@@ -83,7 +83,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["server"] }
+lynn_tcp = { version = "2", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -92,7 +92,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["client"] }
+lynn_tcp = { version = "2", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -229,7 +229,9 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
 | `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
-> **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `features = ["metrics"]`. `tls` and `seaorm` are disabled by default and must be enabled explicitly.
+> **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `default-features = false, features = ["metrics"]`. `tls` and `seaorm` are disabled by default and must be enabled explicitly.
+
+`client` and `server` compile independently, including with `tls`. With no features enabled, the crate builds without either transport API. Examples, integration tests, and benchmark targets require their declared roles; CI checks and tests the no-feature, client-only, server-only, metrics-only, client+TLS, and server+TLS configurations.
 
 ---
 
