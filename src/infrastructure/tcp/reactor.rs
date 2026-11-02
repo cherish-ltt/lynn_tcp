@@ -201,7 +201,7 @@ impl EventManager {
                             },
                         }
                     } else {
-                        idle_count += 1;
+                        idle_count = idle_count.saturating_add(1);
                         if idle_count < 32 {
                             // Temporarily relinquish control
                             yield_now().await;

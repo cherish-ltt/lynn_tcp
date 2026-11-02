@@ -331,8 +331,36 @@ docs/
 - **编译验证**：feature 门控代码不参与默认构建，CI 与本地提交前必须通过 `cargo check --all-features --all-targets` 与 `cargo test --all-features`（已加入 rust-ci.yml，见第 2 节）。
 - **禁止静默降级**：某能力依赖 feature 时，其配置 API（builder 方法、配置结构体）必须同门控，不允许"配置了但被忽略"。
 - **TLS 安全基线**：仅启用 TLS 1.3 协议版本；客户端默认必须校验服务端证书（CA 信任锚），跳过校验仅能通过显式的 `danger_accept_invalid_certs` 且必须打日志告警。
+- **TLS 地址名称**：默认校验名称须从结构化 SocketAddr 提取 IP，支持 IPv4/IPv6；显式 server_name 保持优先，回归测试须验证真实 IP SAN 握手且不能关闭证书校验。
 - **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
 - **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
+
+### 10.8 独立 feature 构建
+
+- 角色专用模块须与 `server` / `client` 一致门控，共享类型不得隐式引入另一角色。
+- CI 除默认与全 feature 外，还检查并测试关闭默认功能后的无 feature、`client`、`server`、`metrics`、`client,tls`、`server,tls` 六种组合。
+- 示例、集成测试和基准目标使用 `required-features` 声明真实依赖；文档中的独立角色配置必须设置 `default-features = false`。
+
+### 10.12 metrics 请求边界
+
+- `/metrics` 与 `/health` 的请求行解析不得依赖 TCP 分片边界；读取须有固定长度上限和整行总期限，并覆盖分片、EOF、超长和超时回归测试。
+
+### 10.15 客户端生命周期
+
+- `LynnClient` 是连接和心跳任务的所有者；释放 owner 或取消 `start()` 必须结束其任务，克隆 sender 不得延长连接生命周期。
+- 读写操作属于监督任务的子 future，不得 detach；任一传输方向结束时释放另一方向，阻塞 I/O 与重连等待必须可取消。
+- Drop 是异步取消，不保证排空发送队列或 TLS 优雅关闭；需要确认交付的业务必须在释放前完成协议交互。
+
+### 10.14 Reactor 长空闲回归
+
+- worker 空闲退避计数必须有界，不得依赖整数溢出；使用测试专用 Tokio 虚拟时钟覆盖长空闲后的真实服务响应。
+
+...
+
+### 10.9 接收解析边界
+
+- 客户端与服务端使用同一有界解析器；错误帧必须显式终止连接，不得当作未收齐继续缓存。
+- 实际保留数据限制为最大帧长度、帧头与一次读取的总和；回归须覆盖错误帧持续输入、长度边界、分片/粘包及明文/TLS 双端关闭。
 
 ### 10.10 连接生命周期与处理许可
 

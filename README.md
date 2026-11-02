@@ -83,7 +83,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["server"] }
+lynn_tcp = { version = "2", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -92,7 +92,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["client"] }
+lynn_tcp = { version = "2", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -229,7 +229,13 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
 | `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
-> **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `features = ["metrics"]`. `tls` and `seaorm` are disabled by default and must be enabled explicitly.
+> **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `default-features = false, features = ["metrics"]`. `tls` and `seaorm` are disabled by default and must be enabled explicitly.
+
+`client` and `server` compile independently, including with `tls`. With no features enabled, the crate builds without either transport API. Examples, integration tests, and benchmark targets require their declared roles; CI checks and tests the no-feature, client-only, server-only, metrics-only, client+TLS, and server+TLS configurations.
+
+The metrics HTTP endpoint accepts TCP-fragmented request lines for `/metrics` and `/health`.
+Each request line must end with CRLF within 1024 bytes and 5 seconds; oversized or incomplete
+requests close the connection. Unknown paths still return HTTP 404.
 
 ---
 
@@ -256,6 +262,9 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `with_send_buffer_size()` | Send buffer (bytes) | `65535` |
 | `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsServerConfig` | off |
 | `with_tls_cert_paths()` *(feature `tls`)* | Enable TLS 1.3 from PEM cert/key paths | off |
+
+Reactor workers cap their idle backoff without counter wraparound and resume processing
+when work arrives, including after extended idle periods.
 
 I/O timeouts apply to both plain TCP and TLS after the handshake. Any received bytes renew
 the read-idle deadline; this is not a total-frame deadline. The write deadline covers a
@@ -315,6 +324,10 @@ let config = LynnClientConfigBuilder::new()
 
 Miss-configured TLS fails fast (missing files, invalid pairs) and handshake failures simply drop the offending connection. Run the runnable demo: `cargo run --example tls_example --features tls`.
 
+Without `with_server_name`, certificate name verification uses the server's IPv4 or IPv6
+address (for example, `[::1]:9177` requires an `::1` IP SAN). An explicit server name takes
+precedence; CA trust and name verification remain enabled by default.
+
 ---
 
 ### Global State (Dependency Injection)
@@ -345,6 +358,10 @@ State is resolved per request, so `with_state` may be called before or after `ad
 
 ---
 
+#### Receive protocol errors
+
+Both client and server reject malformed frame headers, lengths, and trailers and close the affected transport, including TLS. Valid fragmented/coalesced frames remain supported. The receive parser retains at most the 10 MiB frame limit plus the 10-byte header and one 1 KiB socket read; a terminal parse error releases its buffer and rejects further input. This is a per-parser bound, not a process-wide memory quota. Clients retain their configured reconnect policy after a protocol error.
+
 ### Client Automatic Reconnection
 
 Server connection quotas are returned after disconnect, transport errors, heartbeat eviction, or failed TLS handshakes. Read EOF drains already accepted handlers and their replies before closing the write half; heartbeat eviction still bounds unresponsive sessions. Processing permits cover queued handlers through reply enqueueing, and excess requests are rejected with a warning rather than queued without a limit.
@@ -357,6 +374,8 @@ if !client.is_connected() {
     eprintln!("server unreachable");
 }
 ```
+
+Dropping `LynnClient` cancels its connection, read/write, retry, and heartbeat work. Cloned `get_sender()` handles do not extend the client's lifetime and become closed. Cancellation is asynchronous and does not flush queued messages or guarantee a TLS `close_notify`; finish required exchanges before dropping the owner.
 
 ---
 

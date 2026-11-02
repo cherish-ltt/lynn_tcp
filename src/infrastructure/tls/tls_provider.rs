@@ -1,6 +1,6 @@
 //! rustls configuration builders (TLS 1.3 only, ring provider).
 
-use std::{io::BufReader, sync::Arc};
+use std::{io::BufReader, net::SocketAddr, sync::Arc};
 
 use rustls::{
     RootCertStore,
@@ -129,11 +129,13 @@ fn resolve_server_name(
 ) -> Result<ServerName<'static>> {
     let raw = match &config.server_name {
         Some(name) => name.clone(),
-        // Fall back to the IP literal of the server address ("ip:port").
-        None => fallback_addr
-            .rsplit_once(':')
-            .map(|(host, _)| host.to_string())
-            .unwrap_or_else(|| fallback_addr.to_string()),
+        // SocketAddr retains IPv6 brackets only in its display representation.
+        None => {
+            let addr: SocketAddr = fallback_addr.parse().map_err(|e| {
+                LynnError::tls(format!("invalid TLS server address '{fallback_addr}': {e}"))
+            })?;
+            return Ok(ServerName::from(addr.ip()));
+        },
     };
     ServerName::try_from(raw.clone())
         .map_err(|e| LynnError::tls(format!("invalid TLS server name '{raw}': {e}")))
@@ -215,7 +217,7 @@ mod tests {
     #[test]
     fn client_tls_requires_a_trust_anchor_by_default() {
         let cfg = TlsClientConfig::default();
-        let err = expect_tls_err(build_client_tls(&cfg, "127.0.0.1:9177"));
+        let err = expect_tls_err(build_client_tls(&cfg, "[::1]:9177"));
         assert!(err.to_string().contains("trust anchor"), "got: {err}");
     }
 
@@ -233,13 +235,26 @@ mod tests {
     }
 
     #[test]
+    fn ipv6_socket_names_resolve_to_ip_addresses() {
+        let cfg = TlsClientConfig::default();
+        for addr in ["127.0.0.1:9177", "[::1]:9177", "[2001:db8::1234]:9177"] {
+            let socket: std::net::SocketAddr = addr.parse().unwrap();
+            assert_eq!(
+                resolve_server_name(&cfg, addr).unwrap(),
+                ServerName::from(socket.ip())
+            );
+        }
+        assert!(resolve_server_name(&cfg, "not a socket address").is_err());
+    }
+
+    #[test]
     fn server_name_override_wins() {
         let cfg = TlsClientConfigBuilder::new()
             .with_ca_cert_path("/nonexistent/ca.pem")
             .with_server_name("example.test")
             .build();
         // Fails later on the missing CA file, but the name must resolve first.
-        let err = expect_tls_err(build_client_tls(&cfg, "127.0.0.1:9177"));
+        let err = expect_tls_err(build_client_tls(&cfg, "[::1]:9177"));
         assert!(
             err.to_string().contains("ca.pem"),
             "name resolution passed, CA load failed: {err}"

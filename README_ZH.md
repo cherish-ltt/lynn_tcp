@@ -83,7 +83,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["server"] }
+lynn_tcp = { version = "2", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -92,7 +92,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["client"] }
+lynn_tcp = { version = "2", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -229,7 +229,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
-> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
+> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`default-features = false, features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
+
+`client` 与 `server` 可独立编译，也可分别搭配 `tls`。未启用任何 feature 时，crate 仍可构建，但不提供两种传输 API。示例、集成测试及基准目标须启用其声明的角色；CI 检查并测试无 feature、仅客户端、仅服务端、仅 metrics、客户端+TLS、服务端+TLS 六种配置。
+
+metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达。
+请求行必须在 1024 字节内以 CRLF 结束，并在 5 秒内收齐；超长或不完整的请求会关闭连接。
+未知路径仍返回 HTTP 404。
 
 ---
 
@@ -256,6 +262,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `with_send_buffer_size()` | 发送缓冲区（字节） | `65535` |
 | `with_tls()` *（feature `tls`）* | 使用 `TlsServerConfig` 开启 TLS 1.3 | 关闭 |
 | `with_tls_cert_paths()` *（feature `tls`）* | 从 PEM 证书/私钥路径开启 TLS 1.3 | 关闭 |
+
+Reactor worker 的空闲退避有上限，计数不会溢出回绕；长时间空闲后收到任务仍会恢复处理。
 
 I/O 超时适用于明文 TCP 和握手后的 TLS。每次收到字节都会重置读取空闲期限，
 因此它不是完整帧的总时限。写入期限覆盖单次响应及其刷新，最终关闭另计期限。
@@ -314,6 +322,9 @@ let config = LynnClientConfigBuilder::new()
 
 TLS 配置错误（文件缺失、证书私钥不配对）会在启动时立即报错；握手失败的连接会被直接关闭。可运行演示：`cargo run --example tls_example --features tls`。
 
+未设置 `with_server_name` 时，证书名称校验使用服务器的 IPv4 或 IPv6 地址
+（例如 `[::1]:9177` 需要证书包含 `::1` IP SAN）。显式服务器名称优先，默认仍校验 CA 信任及证书名称。
+
 ---
 
 ### 全局状态（依赖注入）
@@ -344,6 +355,10 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 
 ---
 
+#### 接收协议错误
+
+客户端与服务端会拒绝错误的帧头、长度和帧尾，并关闭对应传输连接（包括 TLS）；正常分片与粘包仍受支持。接收解析器最多保留 10 MiB 帧上限、10 字节帧头及一次 1 KiB socket 读取的数据；终止性解析错误会释放缓存并拒绝后续输入。这是单解析器的数据保留上限，不是进程级内存配额。客户端在协议错误后仍遵循已配置的重连策略。
+
 ### 客户端断线自动重连
 
 服务端在断线、传输错误、心跳驱逐或 TLS 握手失败后归还连接配额。读取 EOF 后先完成已接收的处理任务并发送其响应，再关闭写半部；无响应会话仍受心跳驱逐约束。处理许可覆盖请求排队、执行直至响应入队，超限请求被拒绝并记录告警，不再无界排队。
@@ -356,6 +371,8 @@ if !client.is_connected() {
     eprintln!("服务器不可达");
 }
 ```
+
+释放 `LynnClient` 会取消连接、读写、重试及心跳任务。`get_sender()` 克隆出的句柄不会延长客户端生命周期，并将进入关闭状态。取消异步完成，不保证发送完队列中的消息或发送 TLS `close_notify`；必须完成的交互应在释放 owner 前结束。
 
 ---
 

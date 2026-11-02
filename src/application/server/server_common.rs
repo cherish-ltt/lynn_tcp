@@ -241,14 +241,25 @@ pub(crate) async fn push_read_half(
             let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
             let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
 
-            loop {
+            'read_loop: loop {
                 let result = with_io_timeout(read_timeout_secs, read_half.read(&mut buf)).await;
                 match result {
                     Ok(0) => break true,
                     Ok(n) => {
-                        big_buf.extend_from_slice(&buf[..n]);
-                        while big_buf.is_complete() {
-                            let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
+                        if let Err(error) = big_buf.extend_from_slice(&buf[..n]) {
+                            warn!("Invalid frame from {addr}: {error}");
+                            break false;
+                        }
+                        loop {
+                            let payload = match big_buf.next_frame() {
+                                Ok(Some(payload)) => payload,
+                                Ok(None) => break,
+                                Err(error) => {
+                                    warn!("Invalid frame from {addr}: {error}");
+                                    break 'read_loop false;
+                                },
+                            };
+                            let mut input_buf_vo = InputBufVO::new(payload, addr);
                             if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
                                 match constructor_id {
                                     2 => {

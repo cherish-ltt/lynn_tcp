@@ -68,3 +68,28 @@ jobs:
 
       - name: Run tests (all features)
         run: cargo test --all-features
+
+  feature-matrix:
+    name: Features (${{ matrix.features || 'none' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        features: ["", "client", "server", "metrics", "client,tls", "server,tls"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.98.1"
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check isolated features
+        run: cargo check --locked --no-default-features --features "${{ matrix.features }}" --all-targets
+
+      - name: Test isolated features
+        run: cargo test --locked --no-default-features --features "${{ matrix.features }}"
