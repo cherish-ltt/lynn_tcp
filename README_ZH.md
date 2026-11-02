@@ -240,7 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `with_addr()` | 服务器监听地址 | `0.0.0.0:9177` |
 | `with_server_max_connections()` | 最大并发连接数 | `100_000` |
 | `with_server_max_taskpool_size()` | 异步任务池大小（吞吐量） | `512` |
-| `with_server_single_process_permit()` | 最大并发处理任务数 | `1024` |
+| `with_server_single_process_permit()` | 每连接排队及执行中的请求上限（0=拒绝请求） | `14` |
 | `with_server_check_heart_interval()` | 心跳检测间隔（秒） | `60` |
 | `with_server_check_heart_timeout_time()` | 心跳超时时间（秒） | `180` |
 | `with_tcp_nodelay()` | TCP_NODELAY（禁用 Nagle 算法） | `true` |
@@ -248,7 +248,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `with_tcp_keepalive_time_secs()` | 保活间隔（秒） | `120` |
 | `with_message_header_mark()` | 自定义消息头标记 | `0x23D9` |
 | `with_message_tail_mark()` | 自定义消息尾标记 | `0x1E27` |
-| `with_max_connections_per_ip()` | 每 IP 最大连接数 | `100` |
+| `with_max_connections_per_ip()` | 每 IP 活跃连接上限（0=禁用） | `10` |
 | `with_connection_rate_limit()` | 连接速率限制（每秒，0=禁用） | `0` |
 | `with_read_timeout_secs()` | 读取超时（秒，0=禁用） | `0` |
 | `with_write_timeout_secs()` | 写入超时（秒，0=禁用） | `0` |
@@ -340,6 +340,8 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 ---
 
 ### 客户端断线自动重连
+
+服务端在断线、传输错误、心跳驱逐或 TLS 握手失败后归还连接配额。读取 EOF 后先完成已接收的处理任务并发送其响应，再关闭写半部；无响应会话仍受心跳驱逐约束。处理许可覆盖请求排队、执行直至响应入队，超限请求被拒绝并记录告警，不再无界排队。
 
 客户端内置连接监督者：连接断开后自动重连 —— **默认尝试 3 次**，间隔 1 秒（均可配置）。用户侧收发通道跨重连复用，断线期间积压的过期帧会被丢弃，连接状态可随时查询：
 

@@ -334,4 +334,8 @@ docs/
 - **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
 - **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
 
-...
+### 10.10 连接生命周期与处理许可
+
+- 连接配额必须随接受事件、TLS 握手及读写会话转移所有权，所有终止路径恰好归还一次；清理旧连接不得移除相同地址的新连接。
+- 每连接处理许可覆盖排队、handler 执行及响应入队；panic 也必须释放许可，超限和零许可保留拒绝并告警语义。
+- 正常读取 EOF 排空已接收请求及其响应；错误和心跳驱逐终止读写两端，不得持有 DashMap guard 跨异步等待。

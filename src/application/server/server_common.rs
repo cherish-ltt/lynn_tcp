@@ -12,6 +12,7 @@ use tokio::{
 };
 use tracing::{error, info, warn};
 
+use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::ReactorEventSender;
 use crate::const_config::{
     DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
@@ -25,6 +26,7 @@ use crate::domain::model::lynn_user::LynnUser;
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
+use crate::infrastructure::connection::connection_limiter::ConnectionPermit;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
 use crate::infrastructure::tcp::stream::{
@@ -64,14 +66,19 @@ pub(super) fn spawn_check_heart(
                     if let Ok(duration) = current_time.duration_since(time_old)
                         && duration > timeout_duration
                     {
-                        remove_list.push(addr);
+                        remove_list.push((addr, last_communicate_time.clone()));
                     }
                 }
                 // If unable to obtain a read lock, skip the client to avoid blocking
             }
 
-            for addr in remove_list {
-                if let Some((_, user)) = clients.remove(&addr) {
+            for (addr, identity) in remove_list {
+                if clients
+                    .remove_if(&addr, |_, user| {
+                        Arc::ptr_eq(&user.get_last_communicate_time(), &identity)
+                    })
+                    .is_some()
+                {
                     info!(
                         "Clean up addr:{}, that have not sent messages for a long time",
                         addr
@@ -135,8 +142,11 @@ async fn send_response(
     let mut delay_socket = Vec::with_capacity(addrs.len());
 
     for socket_addr in addrs {
-        if let Some(socket) = clients.get(socket_addr) {
-            socket.send_response(response).await;
+        let send = clients
+            .get(socket_addr)
+            .map(|user| user.send_response(response));
+        if let Some(send) = send {
+            send.await;
         } else {
             delay_socket.push(*socket_addr);
         }
@@ -160,8 +170,8 @@ pub(crate) async fn input_dto_build(
     states: Arc<StateRegistry>,
 ) {
     // Attempt to acquire a permit from the semaphore.
-    match process_permit.try_acquire() {
-        Ok(_permit) => {
+    match process_permit.try_acquire_owned() {
+        Ok(permit) => {
             reactor_event_sender.push(ReactorEvent::crate_execute_task_event((
                 handler_method,
                 HandlerContext::new(
@@ -170,6 +180,7 @@ pub(crate) async fn input_dto_build(
                     states,
                 ),
                 clients,
+                permit,
             )));
         },
         Err(_) => {
@@ -185,11 +196,22 @@ pub(crate) async fn add_client(
     stream: LynnStream,
     addr: SocketAddr,
     last_communicate_time: Arc<RwLock<SystemTime>>,
-) -> BoxedReadHalf {
+    permit: Option<ConnectionPermit>,
+) -> (BoxedReadHalf, ConnectionSession) {
     let (read_half, write_half): (BoxedReadHalf, BoxedWriteHalf) = split_transport(stream);
-    let lynn_user = LynnUser::new(write_half, last_communicate_time);
+    let (lynn_user, writer, closed) = LynnUser::new(write_half, last_communicate_time.clone());
     clients.insert(addr, lynn_user);
-    read_half
+    (
+        read_half,
+        ConnectionSession {
+            writer,
+            closed,
+            clients,
+            addr,
+            last_communicate_time,
+            permit,
+        },
+    )
 }
 
 #[inline(always)]
@@ -204,60 +226,108 @@ pub(crate) async fn push_read_half(
     reactor_event_sender: ReactorEventSender,
     last_communicate_time: Arc<RwLock<SystemTime>>,
     states: Arc<StateRegistry>,
+    mut session: ConnectionSession,
+    process_limit: usize,
 ) {
     tokio::spawn(async move {
-        let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
-        let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
+        let read = async {
+            let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
+            let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
 
-        loop {
-            let result = read_half.read(&mut buf).await;
-            match result {
-                Ok(0) => break,
-                Ok(n) => {
-                    big_buf.extend_from_slice(&buf[..n]);
-                    while big_buf.is_complete() {
-                        let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
-                        if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
-                            match constructor_id {
-                                2 => {
-                                    if let Ok(mut time_guard) = last_communicate_time.try_write() {
-                                        *time_guard = SystemTime::now();
-                                    }
-                                    continue;
-                                },
-                                1 => {
-                                    if let Some(method_id) = input_buf_vo.get_method_id() {
-                                        if let Some(handler_method) =
-                                            lynn_router.get_handler_by_method_id(&method_id)
+            loop {
+                let result = read_half.read(&mut buf).await;
+                match result {
+                    Ok(0) => break true,
+                    Ok(n) => {
+                        big_buf.extend_from_slice(&buf[..n]);
+                        while big_buf.is_complete() {
+                            let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
+                            if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
+                                match constructor_id {
+                                    2 => {
+                                        if let Ok(mut time_guard) =
+                                            last_communicate_time.try_write()
                                         {
-                                            input_dto_build(
-                                                addr,
-                                                input_buf_vo,
-                                                process_permit.clone(),
-                                                clients.clone(),
-                                                handler_method.clone(),
-                                                reactor_event_sender.clone(),
-                                                states.clone(),
-                                            )
-                                            .await;
-                                        } else {
-                                            warn!("router_map_async no method match,{}", method_id);
+                                            *time_guard = SystemTime::now();
                                         }
-                                    } else {
-                                        warn!("router_map_async input_buf_vo no method_id");
-                                    }
-                                },
-                                _ => {
-                                    warn!("Unknown constructor_id: {}", constructor_id);
-                                },
+                                        continue;
+                                    },
+                                    1 => {
+                                        if let Some(method_id) = input_buf_vo.get_method_id() {
+                                            if let Some(handler_method) =
+                                                lynn_router.get_handler_by_method_id(&method_id)
+                                            {
+                                                input_dto_build(
+                                                    addr,
+                                                    input_buf_vo,
+                                                    process_permit.clone(),
+                                                    clients.clone(),
+                                                    handler_method.clone(),
+                                                    reactor_event_sender.clone(),
+                                                    states.clone(),
+                                                )
+                                                .await;
+                                            } else {
+                                                warn!(
+                                                    "router_map_async no method match,{}",
+                                                    method_id
+                                                );
+                                            }
+                                        } else {
+                                            warn!("router_map_async input_buf_vo no method_id");
+                                        }
+                                    },
+                                    _ => {
+                                        warn!("Unknown constructor_id: {}", constructor_id);
+                                    },
+                                }
                             }
                         }
+                    },
+                    Err(e) => {
+                        error!("Failed to read from socket: {}", e.to_string());
+                        break false;
+                    },
+                }
+            }
+        };
+        let graceful = tokio::select! {
+            graceful = read => graceful,
+            _ = &mut session.writer => false,
+            _ = session.closed.changed() => false,
+        };
+        if !graceful {
+            return;
+        }
+        let drain = async {
+            // Keep accepted handlers and their queued replies alive after a peer's write EOF.
+            let mut remaining = process_limit;
+            while remaining > 0 {
+                let batch = remaining.min(u32::MAX as usize) as u32;
+                let Ok(permit) = process_permit.acquire_many(batch).await else {
+                    return;
+                };
+                permit.forget();
+                remaining -= batch as usize;
+            }
+        };
+        let drained = tokio::select! {
+            _ = drain => true,
+            _ = &mut session.writer => false,
+            _ = session.closed.changed() => false,
+        };
+        if drained {
+            tokio::select! {
+                _ = async {
+                    let shutdown = clients.get(&addr).filter(|user| {
+                        Arc::ptr_eq(&user.get_last_communicate_time(), &last_communicate_time)
+                    }).map(|user| user.shutdown());
+                    if let Some(shutdown) = shutdown {
+                        shutdown.await;
                     }
-                },
-                Err(e) => {
-                    error!("Failed to read from socket: {}", e.to_string());
-                    break;
-                },
+                    let _ = (&mut session.writer).await;
+                } => {},
+                _ = session.closed.changed() => {},
             }
         }
     });

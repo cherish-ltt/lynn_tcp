@@ -240,7 +240,7 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `with_addr()` | Server listen address | `0.0.0.0:9177` |
 | `with_server_max_connections()` | Max concurrent connections | `100_000` |
 | `with_server_max_taskpool_size()` | Async task pool size (throughput) | `512` |
-| `with_server_single_process_permit()` | Max concurrent processing tasks | `1024` |
+| `with_server_single_process_permit()` | Max queued/running requests per connection (0 = reject requests) | `14` |
 | `with_server_check_heart_interval()` | Heartbeat check interval (s) | `60` |
 | `with_server_check_heart_timeout_time()` | Heartbeat timeout (s) | `180` |
 | `with_tcp_nodelay()` | TCP_NODELAY (disable Nagle) | `true` |
@@ -248,7 +248,7 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `with_tcp_keepalive_time_secs()` | Keep-alive interval (s) | `120` |
 | `with_message_header_mark()` | Custom message header mark | `0x23D9` |
 | `with_message_tail_mark()` | Custom message tail mark | `0x1E27` |
-| `with_max_connections_per_ip()` | Max connections per IP | `100` |
+| `with_max_connections_per_ip()` | Max active connections per IP (0 = disabled) | `10` |
 | `with_connection_rate_limit()` | Connection rate (per second) | `0` (disabled) |
 | `with_read_timeout_secs()` | Read timeout (s, 0 = disabled) | `0` |
 | `with_write_timeout_secs()` | Write timeout (s, 0 = disabled) | `0` |
@@ -340,6 +340,8 @@ State is resolved per request, so `with_state` may be called before or after `ad
 ---
 
 ### Client Automatic Reconnection
+
+Server connection quotas are returned after disconnect, transport errors, heartbeat eviction, or failed TLS handshakes. Read EOF drains already accepted handlers and their replies before closing the write half; heartbeat eviction still bounds unresponsive sessions. Processing permits cover queued handlers through reply enqueueing, and excess requests are rejected with a warning rather than queued without a limit.
 
 The client supervises its own connection: when it drops, it reconnects automatically — **3 attempts by default**, 1s apart (configurable). User-facing channels survive reconnections, stale queued frames are discarded, and the live state is one call away:
 
