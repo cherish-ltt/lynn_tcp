@@ -231,6 +231,10 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 
 > **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `features = ["metrics"]`. `tls` and `seaorm` are disabled by default and must be enabled explicitly.
 
+The metrics HTTP endpoint accepts TCP-fragmented request lines for `/metrics` and `/health`.
+Each request line must end with CRLF within 1024 bytes and 5 seconds; oversized or incomplete
+requests close the connection. Unknown paths still return HTTP 404.
+
 ---
 
 ### Available Configuration (LynnServerConfigBuilder)

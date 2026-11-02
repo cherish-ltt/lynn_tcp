@@ -231,6 +231,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 > **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
 
+metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达。
+请求行必须在 1024 字节内以 CRLF 结束，并在 5 秒内收齐；超长或不完整的请求会关闭连接。
+未知路径仍返回 HTTP 404。
+
 ---
 
 ### 可配置项（LynnServerConfigBuilder）

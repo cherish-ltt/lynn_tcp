@@ -334,4 +334,8 @@ docs/
 - **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
 - **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
 
+### 10.12 metrics 请求边界
+
+- `/metrics` 与 `/health` 的请求行解析不得依赖 TCP 分片边界；读取须有固定长度上限和整行总期限，并覆盖分片、EOF、超长和超时回归测试。
+
 ...
