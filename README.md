@@ -350,6 +350,8 @@ if !client.is_connected() {
 }
 ```
 
+Dropping `LynnClient` cancels its connection, read/write, retry, and heartbeat work. Cloned `get_sender()` handles do not extend the client's lifetime and become closed. Cancellation is asynchronous and does not flush queued messages or guarantee a TLS `close_notify`; finish required exchanges before dropping the owner.
+
 ---
 
 ### Road Map

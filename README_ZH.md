@@ -350,6 +350,8 @@ if !client.is_connected() {
 }
 ```
 
+释放 `LynnClient` 会取消连接、读写、重试及心跳任务。`get_sender()` 克隆出的句柄不会延长客户端生命周期，并将进入关闭状态。取消异步完成，不保证发送完队列中的消息或发送 TLS `close_notify`；必须完成的交互应在释放 owner 前结束。
+
 ---
 
 ### 规划

@@ -334,4 +334,10 @@ docs/
 - **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
 - **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
 
+### 10.15 客户端生命周期
+
+- `LynnClient` 是连接和心跳任务的所有者；释放 owner 或取消 `start()` 必须结束其任务，克隆 sender 不得延长连接生命周期。
+- 读写操作属于监督任务的子 future，不得 detach；任一传输方向结束时释放另一方向，阻塞 I/O 与重连等待必须可取消。
+- Drop 是异步取消，不保证排空发送队列或 TLS 优雅关闭；需要确认交付的业务必须在释放前完成协议交互。
+
 ...
