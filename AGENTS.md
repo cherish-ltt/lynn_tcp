@@ -340,6 +340,10 @@ docs/
 - CI 除默认与全 feature 外，还检查并测试关闭默认功能后的无 feature、`client`、`server`、`metrics`、`client,tls`、`server,tls` 六种组合。
 - 示例、集成测试和基准目标使用 `required-features` 声明真实依赖；文档中的独立角色配置必须设置 `default-features = false`。
 
+### 10.12 metrics 请求边界
+
+- `/metrics` 与 `/health` 的请求行解析不得依赖 TCP 分片边界；读取须有固定长度上限和整行总期限，并覆盖分片、EOF、超长和超时回归测试。
+
 ...
 
 ### 10.9 接收解析边界

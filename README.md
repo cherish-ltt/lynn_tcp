@@ -233,6 +233,10 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 
 `client` and `server` compile independently, including with `tls`. With no features enabled, the crate builds without either transport API. Examples, integration tests, and benchmark targets require their declared roles; CI checks and tests the no-feature, client-only, server-only, metrics-only, client+TLS, and server+TLS configurations.
 
+The metrics HTTP endpoint accepts TCP-fragmented request lines for `/metrics` and `/health`.
+Each request line must end with CRLF within 1024 bytes and 5 seconds; oversized or incomplete
+requests close the connection. Unknown paths still return HTTP 404.
+
 ---
 
 ### Available Configuration (LynnServerConfigBuilder)

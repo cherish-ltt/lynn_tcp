@@ -8,6 +8,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[cfg(feature = "metrics")]
 use tokio::net::TcpListener;
 #[cfg(feature = "metrics")]
+use tokio::time::{Duration, timeout};
+#[cfg(feature = "metrics")]
 use tracing::{error, info};
 
 use crate::infrastructure::metrics::metrics::export_metrics;
@@ -54,11 +56,35 @@ async fn handle_connection(
     socket: &mut tokio::net::TcpStream,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut read_buf = [0; 1024];
-    let mut request_line = String::new();
 
     // Read the request line
-    let n = socket.read(&mut read_buf).await?;
-    request_line.push_str(&String::from_utf8_lossy(&read_buf[..n]));
+    let line_len = timeout(Duration::from_secs(5), async {
+        let mut filled = 0;
+        loop {
+            if filled == read_buf.len() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "metrics request line exceeds 1024 bytes",
+                ));
+            }
+            let n = socket.read(&mut read_buf[filled..]).await?;
+            if n == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "incomplete metrics request line",
+                ));
+            }
+            filled += n;
+            if let Some(end) = read_buf[..filled]
+                .windows(2)
+                .position(|pair| pair == b"\r\n")
+            {
+                return Ok(end);
+            }
+        }
+    })
+    .await??;
+    let request_line = std::str::from_utf8(&read_buf[..line_len])?;
 
     // Check if it's a GET /metrics request
     if request_line.starts_with("GET /metrics ") {
@@ -129,7 +155,112 @@ mod tests {
     use tokio::time::{Duration, sleep};
 
     #[tokio::test]
+    async fn fragmented_request_lines_are_accepted_at_every_boundary() {
+        for path in ["metrics", "health"] {
+            let request = format!("GET /{path} HTTP/1.1\r\n\r\n");
+            for split in 1..request.len() {
+                let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+                    .await
+                    .unwrap();
+                let (mut server, _) = listener.accept().await.unwrap();
+                let (result, response) = tokio::join!(handle_connection(&mut server), async {
+                    client
+                        .write_all(&request.as_bytes()[..split])
+                        .await
+                        .unwrap();
+                    sleep(Duration::from_millis(5)).await;
+                    client
+                        .write_all(&request.as_bytes()[split..])
+                        .await
+                        .unwrap();
+                    let mut response = [0; 17];
+                    timeout(Duration::from_secs(2), client.read_exact(&mut response))
+                        .await
+                        .unwrap()
+                        .unwrap();
+                    response
+                });
+                result.unwrap();
+                assert!(
+                    response.starts_with(b"HTTP/1.1 200 OK\r\n"),
+                    "{path}, split={split}: {}",
+                    String::from_utf8_lossy(&response)
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn request_line_can_arrive_one_byte_at_a_time() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        let (mut server, _) = listener.accept().await.unwrap();
+        let (result, ()) = tokio::join!(handle_connection(&mut server), async {
+            for byte in b"GET /health HTTP/1.1\r\n" {
+                client.write_all(&[*byte]).await.unwrap();
+                sleep(Duration::from_millis(5)).await;
+            }
+        });
+        result.unwrap();
+        let mut response = [0; 17];
+        timeout(Duration::from_secs(2), client.read_exact(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(&response, b"HTTP/1.1 200 OK\r\n");
+    }
+
+    #[tokio::test]
+    async fn incomplete_and_oversized_request_lines_are_rejected() {
+        for (request, expected) in [
+            (b"GET /met".to_vec(), std::io::ErrorKind::UnexpectedEof),
+            (vec![b'G'; 1024], std::io::ErrorKind::InvalidData),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+                .await
+                .unwrap();
+            let (mut server, _) = listener.accept().await.unwrap();
+            client.write_all(&request).await.unwrap();
+            client.shutdown().await.unwrap();
+            let error = handle_connection(&mut server).await.unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                expected
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn incomplete_request_line_has_a_total_deadline() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+            .await
+            .unwrap();
+        let (mut server, _) = listener.accept().await.unwrap();
+        let (result, ()) = tokio::join!(
+            timeout(Duration::from_secs(7), handle_connection(&mut server)),
+            async {
+                for _ in 0..6 {
+                    client.write_all(b"G").await.unwrap();
+                    sleep(Duration::from_secs(1)).await;
+                }
+            }
+        );
+        assert!(
+            result
+                .expect("incoming bytes must not reset the total deadline")
+                .unwrap_err()
+                .is::<tokio::time::error::Elapsed>()
+        );
+    }
+
+    #[tokio::test]
     async fn test_metrics_server() {
+        lazy_static::initialize(&crate::infrastructure::metrics::metrics::METRICS);
         let config = MetricsServerConfig {
             bind_addr: "127.0.0.1:19991".to_string(),
             enabled: true,

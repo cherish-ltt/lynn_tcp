@@ -233,6 +233,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `client` 与 `server` 可独立编译，也可分别搭配 `tls`。未启用任何 feature 时，crate 仍可构建，但不提供两种传输 API。示例、集成测试及基准目标须启用其声明的角色；CI 检查并测试无 feature、仅客户端、仅服务端、仅 metrics、客户端+TLS、服务端+TLS 六种配置。
 
+metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达。
+请求行必须在 1024 字节内以 CRLF 结束，并在 5 秒内收齐；超长或不完整的请求会关闭连接。
+未知路径仍返回 HTTP 404。
+
 ---
 
 ### 可配置项（LynnServerConfigBuilder）
