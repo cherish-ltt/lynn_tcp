@@ -241,13 +241,21 @@ mod tests {
             .await
             .unwrap();
         let (mut server, _) = listener.accept().await.unwrap();
-        let (result, ()) = tokio::join!(handle_connection(&mut server), async {
-            for _ in 0..6 {
-                client.write_all(b"G").await.unwrap();
-                sleep(Duration::from_secs(1)).await;
+        let (result, ()) = tokio::join!(
+            timeout(Duration::from_secs(7), handle_connection(&mut server)),
+            async {
+                for _ in 0..6 {
+                    client.write_all(b"G").await.unwrap();
+                    sleep(Duration::from_secs(1)).await;
+                }
             }
-        });
-        assert!(result.unwrap_err().is::<tokio::time::error::Elapsed>());
+        );
+        assert!(
+            result
+                .expect("incoming bytes must not reset the total deadline")
+                .unwrap_err()
+                .is::<tokio::time::error::Elapsed>()
+        );
     }
 
     #[tokio::test]
