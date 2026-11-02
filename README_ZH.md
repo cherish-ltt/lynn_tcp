@@ -83,7 +83,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["server"] }
+lynn_tcp = { version = "2", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -92,7 +92,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["client"] }
+lynn_tcp = { version = "2", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -229,7 +229,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
-> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
+> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`default-features = false, features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
+
+`client` 与 `server` 可独立编译，也可分别搭配 `tls`。未启用任何 feature 时，crate 仍可构建，但不提供两种传输 API。示例、集成测试及基准目标须启用其声明的角色；CI 检查并测试无 feature、仅客户端、仅服务端、仅 metrics、客户端+TLS、服务端+TLS 六种配置。
 
 metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达。
 请求行必须在 1024 字节内以 CRLF 结束，并在 5 秒内收齐；超长或不完整的请求会关闭连接。
@@ -342,6 +344,10 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 状态在请求处理时解析，因此 `with_state` 可以在 `add_router` 之前或之后调用 —— 只需在 `start()` 前注册即可。可运行演示：`cargo run --example state_example`。
 
 ---
+
+#### 接收协议错误
+
+客户端与服务端会拒绝错误的帧头、长度和帧尾，并关闭对应传输连接（包括 TLS）；正常分片与粘包仍受支持。接收解析器最多保留 10 MiB 帧上限、10 字节帧头及一次 1 KiB socket 读取的数据；终止性解析错误会释放缓存并拒绝后续输入。这是单解析器的数据保留上限，不是进程级内存配额。客户端在协议错误后仍遵循已配置的重连策略。
 
 ### 客户端断线自动重连
 

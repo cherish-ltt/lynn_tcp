@@ -135,8 +135,11 @@ async fn send_response(
     let mut delay_socket = Vec::with_capacity(addrs.len());
 
     for socket_addr in addrs {
-        if let Some(socket) = clients.get(socket_addr) {
-            socket.send_response(response).await;
+        let send = clients
+            .get(socket_addr)
+            .map(|user| user.send_response(response));
+        if let Some(send) = send {
+            send.await;
         } else {
             delay_socket.push(*socket_addr);
         }
@@ -209,14 +212,34 @@ pub(crate) async fn push_read_half(
         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
         let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
 
-        loop {
+        'read_loop: loop {
             let result = read_half.read(&mut buf).await;
             match result {
                 Ok(0) => break,
                 Ok(n) => {
-                    big_buf.extend_from_slice(&buf[..n]);
-                    while big_buf.is_complete() {
-                        let mut input_buf_vo = InputBufVO::new(big_buf.get_data(), addr);
+                    if let Err(error) = big_buf.extend_from_slice(&buf[..n]) {
+                        warn!("Invalid frame from {addr}: {error}");
+                        clients.remove_if(&addr, |_, user| {
+                            Arc::ptr_eq(&user.get_last_communicate_time(), &last_communicate_time)
+                        });
+                        break;
+                    }
+                    loop {
+                        let payload = match big_buf.next_frame() {
+                            Ok(Some(payload)) => payload,
+                            Ok(None) => break,
+                            Err(error) => {
+                                warn!("Invalid frame from {addr}: {error}");
+                                clients.remove_if(&addr, |_, user| {
+                                    Arc::ptr_eq(
+                                        &user.get_last_communicate_time(),
+                                        &last_communicate_time,
+                                    )
+                                });
+                                break 'read_loop;
+                            },
+                        };
+                        let mut input_buf_vo = InputBufVO::new(payload, addr);
                         if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
                             match constructor_id {
                                 2 => {

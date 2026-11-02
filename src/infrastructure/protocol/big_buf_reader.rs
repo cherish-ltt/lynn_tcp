@@ -1,202 +1,80 @@
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 
 use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
-use crate::domain::model::message_validation::validate_message_length;
+use crate::domain::model::message_validation::{MAX_MESSAGE_SIZE, validate_message_length};
+use crate::{LynnError, Result};
 
-/// A struct for reading large buffers.
+// One maximum frame plus the next socket read, which may also contain another frame.
+const MAX_BUFFER_SIZE: usize = MAX_MESSAGE_SIZE + 10 + DEFAULT_MAX_RECEIVE_BYTES_SIZE;
+
+/// A bounded receive buffer shared by the client and server.
 pub(crate) struct BigBufReader {
-    /// The data buffer.
     data: BytesMut,
-    /// The remaining data buffer.
-    remaining_data: Option<BytesMut>,
-    /// The target length of the data buffer.
-    target_len: Option<usize>,
-    /// The message header mark.
     message_header_mark: u16,
-    /// The message tail mark.
     message_tail_mark: u16,
+    failed: bool,
 }
 
 impl BigBufReader {
-    /// Creates a new `BigBufReader` instance.
-    ///
-    /// # Parameters
-    ///
-    /// * `message_header_mark` - The message header mark.
-    /// * `message_tail_mark` - The message tail mark.
-    ///
-    /// # Returns
-    ///
-    /// A new `BigBufReader` instance.
     pub(crate) fn new(message_header_mark: u16, message_tail_mark: u16) -> Self {
         Self {
             data: BytesMut::with_capacity(DEFAULT_MAX_RECEIVE_BYTES_SIZE),
-            remaining_data: None,
-            target_len: None,
             message_header_mark,
             message_tail_mark,
+            failed: false,
         }
     }
 
-    /// Forces the buffer to be cleared.
-    pub(crate) fn forced_clear(&mut self) {
-        self.data.clear();
-        self.remaining_data = None;
-        self.target_len = None;
+    fn reject(&mut self, error: LynnError) -> LynnError {
+        self.failed = true;
+        self.data = BytesMut::new();
+        error
     }
 
-    /// Checks the data in the buffer.
-    pub(crate) fn check_data(&mut self) {
-        if let Some(target_len) = self.target_len {
-            if self.data.len() > 10 + target_len && self.data.len() > 12 {
-                let data = if target_len != 0 && target_len >= 2 {
-                    self.data.split_off(10 + target_len)
-                } else {
-                    self.data.split_off(12)
-                };
-                self.data.clear();
-                self.target_len = None;
-                self.extend_from_slice(&data);
-            } else {
-                self.data.clear();
-                self.target_len = None;
-                if let Some(buf) = &self.remaining_data {
-                    let buf = buf.clone();
-                    self.remaining_data = None;
-                    self.extend_from_slice(&buf);
-                }
-            }
-        } else {
-            if !self.data.is_empty() {
-                self.data.clear();
-            }
-            if let Some(buf) = &self.remaining_data {
-                let buf = buf.clone();
-                self.remaining_data = None;
-                self.target_len = None;
-                self.extend_from_slice(&buf);
-            }
+    pub(crate) fn extend_from_slice(&mut self, buf: &[u8]) -> Result<()> {
+        if self.failed {
+            return Err(LynnError::protocol("receive parser is closed"));
         }
-    }
-
-    /// Checks if the buffer is empty.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the buffer is empty, `false` otherwise.
-    pub(crate) fn is_empty(&self) -> bool {
-        self.data.is_empty()
-    }
-
-    /// Gets the length of the next buffer to be extended.
-    ///
-    /// # Returns
-    ///
-    /// The length of the next buffer to be extended, or `None` if the buffer is already complete.
-    pub(crate) fn get_next_extend_buf_len(&mut self) -> Option<usize> {
-        if let Some(target_len) = self.target_len {
-            let len = self.data.len();
-            if len < target_len + 10 {
-                return Some(target_len + 10 - len);
-            }
+        if buf.len() > MAX_BUFFER_SIZE - self.data.len() {
+            return Err(self.reject(LynnError::protocol("receive buffer limit exceeded")));
         }
-        None
+        self.data.extend_from_slice(buf);
+        Ok(())
     }
 
-    /// Checks if the buffer is complete.
-    ///
-    /// # Returns
-    ///
-    /// `true` if the buffer is complete, `false` otherwise.
-    pub(crate) fn is_complete(&mut self) -> bool {
-        if let Some(target_len) = self.target_len {
-            if !self.is_empty()
-                && self.data.len() >= 10 + target_len as usize
-                && self.data.len() >= 12
-                && u16::from_le_bytes([
-                    self.data[10 + target_len - 2],
-                    self.data[10 + target_len - 1],
-                ]) == self.message_tail_mark
-            {
-                return true;
-            }
+    /// Returns a payload, an incomplete frame, or a terminal protocol error.
+    pub(crate) fn next_frame(&mut self) -> Result<Option<BytesMut>> {
+        if self.failed {
+            return Err(LynnError::protocol("receive parser is closed"));
         }
-        false
-    }
-
-    /// Gets the data from the buffer.
-    ///
-    /// # Returns
-    ///
-    /// The data from the buffer.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `target_len` is not set (i.e., the message hasn't been properly initialized).
-    pub(crate) fn get_data(&mut self) -> BytesMut {
-        let target_len = self
-            .target_len
-            .expect("target_len should be set before get_data is called");
-        let bytes = BytesMut::from(&self.data[10..target_len + 8]);
-        self.check_data();
-        bytes
-    }
-
-    /// Extends the buffer with the given slice.
-    ///
-    /// # Parameters
-    ///
-    /// * `buf` - The slice to extend the buffer with.
-    pub(crate) fn extend_from_slice(&mut self, buf: &[u8]) {
-        let buf_len = buf.len();
-        if !self.is_complete() {
-            let next_len = self.get_next_extend_buf_len();
-            match next_len {
-                Some(len) if len < buf_len => {
-                    // Extend with part of the buffer
-                    self.data.extend_from_slice(&buf[0..len]);
-                    let bytes_mut = &buf[len..buf_len];
-                    if self.remaining_data.is_none() {
-                        self.remaining_data = Some(BytesMut::from(bytes_mut));
-                    } else {
-                        if let Some(source_bytes_mut) = &self.remaining_data {
-                            let mut data = source_bytes_mut.clone();
-                            data.extend_from_slice(bytes_mut);
-                            self.remaining_data = Some(data)
-                        }
-                    }
-                },
-                // Either next_len is None or next_len >= buf_len, extend with full buffer
-                _ => {
-                    self.data.extend_from_slice(buf);
-                },
-            }
-            if self.target_len.is_none() {
-                if let Some((header_bytes, remaining)) = self.data.split_first_chunk::<2>() {
-                    let header_mark = u16::from_le_bytes(*header_bytes);
-                    if header_mark == self.message_header_mark {
-                        if let Some((length_bytes, _)) = remaining.split_first_chunk::<8>() {
-                            let msg_len = u64::from_le_bytes(*length_bytes);
-
-                            // Validate message length to prevent memory exhaustion attacks
-                            match validate_message_length(msg_len) {
-                                Ok(validated_len) => {
-                                    self.target_len = Some(validated_len);
-                                },
-                                Err(e) => {
-                                    tracing::warn!("Invalid message length: {}", e);
-                                    self.forced_clear();
-                                },
-                            }
-                        }
-                    } else {
-                        self.forced_clear();
-                    }
-                }
-            }
-        } else {
-            self.remaining_data = Some(BytesMut::from(buf));
+        if self.data.len() < 2 {
+            return Ok(None);
         }
+        if u16::from_le_bytes([self.data[0], self.data[1]]) != self.message_header_mark {
+            return Err(self.reject(LynnError::protocol("invalid frame header")));
+        }
+        if self.data.len() < 10 {
+            return Ok(None);
+        }
+        let length = u64::from_le_bytes(self.data[2..10].try_into().unwrap());
+        let length = validate_message_length(length).map_err(|error| self.reject(error))?;
+        if length < 5 {
+            return Err(self.reject(LynnError::protocol(
+                "frame must include metadata and trailer",
+            )));
+        }
+        let frame_len = 10 + length;
+        if self.data.len() < frame_len {
+            return Ok(None);
+        }
+        if u16::from_le_bytes([self.data[frame_len - 2], self.data[frame_len - 1]])
+            != self.message_tail_mark
+        {
+            return Err(self.reject(LynnError::protocol("invalid frame trailer")));
+        }
+        let payload = BytesMut::from(&self.data[10..frame_len - 2]);
+        self.data.advance(frame_len);
+        Ok(Some(payload))
     }
 }
 
@@ -208,111 +86,154 @@ mod tests {
     const TAIL: u16 = 0x3344;
 
     fn frame(constructor: u8, method: u16, body: &[u8]) -> BytesMut {
-        let msg_len = (1 + 2 + body.len() + 2) as u64;
-        let mut f = BytesMut::new();
-        f.extend_from_slice(&HEADER.to_le_bytes());
-        f.extend_from_slice(&msg_len.to_le_bytes());
-        f.extend_from_slice(&[constructor]);
-        f.extend_from_slice(&method.to_le_bytes());
-        f.extend_from_slice(body);
-        f.extend_from_slice(&TAIL.to_le_bytes());
-        f
+        let mut frame = BytesMut::new();
+        frame.extend_from_slice(&HEADER.to_le_bytes());
+        frame.extend_from_slice(&((body.len() + 5) as u64).to_le_bytes());
+        frame.extend_from_slice(&[constructor]);
+        frame.extend_from_slice(&method.to_le_bytes());
+        frame.extend_from_slice(body);
+        frame.extend_from_slice(&TAIL.to_le_bytes());
+        frame
     }
 
     #[test]
-    fn parses_a_single_frame() {
-        let mut r = BigBufReader::new(HEADER, TAIL);
-        r.extend_from_slice(&frame(1, 9, b"hello"));
-        assert!(r.is_complete());
-        assert!(!r.is_empty());
-        let data = r.get_data();
-        assert_eq!(
-            &data[..],
-            &[1, 9, 0, b'h', b'e', b'l', b'l', b'o'],
-            "payload must keep constructor id, method id and body"
-        );
-        // After extraction the reader is empty and ready for the next frame.
-        assert!(!r.is_complete());
-        assert!(r.is_empty());
+    fn parses_single_and_coalesced_frames_at_every_split() {
+        let first = frame(1, 9, b"hello");
+        let second = frame(2, 0, b"");
+        let input = [first.as_ref(), second.as_ref()].concat();
+        for split in 0..=input.len() {
+            let mut reader = BigBufReader::new(HEADER, TAIL);
+            let mut received = Vec::new();
+            for chunk in [&input[..split], &input[split..]] {
+                reader.extend_from_slice(chunk).unwrap();
+                while let Some(payload) = reader.next_frame().unwrap() {
+                    received.push(payload);
+                }
+            }
+            assert_eq!(
+                received,
+                [
+                    BytesMut::from(&b"\x01\x09\x00hello"[..]),
+                    BytesMut::from(&b"\x02\x00\x00"[..])
+                ]
+            );
+            assert!(reader.data.is_empty());
+        }
     }
 
     #[test]
     fn parses_byte_by_byte() {
-        let mut r = BigBufReader::new(HEADER, TAIL);
-        let f = frame(1, 5, b"payload");
-        for byte in f.iter() {
-            r.extend_from_slice(&[*byte]);
+        let input = frame(1, 5, b"payload");
+        let mut reader = BigBufReader::new(HEADER, TAIL);
+        for (index, byte) in input.iter().enumerate() {
+            reader.extend_from_slice(&[*byte]).unwrap();
+            let payload = reader.next_frame().unwrap();
+            if index + 1 == input.len() {
+                assert_eq!(payload.unwrap().as_ref(), b"\x01\x05\x00payload");
+            } else {
+                assert!(payload.is_none());
+            }
         }
-        assert!(r.is_complete());
-        let data = r.get_data();
+    }
+
+    #[test]
+    fn invalid_tail_does_not_retain_unbounded_input() {
+        let mut invalid = frame(1, 1, b"");
+        let end = invalid.len();
+        invalid[end - 2..].fill(0);
+        for split in 0..invalid.len() {
+            let mut reader = BigBufReader::new(HEADER, TAIL);
+            reader.extend_from_slice(&invalid[..split]).unwrap();
+            assert!(reader.next_frame().unwrap().is_none());
+            reader.extend_from_slice(&invalid[split..]).unwrap();
+            assert!(reader.next_frame().is_err());
+            for _ in 0..10241 {
+                assert!(reader.extend_from_slice(&[0; 1024]).is_err());
+            }
+            assert_eq!(reader.data.len(), 0);
+            assert_eq!(reader.data.capacity(), 0);
+            assert!(reader.next_frame().is_err());
+        }
+    }
+
+    #[test]
+    fn extracted_small_frame_does_not_pin_large_receive_allocation() {
+        let mut reader = BigBufReader::new(HEADER, TAIL);
+        let mut input = frame(1, 1, &vec![7; MAX_MESSAGE_SIZE - 5]);
+        input.extend_from_slice(&frame(2, 0, b""));
+        reader.extend_from_slice(&input).unwrap();
+        drop(reader.next_frame().unwrap().unwrap());
+        let small = reader.next_frame().unwrap().unwrap();
+        assert_eq!(small.len(), 3);
+        assert_eq!(small.capacity(), 3);
+    }
+
+    #[test]
+    fn invalid_second_frame_is_not_hidden_by_first_frame() {
+        let mut input = frame(1, 1, b"ok");
+        let mut invalid = frame(1, 2, b"bad");
+        let end = invalid.len();
+        invalid[end - 1] ^= 1;
+        input.extend_from_slice(&invalid);
+        let mut reader = BigBufReader::new(HEADER, TAIL);
+        reader.extend_from_slice(&input).unwrap();
         assert_eq!(
-            &data[..],
-            &[1, 5, 0, b'p', b'a', b'y', b'l', b'o', b'a', b'd']
+            reader.next_frame().unwrap().unwrap().as_ref(),
+            b"\x01\x01\x00ok"
         );
+        assert!(reader.next_frame().is_err());
+        assert!(reader.data.is_empty());
     }
 
     #[test]
-    fn parses_two_frames_in_one_feed() {
-        let mut r = BigBufReader::new(HEADER, TAIL);
-        let mut both = frame(1, 1, b"a");
-        both.extend_from_slice(&frame(2, 0, &[])); // heart-shaped frame
-        r.extend_from_slice(&both);
-
-        let first = r.get_data();
-        assert_eq!(&first[..], &[1, 1, 0, b'a']);
-        assert!(r.is_complete(), "the second frame must already be buffered");
-        let second = r.get_data();
-        assert_eq!(&second[..], &[2, 0, 0]);
-        assert!(!r.is_complete());
-        assert!(r.is_empty());
+    fn invalid_header_and_lengths_are_terminal() {
+        for length in [0, 2, 3, 4, MAX_MESSAGE_SIZE as u64 + 1, u64::MAX] {
+            let mut reader = BigBufReader::new(HEADER, TAIL);
+            let mut input = HEADER.to_le_bytes().to_vec();
+            input.extend_from_slice(&length.to_le_bytes());
+            reader.extend_from_slice(&input).unwrap();
+            assert!(reader.next_frame().is_err(), "length {length}");
+            assert!(reader.data.is_empty());
+        }
+        let mut reader = BigBufReader::new(HEADER, TAIL);
+        reader.extend_from_slice(&[0, 0]).unwrap();
+        assert!(reader.next_frame().is_err());
+        assert!(reader.extend_from_slice(&frame(1, 1, b"ok")).is_err());
     }
 
     #[test]
-    fn buffers_partial_frames() {
-        let mut r = BigBufReader::new(HEADER, TAIL);
-        let f = frame(1, 5, b"payload");
-        r.extend_from_slice(&f[..10]);
-        assert!(!r.is_complete());
-        assert_eq!(
-            r.get_next_extend_buf_len(),
-            Some(f.len() - 10),
-            "must report exactly how many bytes are still missing"
+    fn maximum_frame_and_coalesced_next_read_are_accepted() {
+        let mut input = frame(1, 1, &vec![7; MAX_MESSAGE_SIZE - 5]);
+        input.extend_from_slice(&frame(2, 0, b""));
+        let mut reader = BigBufReader::new(HEADER, TAIL);
+        let mut lengths = Vec::new();
+        for chunk in input.chunks(DEFAULT_MAX_RECEIVE_BYTES_SIZE) {
+            reader.extend_from_slice(chunk).unwrap();
+            assert!(reader.data.len() <= MAX_BUFFER_SIZE);
+            while let Some(payload) = reader.next_frame().unwrap() {
+                lengths.push(payload.len());
+            }
+        }
+        assert_eq!(lengths, [MAX_MESSAGE_SIZE - 2, 3]);
+    }
+
+    #[test]
+    fn buffer_limit_is_checked_before_allocation_even_without_parsing() {
+        let mut reader = BigBufReader::new(HEADER, TAIL);
+        reader.extend_from_slice(&vec![0; MAX_BUFFER_SIZE]).unwrap();
+        assert!(reader.extend_from_slice(&[0]).is_err());
+        assert_eq!(reader.data.capacity(), 0);
+        assert!(
+            reader
+                .extend_from_slice(&vec![0; MAX_BUFFER_SIZE + 1])
+                .is_err()
         );
-        r.extend_from_slice(&f[10..]);
-        assert!(r.is_complete());
-    }
-
-    #[test]
-    fn wrong_header_clears_and_recovers() {
-        let mut r = BigBufReader::new(HEADER, TAIL);
-        let mut garbage = frame(1, 1, b"x");
-        garbage[0] = 0x99;
-        garbage[1] = 0x99;
-        r.extend_from_slice(&garbage);
-        assert!(r.is_empty(), "frames with a wrong header must be dropped");
-
-        r.extend_from_slice(&frame(1, 1, b"ok"));
-        assert!(r.is_complete(), "reader must recover after invalid data");
-    }
-
-    #[test]
-    fn oversized_length_clears_buffer() {
-        let mut r = BigBufReader::new(HEADER, TAIL);
-        let mut malicious = BytesMut::new();
-        malicious.extend_from_slice(&HEADER.to_le_bytes());
-        malicious.extend_from_slice(&u64::MAX.to_le_bytes());
-        r.extend_from_slice(&malicious);
-        assert!(r.is_empty(), "invalid lengths must not allocate");
-    }
-
-    #[test]
-    fn forced_clear_resets_everything() {
-        let mut r = BigBufReader::new(HEADER, TAIL);
-        r.extend_from_slice(&frame(1, 1, b"abc"));
-        assert!(r.is_complete());
-        r.forced_clear();
-        assert!(r.is_empty());
-        assert!(!r.is_complete());
-        assert_eq!(r.get_next_extend_buf_len(), None);
+        let mut fresh = BigBufReader::new(HEADER, TAIL);
+        assert!(
+            fresh
+                .extend_from_slice(&vec![0; MAX_BUFFER_SIZE + 1])
+                .is_err()
+        );
+        assert_eq!(fresh.data.capacity(), 0);
     }
 }
