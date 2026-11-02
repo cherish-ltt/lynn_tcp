@@ -339,6 +339,10 @@ State is resolved per request, so `with_state` may be called before or after `ad
 
 ---
 
+#### Receive protocol errors
+
+Both client and server reject malformed frame headers, lengths, and trailers and close the affected transport, including TLS. Valid fragmented/coalesced frames remain supported. The receive parser retains at most the 10 MiB frame limit plus the 10-byte header and one 1 KiB socket read; a terminal parse error releases its buffer and rejects further input. This is a per-parser bound, not a process-wide memory quota. Clients retain their configured reconnect policy after a protocol error.
+
 ### Client Automatic Reconnection
 
 The client supervises its own connection: when it drops, it reconnects automatically — **3 attempts by default**, 1s apart (configurable). User-facing channels survive reconnections, stale queued frames are discarded, and the live state is one call away:
