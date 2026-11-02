@@ -310,6 +310,7 @@ docs/
   1. `cargo-publish.yml`：将 crate 发布到 crates.io。
   2. `release.yml`：从 `docs/update_logs/` 查找与 tag 对应的 md 文件（自动尝试 `v<tag>`、去掉 `-release` 后缀、去掉 `v` 前缀等候选名），以其内容作为 Release Notes 创建 GitHub Release；找不到对应日志时使用默认说明并告警。
 - 因此**发布前必须确保**：`Cargo.toml` 版本号、tag 名、`docs/update_logs/` 日志文件三者一致。
+- 两个发布工作流独立运行，必须分别确认 GitHub Release 和 crates.io 发布成功；不能以其中一个成功替代另一个结果。
 
 ### 10.5 静态扫描规范
 

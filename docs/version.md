@@ -1,5 +1,39 @@
 # Version Note
 
+### v2.2.0
+
+#### v2.2.0
+
+Released on 2026-11-02. This maintenance and security release addresses 10 issues (#46-#55) and [GHSA-4hxf-mfq8-qqxx](https://github.com/cherish-ltt/lynn_tcp/security/advisories/GHSA-4hxf-mfq8-qqxx) through eight PRs (#56-#63). Default public API usage and valid wire formats remain compatible, with stricter error and lifecycle behavior.
+
+1.sec — bounded receive parsing
+
+- Client and server share a bounded parser; invalid headers/trailers and invalid frame lengths terminate the transport instead of retaining further input, including when the writer is backpressured.
+- Normal fragmented/coalesced frames remain supported. Retained parser data is bounded by 10 MiB + a 10-byte header + one 1 KiB read, not by a process-wide memory limit.
+
+2.fix — lifecycle and I/O deadlines
+
+- Return per-IP quotas across EOF, read/write errors, heartbeat eviction and failed TLS handshakes; prevent final-slot release deadlocks and stale online entries.
+- Hold per-connection processing permits through queueing, handler execution and response enqueueing, including panic cleanup; drain accepted responses after normal read EOF.
+- Dropping the client or cancelling startup cancels connection, read/write, retry and heartbeat work; cloned senders no longer keep a dropped owner alive.
+- Apply configured server I/O deadlines to both plain TCP and TLS. Reads renew an idle deadline; each response write and flush share a deadline, with a separate shutdown deadline. Zero disables deadlines; partial writes are never retried.
+
+3.fix / ci — independent features and transport robustness
+
+- Fix independent client/server builds and add CI for six no-default-feature combinations.
+- Accept fragmented metrics request lines within 1024 bytes and a fixed five-second whole-line deadline.
+- Derive IPv6 TLS verification names from structured addresses without relaxing certificate checks.
+- Saturate the reactor idle counter to prevent overflow after prolonged idle periods.
+
+4.compatibility and verification
+
+- Invalid frames now close their connection, configured nonzero timeouts now take effect, and previously accidental per-connection over-admission is rejected. Client Drop is cancellation, not a delivery or graceful TLS-shutdown guarantee.
+- Every response is flushed, including small TLS responses; throughput and batching may change and were not benchmarked. Read timeouts are idle deadlines, not total-frame deadlines.
+- Evidence predates merging and release: all eight PRs passed their Linux CI; local combined commit `d811e06` passed 149 default, 170 all-feature, 111 server-only and 122 server+TLS tests including doctests, the remaining isolated-feature checks/Clippy, default/all-feature builds and checks, and all 13 prek hooks.
+- Per the maintainer's request, merging and the version bump do not rerun local validation. Coverage reports contain mismatched-function warnings and cannot reliably demonstrate the 80% gate. No production-load, public-network slow-reader, TLS-flush performance, Windows or equivalent wall-clock long-duration validation is claimed.
+- Upgrade to `lynn_tcp = "2.2.0"`; middleware support remains planned and is not part of this release.
+- Merged main commit `8f7a9a8` has the same Git tree as the validated combination; the release-only changes update metadata/documentation and remove the temporary stacked-PR CI branch filter, without changing Rust source or tests.
+
 ### v2.1.0
 
 #### v2.1.0

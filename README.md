@@ -26,6 +26,15 @@ English | [简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/READM
 
 It adopts a **DDD (Domain-Driven Design) + Onion Architecture**, separating core domain logic from infrastructure concerns for better maintainability and extensibility.
 
+### v2.2.0 - Security And Lifecycle Fixes
+
+Addresses 10 issues and one security advisory through eight PRs: bounded receive parsing,
+reliable connection cleanup, effective I/O timeouts, independent feature builds, and metrics/IPv6/idle fixes.
+Default API usage and valid frames remain compatible; invalid frames now close connections,
+client Drop cancels its tasks, and configured nonzero timeouts take effect.
+See the [v2.2.0 changelog](docs/update_logs/v2.2.0.md) for migration notes, prior validation evidence,
+coverage limitations and unmeasured TLS-flush performance effects.
+
 ---
 
 ### Keywords
@@ -399,7 +408,7 @@ Dropping `LynnClient` cancels its connection, read/write, retry, and heartbeat w
 
 | Feature | Target Version | Status |
 |---------|---------------|--------|
-| Middleware support | v2.2.0 | 📝 Design |
+| Middleware support | TBD | 📝 Design |
 | Scheduled tasks | TBD | 💡 Idea |
 
 ---
