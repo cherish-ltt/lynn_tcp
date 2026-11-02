@@ -48,9 +48,20 @@ async fn read_pump(
                 break;
             },
             Ok(n) => {
-                big_buf.extend_from_slice(&buf[..n]);
-                while big_buf.is_complete() {
-                    let input_buf_vo = InputBufVO::new_without_socket_addr(big_buf.get_data());
+                if let Err(error) = big_buf.extend_from_slice(&buf[..n]) {
+                    warn!("Invalid server frame: {error}");
+                    break;
+                }
+                loop {
+                    let payload = match big_buf.next_frame() {
+                        Ok(Some(payload)) => payload,
+                        Ok(None) => break,
+                        Err(error) => {
+                            warn!("Invalid server frame: {error}");
+                            break 'read_loop;
+                        },
+                    };
+                    let input_buf_vo = InputBufVO::new_without_socket_addr(payload);
                     if tx_read.send(input_buf_vo).await.is_err() {
                         // Receiver dropped: stop feeding the connection.
                         break 'read_loop;
