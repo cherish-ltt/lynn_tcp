@@ -331,6 +331,7 @@ docs/
 - **编译验证**：feature 门控代码不参与默认构建，CI 与本地提交前必须通过 `cargo check --all-features --all-targets` 与 `cargo test --all-features`（已加入 rust-ci.yml，见第 2 节）。
 - **禁止静默降级**：某能力依赖 feature 时，其配置 API（builder 方法、配置结构体）必须同门控，不允许"配置了但被忽略"。
 - **TLS 安全基线**：仅启用 TLS 1.3 协议版本；客户端默认必须校验服务端证书（CA 信任锚），跳过校验仅能通过显式的 `danger_accept_invalid_certs` 且必须打日志告警。
+- **TLS 地址名称**：默认校验名称须从结构化 SocketAddr 提取 IP，支持 IPv4/IPv6；显式 server_name 保持优先，回归测试须验证真实 IP SAN 握手且不能关闭证书校验。
 - **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
 - **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
 
