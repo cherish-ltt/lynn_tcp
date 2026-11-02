@@ -334,6 +334,23 @@ docs/
 - **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
 - **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
 
+### 10.8 独立 feature 构建
+
+- 角色专用模块须与 `server` / `client` 一致门控，共享类型不得隐式引入另一角色。
+- CI 除默认与全 feature 外，还检查并测试关闭默认功能后的无 feature、`client`、`server`、`metrics`、`client,tls`、`server,tls` 六种组合。
+- 示例、集成测试和基准目标使用 `required-features` 声明真实依赖；文档中的独立角色配置必须设置 `default-features = false`。
+
+### 10.12 metrics 请求边界
+
+- `/metrics` 与 `/health` 的请求行解析不得依赖 TCP 分片边界；读取须有固定长度上限和整行总期限，并覆盖分片、EOF、超长和超时回归测试。
+
+...
+
+### 10.9 接收解析边界
+
+- 客户端与服务端使用同一有界解析器；错误帧必须显式终止连接，不得当作未收齐继续缓存。
+- 实际保留数据限制为最大帧长度、帧头与一次读取的总和；回归须覆盖错误帧持续输入、长度边界、分片/粘包及明文/TLS 双端关闭。
+
 ### 10.10 连接生命周期与处理许可
 
 - 连接配额必须随接受事件、TLS 握手及读写会话转移所有权，所有终止路径恰好归还一次；清理旧连接不得移除相同地址的新连接。
