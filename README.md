@@ -263,6 +263,9 @@ requests close the connection. Unknown paths still return HTTP 404.
 | `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsServerConfig` | off |
 | `with_tls_cert_paths()` *(feature `tls`)* | Enable TLS 1.3 from PEM cert/key paths | off |
 
+Reactor workers cap their idle backoff without counter wraparound and resume processing
+when work arrives, including after extended idle periods.
+
 ### Available Configuration (LynnClientConfigBuilder)
 
 | Method | Description | Default |

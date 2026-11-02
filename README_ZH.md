@@ -263,6 +263,8 @@ metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达
 | `with_tls()` *（feature `tls`）* | 使用 `TlsServerConfig` 开启 TLS 1.3 | 关闭 |
 | `with_tls_cert_paths()` *（feature `tls`）* | 从 PEM 证书/私钥路径开启 TLS 1.3 | 关闭 |
 
+Reactor worker 的空闲退避有上限，计数不会溢出回绕；长时间空闲后收到任务仍会恢复处理。
+
 ### 可配置项（LynnClientConfigBuilder）
 
 | 方法 | 说明 | 默认值 |
