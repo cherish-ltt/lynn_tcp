@@ -16,18 +16,19 @@ use tokio::{
 };
 use tracing::{error, info, warn};
 
+use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::{ReactorEventSender, TaskBodyOutChannel};
 use crate::application::server::server_common::{add_client, check_handler_result, push_read_half};
 use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
-use crate::infrastructure::connection::connection_limiter::ConnectionLimiter;
+use crate::infrastructure::connection::connection_limiter::{ConnectionLimiter, ConnectionPermit};
 use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, StreamAcceptor};
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
 /// Reactor event type
 enum EventType {
-    NewSocket((TcpStream, core::net::SocketAddr)),
+    NewSocket((TcpStream, core::net::SocketAddr, Option<ConnectionPermit>)),
     ExecuteTask(TaskBodyOutChannel),
 }
 
@@ -43,8 +44,12 @@ impl ReactorEvent {
     }
 
     #[inline(always)]
-    pub(crate) fn crate_new_socket_event(socket: TcpStream, addr: core::net::SocketAddr) -> Self {
-        ReactorEvent::new_with_event_type(EventType::NewSocket((socket, addr)))
+    pub(crate) fn crate_new_socket_event(
+        socket: TcpStream,
+        addr: core::net::SocketAddr,
+        permit: Option<ConnectionPermit>,
+    ) -> Self {
+        ReactorEvent::new_with_event_type(EventType::NewSocket((socket, addr, permit)))
     }
 
     #[inline(always)]
@@ -66,6 +71,8 @@ pub(crate) struct NewSocketTask {
     pub(crate) lynn_router: Arc<LynnRouter>,
     pub(crate) reactor_event_sender: ReactorEventSender,
     pub(crate) last_communicate_time: Arc<RwLock<SystemTime>>,
+    pub(crate) session: ConnectionSession,
+    pub(crate) process_limit: usize,
 }
 
 /// New socket event sender type
@@ -131,7 +138,7 @@ impl EventManager {
                     {
                         idle_count = 0;
                         match event.event_type {
-                            EventType::NewSocket((socket, addr)) => {
+                            EventType::NewSocket((socket, addr, permit)) => {
                                 // Perform the (optional) TLS handshake here, off the
                                 // accept loop, so handshakes never serialize accepts.
                                 let Some(stream) = stream_acceptor.accept(socket, addr).await
@@ -140,11 +147,12 @@ impl EventManager {
                                 };
                                 let last_communicate_time =
                                     Arc::new(RwLock::new(SystemTime::now()));
-                                let read_half = add_client(
+                                let (read_half, session) = add_client(
                                     clients.clone(),
                                     stream,
                                     addr,
                                     last_communicate_time.clone(),
+                                    permit,
                                 )
                                 .await;
                                 let process_permit =
@@ -160,19 +168,24 @@ impl EventManager {
                                         lynn_router: lynn_router.clone(),
                                         reactor_event_sender: reactor_event_sender.clone(),
                                         last_communicate_time,
+                                        session,
+                                        process_limit: server_single_process_permit,
                                     })
                                     .await;
                             },
                             EventType::ExecuteTask(task_body) => {
-                                let (task, context, clients) = task_body;
+                                let (task, context, clients, permit) = task_body;
                                 // Run the handler in a nested task so a panicking
                                 // handler (e.g. a missing AppState) cannot take
                                 // down this worker.
-                                match tokio::spawn(async move { task.handler(context).await }).await
+                                match tokio::spawn(async move {
+                                    let result = task.handler(context).await;
+                                    check_handler_result(result, clients).await;
+                                    drop(permit);
+                                })
+                                .await
                                 {
-                                    Ok(result) => {
-                                        check_handler_result(result, clients.clone()).await;
-                                    },
+                                    Ok(()) => {},
                                     Err(join_error) => {
                                         error!(
                                             "Handler task panicked or was cancelled: {}",
@@ -272,6 +285,8 @@ impl CoreReactor {
                     task.reactor_event_sender,
                     task.last_communicate_time,
                     states.clone(),
+                    task.session,
+                    task.process_limit,
                 )
                 .await;
             }
@@ -299,6 +314,7 @@ impl CoreReactor {
             if let Ok((socket, addr)) = client_result {
                 let mut socket_permit = true;
                 let mut socket = Some(socket);
+                let mut permit = None;
 
                 // Apply TCP socket configuration
                 if let Some(ref s) = socket {
@@ -404,7 +420,8 @@ impl CoreReactor {
                 if socket_permit {
                     if let Some((_, _, limiter)) = &connection_limiter {
                         let ip = addr.ip();
-                        if !limiter.check_connection(ip).await {
+                        permit = limiter.acquire(ip).await;
+                        if permit.is_none() {
                             socket_permit = false;
                             warn!(
                                 "Connection from {} rejected by connection limiter (rate limit or per-IP limit exceeded)",
@@ -417,7 +434,7 @@ impl CoreReactor {
                 if socket_permit {
                     if let Some(s) = socket {
                         info!("Accepted connection from: {}", addr);
-                        global_queue.push(ReactorEvent::crate_new_socket_event(s, addr));
+                        global_queue.push(ReactorEvent::crate_new_socket_event(s, addr, permit));
                     }
                 } else {
                     if let Some(mut s) = socket {
