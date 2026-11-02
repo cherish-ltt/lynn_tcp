@@ -250,12 +250,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `with_message_tail_mark()` | 自定义消息尾标记 | `0x1E27` |
 | `with_max_connections_per_ip()` | 每 IP 活跃连接上限（0=禁用） | `10` |
 | `with_connection_rate_limit()` | 连接速率限制（每秒，0=禁用） | `0` |
-| `with_read_timeout_secs()` | 读取超时（秒，0=禁用） | `0` |
-| `with_write_timeout_secs()` | 写入超时（秒，0=禁用） | `0` |
+| `with_read_timeout_secs()` | 读取空闲超时（秒，0=禁用） | `0` |
+| `with_write_timeout_secs()` | 单次响应写入及关闭超时（秒，0=禁用） | `0` |
 | `with_recv_buffer_size()` | 接收缓冲区（字节） | `65535` |
 | `with_send_buffer_size()` | 发送缓冲区（字节） | `65535` |
 | `with_tls()` *（feature `tls`）* | 使用 `TlsServerConfig` 开启 TLS 1.3 | 关闭 |
 | `with_tls_cert_paths()` *（feature `tls`）* | 从 PEM 证书/私钥路径开启 TLS 1.3 | 关闭 |
+
+I/O 超时适用于明文 TCP 和握手后的 TLS。每次收到字节都会重置读取空闲期限，
+因此它不是完整帧的总时限。写入期限覆盖单次响应及其刷新，最终关闭另计期限。
+超时后关闭连接并回收配额；已部分写出的响应不会重试。
+每次响应均刷新，包括 TLS 小响应；零值禁用期限，不禁用刷新。
 
 ### 可配置项（LynnClientConfigBuilder）
 

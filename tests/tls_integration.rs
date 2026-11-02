@@ -225,6 +225,50 @@ async fn tls_client_without_trust_anchor_fails_to_start() {
 }
 
 #[tokio::test]
+async fn tls_read_timeout_closes_idle_authenticated_connection() {
+    let (cert_path, key_path) = generate_certs("read_timeout");
+    let addr = format!("127.0.0.1:{}", free_port());
+    let config = LynnServerConfigBuilder::new()
+        .with_addr(&addr)
+        .unwrap()
+        .with_server_max_taskpool_size(&2)
+        .with_read_timeout_secs(&1)
+        .with_tls(TlsServerConfig::new(&cert_path, &key_path))
+        .build();
+    tokio::spawn(LynnServer::new_with_config(config).await.start());
+    wait_server(&addr).await;
+
+    let cert_pem = std::fs::read(&cert_path).unwrap();
+    let mut roots = rustls::RootCertStore::empty();
+    for cert in rustls_pemfile::certs(&mut cert_pem.as_slice()) {
+        roots.add(cert.unwrap()).unwrap();
+    }
+    let client = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_protocol_versions(&[&rustls::version::TLS13])
+    .unwrap()
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    let connector = tokio_rustls::TlsConnector::from(std::sync::Arc::new(client));
+    let mut socket = connector
+        .connect(
+            "localhost".try_into().unwrap(),
+            TcpStream::connect(&addr).await.unwrap(),
+        )
+        .await
+        .unwrap();
+    let result = timeout(Duration::from_millis(1800), socket.read(&mut [0]))
+        .await
+        .unwrap();
+    assert!(
+        matches!(result, Ok(0)) || result.unwrap_err().kind() == std::io::ErrorKind::UnexpectedEof
+    );
+    std::fs::remove_file(cert_path).unwrap();
+    std::fs::remove_file(key_path).unwrap();
+}
+
+#[tokio::test]
 async fn tls_server_with_missing_cert_files_fails_to_start() {
     let port = free_port();
     let addr = format!("127.0.0.1:{port}");

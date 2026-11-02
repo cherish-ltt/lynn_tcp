@@ -73,6 +73,7 @@ pub(crate) struct NewSocketTask {
     pub(crate) last_communicate_time: Arc<RwLock<SystemTime>>,
     pub(crate) session: ConnectionSession,
     pub(crate) process_limit: usize,
+    pub(crate) read_timeout_secs: u64,
 }
 
 /// New socket event sender type
@@ -104,6 +105,8 @@ impl EventManager {
         tx: NewSocketEventSender,
         server_max_reactor_taskpool_size: &usize,
         stream_acceptor: Arc<StreamAcceptor>,
+        read_timeout_secs: u64,
+        write_timeout_secs: u64,
     ) {
         let mut local_queues: Vec<Worker<ReactorEvent>> =
             Vec::with_capacity(*server_max_reactor_taskpool_size);
@@ -153,6 +156,7 @@ impl EventManager {
                                     addr,
                                     last_communicate_time.clone(),
                                     permit,
+                                    write_timeout_secs,
                                 )
                                 .await;
                                 let process_permit =
@@ -170,6 +174,7 @@ impl EventManager {
                                         last_communicate_time,
                                         session,
                                         process_limit: server_single_process_permit,
+                                        read_timeout_secs,
                                     })
                                     .await;
                             },
@@ -287,6 +292,7 @@ impl CoreReactor {
                     states.clone(),
                     task.session,
                     task.process_limit,
+                    task.read_timeout_secs,
                 )
                 .await;
             }
@@ -499,6 +505,8 @@ impl TcpReactor {
             self.core_reactor.tx.clone(),
             server_max_reactor_taskpool_size,
             stream_acceptor,
+            tcp_config.read_timeout_secs,
+            tcp_config.write_timeout_secs,
         );
 
         // Spawn cleanup task for connection limiter if rate limiting is enabled

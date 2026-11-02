@@ -524,6 +524,9 @@ impl<'a> LynnServerConfigBuilder<'a> {
 
     /// Sets the read timeout in seconds. Set to 0 to disable timeout.
     ///
+    /// Each successful read renews this idle deadline; it is not a total-frame deadline.
+    /// Expiry closes the connection for both plain TCP and TLS transports.
+    ///
     /// # Parameters
     ///
     /// * `read_timeout_secs` - The read timeout in seconds.
@@ -537,6 +540,9 @@ impl<'a> LynnServerConfigBuilder<'a> {
     }
 
     /// Sets the write timeout in seconds. Set to 0 to disable timeout.
+    ///
+    /// Bounds each response write and flush together, and final shutdown separately.
+    /// Expiry closes the connection without retrying a partially written response.
     ///
     /// # Parameters
     ///

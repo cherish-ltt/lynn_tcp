@@ -250,12 +250,18 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `with_message_tail_mark()` | Custom message tail mark | `0x1E27` |
 | `with_max_connections_per_ip()` | Max active connections per IP (0 = disabled) | `10` |
 | `with_connection_rate_limit()` | Connection rate (per second) | `0` (disabled) |
-| `with_read_timeout_secs()` | Read timeout (s, 0 = disabled) | `0` |
-| `with_write_timeout_secs()` | Write timeout (s, 0 = disabled) | `0` |
+| `with_read_timeout_secs()` | Read-idle timeout (s, 0 = disabled) | `0` |
+| `with_write_timeout_secs()` | Per-response write and shutdown timeout (s, 0 = disabled) | `0` |
 | `with_recv_buffer_size()` | Receive buffer (bytes) | `65535` |
 | `with_send_buffer_size()` | Send buffer (bytes) | `65535` |
 | `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsServerConfig` | off |
 | `with_tls_cert_paths()` *(feature `tls`)* | Enable TLS 1.3 from PEM cert/key paths | off |
+
+I/O timeouts apply to both plain TCP and TLS after the handshake. Any received bytes renew
+the read-idle deadline; this is not a total-frame deadline. The write deadline covers a
+response and its flush, with a separate deadline for final shutdown. A timeout closes
+the connection and reclaims its quota; partially written responses are never retried.
+Every response is flushed, including small TLS responses; zero disables the deadline, not flushing.
 
 ### Available Configuration (LynnClientConfigBuilder)
 

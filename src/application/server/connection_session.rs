@@ -41,6 +41,7 @@ mod tests {
             state::state_registry::StateRegistry,
         },
         infrastructure::connection::connection_limiter::ConnectionLimiter,
+        infrastructure::tcp::stream::BoxedWriteHalf,
     };
     use bytes::BytesMut;
     use crossbeam_deque::Injector;
@@ -79,12 +80,22 @@ mod tests {
 
     #[tokio::test]
     async fn write_error_cleans_up_reader_online_entry_and_quota() {
+        assert_writer_cleanup(Box::new(BrokenWriter), 0).await;
+    }
+
+    #[tokio::test]
+    async fn write_timeout_cleans_up_reader_online_entry_and_quota() {
+        let (writer, _blocked_peer) = tokio::io::duplex(1);
+        assert_writer_cleanup(Box::new(writer), 1).await;
+    }
+
+    async fn assert_writer_cleanup(write_half: BoxedWriteHalf, write_timeout_secs: u64) {
         let addr: SocketAddr = "127.0.0.1:9177".parse().unwrap();
         let clients = Arc::new(DashMap::new());
         let time = Arc::new(RwLock::new(SystemTime::now()));
         let limiter = Arc::new(ConnectionLimiter::new(0, 1));
         let permit = limiter.acquire(addr.ip()).await;
-        let (user, writer, closed) = LynnUser::new(Box::new(BrokenWriter), time.clone());
+        let (user, writer, closed) = LynnUser::new(write_half, time.clone(), write_timeout_secs);
         let send = user.send_response(&BytesMut::from(&b"response"[..]));
         clients.insert(addr, user);
         let session = ConnectionSession {
@@ -109,10 +120,11 @@ mod tests {
             Arc::new(StateRegistry::new()),
             session,
             1,
+            0,
         )
         .await;
         send.await;
-        timeout(Duration::from_secs(1), async {
+        timeout(Duration::from_secs(2), async {
             while !clients.is_empty() {
                 sleep(Duration::from_millis(1)).await;
             }
@@ -130,7 +142,7 @@ mod tests {
         let limiter = Arc::new(ConnectionLimiter::new(0, 2));
         let old_time = Arc::new(RwLock::new(SystemTime::now()));
         let (old_user, writer, closed) =
-            LynnUser::new(Box::new(tokio::io::sink()), old_time.clone());
+            LynnUser::new(Box::new(tokio::io::sink()), old_time.clone(), 0);
         clients.insert(addr, old_user);
         let session = ConnectionSession {
             writer,
@@ -144,6 +156,7 @@ mod tests {
         let (new_user, new_writer, _) = LynnUser::new(
             Box::new(tokio::io::sink()),
             Arc::new(RwLock::new(SystemTime::now())),
+            0,
         );
         clients.insert(addr, new_user);
         drop(session);
@@ -164,6 +177,7 @@ mod tests {
         let (user, writer, _) = LynnUser::new(
             Box::new(transport),
             Arc::new(RwLock::new(SystemTime::now())),
+            0,
         );
         let response = BytesMut::from(&b"pending"[..]);
         user.send_response(&response).await;
