@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use dashmap::DashMap;
+use dashmap::{DashMap, mapref::entry::Entry};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
@@ -155,16 +155,16 @@ impl IpConnectionLimiter {
 
     /// Records that a connection from the given IP has closed.
     pub fn release_connection(&self, ip: IpAddr) {
-        if let Some(mut count) = self.ip_connections.get_mut(&ip) {
-            if *count > 0 {
-                *count -= 1;
-            }
-            if *count == 0 {
-                self.ip_connections.remove(&ip);
+        if let Entry::Occupied(mut entry) = self.ip_connections.entry(ip) {
+            let remaining = entry.get().saturating_sub(1);
+            if remaining == 0 {
+                entry.remove();
+            } else {
+                *entry.get_mut() = remaining;
             }
             debug!(
                 "Connection released for IP: {}, remaining count: {}",
-                ip, *count
+                ip, remaining
             );
         }
     }
@@ -181,7 +181,25 @@ pub struct ConnectionLimiter {
     ip_limiter: Option<IpConnectionLimiter>,
 }
 
+pub(crate) struct ConnectionPermit {
+    limiter: Arc<ConnectionLimiter>,
+    ip: IpAddr,
+}
+
+impl Drop for ConnectionPermit {
+    fn drop(&mut self) {
+        self.limiter.release_connection(self.ip);
+    }
+}
+
 impl ConnectionLimiter {
+    pub(crate) async fn acquire(self: &Arc<Self>, ip: IpAddr) -> Option<ConnectionPermit> {
+        self.check_connection(ip).await.then(|| ConnectionPermit {
+            limiter: self.clone(),
+            ip,
+        })
+    }
+
     /// Creates a new connection limiter.
     ///
     /// # Parameters
@@ -264,6 +282,54 @@ impl ConnectionLimiter {
 mod tests {
     use super::*;
     use std::net::{Ipv4Addr, Ipv6Addr};
+
+    #[test]
+    fn final_ip_slot_release_finishes() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let limiter = IpConnectionLimiter::new(1);
+            let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+            assert!(limiter.check_connection_limit(ip));
+            limiter.release_connection(ip);
+            tx.send(limiter.get_connection_count(ip)).unwrap();
+        });
+        assert_eq!(rx.recv_timeout(Duration::from_millis(500)).unwrap(), 0);
+    }
+
+    #[test]
+    fn concurrent_release_and_acquire_keep_active_counts() {
+        let limiter = Arc::new(IpConnectionLimiter::new(8));
+        let ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                let limiter = limiter.clone();
+                scope.spawn(move || {
+                    for _ in 0..200 {
+                        assert!(limiter.check_connection_limit(ip));
+                        limiter.release_connection(ip);
+                    }
+                });
+            }
+        });
+        assert_eq!(limiter.get_connection_count(ip), 0);
+        limiter.release_connection(ip);
+        assert_eq!(limiter.get_connection_count(ip), 0);
+    }
+
+    #[tokio::test]
+    async fn owned_connection_permit_returns_only_its_ip_slot() {
+        let limiter = Arc::new(ConnectionLimiter::new(0, 1));
+        let first_ip = IpAddr::V4(Ipv4Addr::LOCALHOST);
+        let second_ip = IpAddr::V6(Ipv6Addr::LOCALHOST);
+        let first = limiter.acquire(first_ip).await.unwrap();
+        let second = limiter.acquire(second_ip).await.unwrap();
+        assert!(limiter.acquire(first_ip).await.is_none());
+        drop(first);
+        assert!(limiter.acquire(second_ip).await.is_none());
+        assert!(limiter.acquire(first_ip).await.is_some());
+        drop(second);
+        assert!(limiter.acquire(second_ip).await.is_some());
+    }
 
     #[tokio::test]
     async fn test_rate_limiter() {

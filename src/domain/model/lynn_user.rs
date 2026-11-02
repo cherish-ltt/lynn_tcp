@@ -8,6 +8,7 @@ use tokio::{
     sync::{
         RwLock,
         mpsc::{Sender, channel},
+        watch,
     },
     task::JoinHandle,
 };
@@ -19,6 +20,7 @@ use crate::{
 
 pub(crate) enum LynnUserSignal {
     SendResponse(BytesMut),
+    Shutdown,
 }
 
 /// Represents a user in the Lynn system.
@@ -30,7 +32,7 @@ pub(crate) struct LynnUser {
     last_communicate_time: Arc<RwLock<SystemTime>>,
     sender: Sender<LynnUserSignal>,
 
-    main_join_handle: JoinHandle<()>,
+    close: watch::Sender<bool>,
 }
 
 /// Implementation of methods for the LynnUser struct.
@@ -44,40 +46,45 @@ impl LynnUser {
     ///
     /// # Returns
     ///
-    /// A new instance of LynnUser.
+    /// The user, its writer task, and the connection-close notification receiver.
     pub(crate) fn new(
         write_half: BoxedWriteHalf,
         last_communicate_time: Arc<RwLock<SystemTime>>,
-    ) -> Self {
+    ) -> (Self, JoinHandle<()>, watch::Receiver<bool>) {
         let (tx, mut rx) = channel(DEFAULT_SYSTEM_CHANNEL_SIZE);
+        let (close, closed) = watch::channel(false);
         let main_join_handle = tokio::spawn(async move {
             let mut write_half = write_half;
 
-            let mut buffer = Vec::with_capacity(4096);
+            let mut unflushed_bytes = 0;
             while let Some(LynnUserSignal::SendResponse(response)) = rx.recv().await {
                 if let Err(e) = write_half.write_all(&response).await {
                     error!("Failed to write to socket: {}", e);
-                    break;
+                    return;
                 } else {
-                    buffer.extend_from_slice(&response);
-                    if buffer.len() >= 4096 {
+                    unflushed_bytes += response.len();
+                    if unflushed_bytes >= 4096 {
                         if let Err(e) = write_half.flush().await {
                             error!("Failed to flush socket: {}", e);
-                            break;
+                            return;
                         }
-                        buffer.clear();
+                        unflushed_bytes = 0;
                     }
                 }
             }
-            if !buffer.is_empty() {
-                let _ = write_half.flush().await;
+            if let Err(e) = write_half.shutdown().await {
+                error!("Failed to shut down socket: {}", e);
             }
         });
-        Self {
-            last_communicate_time,
-            sender: tx,
+        (
+            Self {
+                last_communicate_time,
+                sender: tx,
+                close,
+            },
             main_join_handle,
-        }
+            closed,
+        )
     }
 
     /// Gets a clone of the last communicate time.
@@ -103,6 +110,15 @@ impl LynnUser {
             }
         }
     }
+
+    pub(crate) fn shutdown(&self) -> impl Future<Output = ()> + Send + use<> {
+        let sender = self.sender.clone();
+        async move {
+            if let Err(e) = sender.send(LynnUserSignal::Shutdown).await {
+                error!("Send shutdown error:{}", e);
+            }
+        }
+    }
 }
 
 /// Implementation of the Drop trait for the LynnUser struct.
@@ -114,12 +130,12 @@ pub(crate) type ClientsStructType = Arc<DashMap<SocketAddr, LynnUser>>;
 pub(crate) struct ClientsStruct(pub(crate) ClientsStructType);
 
 impl Drop for LynnUser {
-    /// Drops the LynnUser instance and aborts the associated thread if it exists.
+    /// Notifies the connection task that the user has been removed.
     ///
     /// # Parameters
     ///
     /// * `self` - The mutable reference to the LynnUser instance.
     fn drop(&mut self) {
-        self.main_join_handle.abort();
+        let _ = self.close.send(true);
     }
 }
