@@ -28,8 +28,8 @@ pub(super) type SharedWriteReceiver = Arc<Mutex<mpsc::Receiver<HandlerResult>>>;
 ///
 /// Returns the read pump's handle: it resolves as soon as the connection is
 /// considered dead (read EOF/error or the user-side receiver was dropped).
-/// The write pump exits independently once `close_rx` fires or the write
-/// channel closes, and shuts its half down on the way out.
+/// The write pump is cancelled when reading ends, including while its I/O is blocked.
+/// It also exits independently on `close_rx` or write channel closure.
 #[inline(always)]
 pub(super) fn spawn_connection_pumps(
     stream: LynnStream,
@@ -47,14 +47,12 @@ pub(super) fn spawn_connection_pumps(
         rx_write,
         close_rx,
     ));
-    let read_handle = tokio::spawn(read_pump(
-        read_half,
-        message_header_mark,
-        message_tail_mark,
-        tx_read,
-    ));
-    let _ = write_handle; // exits via close_rx / channel closure
-    read_handle
+    tokio::spawn(async move {
+        read_pump(read_half, message_header_mark, message_tail_mark, tx_read).await;
+        // A blocked write cannot observe close_rx; a terminal read must still close both halves.
+        write_handle.abort();
+        let _ = write_handle.await;
+    })
 }
 
 /// Reads frames from the connection and forwards them to the user channel.

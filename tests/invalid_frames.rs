@@ -84,6 +84,46 @@ async fn client_closes_invalid_frame_transport() {
     drop(client);
 }
 
+#[tokio::test]
+async fn client_invalid_frame_cancels_backpressured_write() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = LynnClientConfigBuilder::new()
+        .with_server_addr(listener.local_addr().unwrap())
+        .unwrap()
+        .with_server_single_channel_size(&1)
+        .with_reconnect_interval_secs(&60)
+        .build();
+    let mut client = LynnClient::new_with_config(config).await.start().await;
+    let sender = client.get_sender().await.unwrap();
+    let (mut peer, _) = listener.accept().await.unwrap();
+    drop(listener);
+    let data = lynn_tcp::bytes::Bytes::from(vec![0; 4 * 1024 * 1024]);
+    timeout(Duration::from_secs(3), async {
+        loop {
+            let send = sender.send(
+                lynn_tcp::lynn_tcp_dependents::HandlerResult::new_with_send_to_server(
+                    1,
+                    data.clone(),
+                ),
+            );
+            if timeout(Duration::from_millis(100), send).await.is_err() {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("the non-reading peer must cause backpressure");
+    peer.write_all(&invalid_frame()).await.unwrap();
+    timeout(Duration::from_secs(3), async {
+        while client.is_connected() {
+            sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("protocol error must finish the blocked writer before reconnecting");
+    assert_closed(&mut peer).await;
+}
+
 #[cfg(feature = "tls")]
 fn tls_configs() -> (rustls::ServerConfig, rustls::ClientConfig, String, String) {
     let rcgen::CertifiedKey { cert, signing_key } =
