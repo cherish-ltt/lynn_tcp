@@ -91,13 +91,16 @@ impl LynnUser {
     }
 
     #[inline(always)]
-    pub(crate) async fn send_response(&self, response: &BytesMut) {
-        if let Err(e) = self
-            .sender
-            .send(LynnUserSignal::SendResponse(response.clone()))
-            .await
-        {
-            error!("Send response error:{}", e);
+    pub(crate) fn send_response(
+        &self,
+        response: &BytesMut,
+    ) -> impl Future<Output = ()> + Send + use<> {
+        let sender = self.sender.clone();
+        let response = response.clone();
+        async move {
+            if let Err(e) = sender.send(LynnUserSignal::SendResponse(response)).await {
+                error!("Send response error:{}", e);
+            }
         }
     }
 }
