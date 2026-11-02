@@ -334,4 +334,8 @@ docs/
 - **AppState 注入**：`LynnServer::with_state(T)` 按 `TypeId` 注册，一个服务可共存多个状态类型；`AppState<T>` 在请求时解析（注册顺序与 `add_router` 无关），未注册时 panic（会被 reactor 的 handler panic 隔离捕获，不影响服务存活），因此状态必须在 `start()` 前注册。
 - **传输抽象**：连接管道统一走 `LynnStream`（明文/TLS 枚举），新增传输类型时在枚举上扩展变体并实现 `AsyncRead + AsyncWrite` 委派。
 
+### 10.14 Reactor 长空闲回归
+
+- worker 空闲退避计数必须有界，不得依赖整数溢出；使用测试专用 Tokio 虚拟时钟覆盖长空闲后的真实服务响应。
+
 ...

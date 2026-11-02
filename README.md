@@ -257,6 +257,9 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsServerConfig` | off |
 | `with_tls_cert_paths()` *(feature `tls`)* | Enable TLS 1.3 from PEM cert/key paths | off |
 
+Reactor workers cap their idle backoff without counter wraparound and resume processing
+when work arrives, including after extended idle periods.
+
 ### Available Configuration (LynnClientConfigBuilder)
 
 | Method | Description | Default |

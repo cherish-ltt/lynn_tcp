@@ -58,6 +58,8 @@ seaorm=["dep:sea-orm"]
 
 # 测试与示例专用依赖
 [dev-dependencies]
+# 虚拟时钟回归测试
+tokio = { version = "=1.53.1", features = ["test-util"] }
 # TLS 集成测试与示例用的临时证书生成
 rcgen = "=0.14.10"
 # 基准测试中提升/检查文件描述符上限
