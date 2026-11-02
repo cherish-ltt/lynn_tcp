@@ -83,7 +83,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["server"] }
+lynn_tcp = { version = "2", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -92,7 +92,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["client"] }
+lynn_tcp = { version = "2", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -229,7 +229,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
-> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
+> **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`default-features = false, features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
+
+`client` 与 `server` 可独立编译，也可分别搭配 `tls`。未启用任何 feature 时，crate 仍可构建，但不提供两种传输 API。示例、集成测试及基准目标须启用其声明的角色；CI 检查并测试无 feature、仅客户端、仅服务端、仅 metrics、客户端+TLS、服务端+TLS 六种配置。
 
 ---
 

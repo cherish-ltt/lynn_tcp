@@ -70,6 +70,8 @@
 //! ### Example
 //! Use default config
 //! ```rust,no_run
+//! # #[cfg(feature = "server")]
+//! # mod example {
 //! use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 //!
 //! #[tokio::main]
@@ -97,10 +99,13 @@
 //! pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
 //!     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 //! }
+//! # }
 //! ```
 //! ### Example
 //! Use customized config
 //! ```rust,no_run
+//! # #[cfg(feature = "server")]
+//! # mod example {
 //! use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 //!
 //! #[tokio::main]
@@ -136,6 +141,7 @@
 //! pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
 //!     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
 //! }
+//! # }
 //! ```
 //! ## Client
 //! A client for communicating with a server over TCP.
@@ -146,6 +152,8 @@
 //! ### Example
 //! Use default config (If you want to use custom configuration, please use `LynnClientConfigBuilder`)
 //! ```rust,no_run
+//! # #[cfg(feature = "client")]
+//! # mod example {
 //! use lynn_tcp::{
 //!     lynn_client::LynnClient,
 //!     lynn_tcp_dependents::*,
@@ -161,6 +169,7 @@
 //!     let input_buf_vo = client.get_receive_data().await.unwrap();
 //!     Ok(())
 //! }
+//! # }
 //! ```
 
 // 分层架构模块注册
