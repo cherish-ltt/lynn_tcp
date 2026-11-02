@@ -5,7 +5,7 @@ use std::{
 
 use crossbeam_deque::Injector;
 use dashmap::DashMap;
-use tokio::net::TcpListener;
+use tokio::{net::TcpListener, sync::OwnedSemaphorePermit};
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
@@ -21,8 +21,13 @@ use crate::infrastructure::tcp::reactor::{ReactorEvent, TcpReactor};
 use crate::infrastructure::tcp::stream::StreamAcceptor;
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
-/// Task body sent through the channel: (handler, context, clients).
-pub(crate) type TaskBodyOutChannel = (Arc<AsyncFunc>, HandlerContext, ClientsStructType);
+/// Task body sent through the channel: (handler, context, clients, processing permit).
+pub(crate) type TaskBodyOutChannel = (
+    Arc<AsyncFunc>,
+    HandlerContext,
+    ClientsStructType,
+    OwnedSemaphorePermit,
+);
 
 /// Event sender for the reactor, backed by a crossbeam injector.
 pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;

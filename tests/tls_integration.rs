@@ -138,6 +138,127 @@ async fn tls_roundtrip_with_configured_certificates() {
     );
 }
 
+#[tokio::test]
+async fn failed_tls_handshakes_do_not_exhaust_per_ip_quota() {
+    use tokio::io::AsyncWriteExt;
+    let (cert_path, key_path) = generate_certs("quota");
+    let addr = format!("127.0.0.1:{}", free_port());
+    let config = LynnServerConfigBuilder::new()
+        .with_addr(&addr)
+        .unwrap()
+        .with_server_max_taskpool_size(&2)
+        .with_max_connections_per_ip(&1)
+        .with_connection_rate_limit(&0)
+        .with_tls(TlsServerConfig::new(&cert_path, &key_path))
+        .build();
+    tokio::spawn(
+        LynnServer::new_with_config(config)
+            .await
+            .add_router(1, echo_handler)
+            .start(),
+    );
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    for _ in 0..3 {
+        let mut invalid = TcpStream::connect(&addr).await.unwrap();
+        invalid.write_all(b"not a TLS record").await.unwrap();
+        let mut alert = Vec::new();
+        let result = timeout(Duration::from_secs(1), invalid.read_to_end(&mut alert))
+            .await
+            .unwrap();
+        assert!(
+            result.is_ok() || result.unwrap_err().kind() == std::io::ErrorKind::ConnectionReset
+        );
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+    let config = LynnClientConfigBuilder::new()
+        .with_server_addr(&addr)
+        .unwrap()
+        .with_tls(
+            TlsClientConfigBuilder::new()
+                .with_ca_cert_path(&cert_path)
+                .with_server_name("localhost")
+                .build(),
+        )
+        .build();
+    let mut client = LynnClient::new_with_config(config).await.start().await;
+    client
+        .send_data(HandlerResult::new_with_send_to_server(
+            1,
+            Bytes::from("after failures"),
+        ))
+        .await
+        .unwrap();
+    let response = timeout(Duration::from_secs(2), client.get_receive_data())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(&response.get_all_bytes()[..], b"Echo: after failures");
+    std::fs::remove_file(cert_path).unwrap();
+    std::fs::remove_file(key_path).unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ipv6_tls_roundtrip_verifies_ip_san_without_name_override() {
+    let rcgen::CertifiedKey { cert, signing_key } =
+        rcgen::generate_simple_self_signed(vec!["::1".to_string()]).unwrap();
+    let cert_path = temp_file("ipv6_cert.pem", &cert.pem());
+    let key_path = temp_file("ipv6_key.pem", &signing_key.serialize_pem());
+    let probe = std::net::TcpListener::bind("[::1]:0").expect("IPv6 loopback available");
+    let addr = probe.local_addr().unwrap().to_string();
+    drop(probe);
+    let server = tokio::spawn(spawn_tls_server(
+        addr.clone(),
+        cert_path.clone(),
+        key_path.clone(),
+    ));
+    wait_server(&addr).await;
+
+    let config = LynnClientConfigBuilder::new()
+        .with_server_addr(&addr)
+        .unwrap()
+        .with_tls(
+            TlsClientConfigBuilder::new()
+                .with_ca_cert_path(&cert_path)
+                .build(),
+        )
+        .build();
+    let mut client = LynnClient::new_with_config(config).await.start().await;
+    client
+        .send_data(HandlerResult::new_with_send_to_server(
+            1,
+            Bytes::from_static(b"IPv6 verified"),
+        ))
+        .await
+        .unwrap();
+    let response = timeout(Duration::from_secs(5), client.get_receive_data())
+        .await
+        .unwrap()
+        .expect("IPv6 TLS connection must remain open");
+    assert_eq!(response.get_all_bytes(), b"Echo: IPv6 verified"[..]);
+
+    let wrong_name = LynnClientConfigBuilder::new()
+        .with_server_addr(&addr)
+        .unwrap()
+        .with_reconnect_max_attempts(&1)
+        .with_tls(
+            TlsClientConfigBuilder::new()
+                .with_ca_cert_path(&cert_path)
+                .with_server_name("localhost")
+                .build(),
+        )
+        .build();
+    let mut rejected = LynnClient::new_with_config(wrong_name).await.start().await;
+    assert!(
+        timeout(Duration::from_secs(2), rejected.get_receive_data())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    server.abort();
+    std::fs::remove_file(cert_path).unwrap();
+    std::fs::remove_file(key_path).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tls_client_without_trust_anchor_fails_to_start() {
     let (cert_path, key_path) = generate_certs("no_ca");

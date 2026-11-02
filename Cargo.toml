@@ -67,13 +67,71 @@ libc = "=0.2.189"
 
 # 按需编译的示例（依赖可选 feature）
 [[example]]
+name = "basic_server"
+required-features = ["server"]
+
+[[example]]
+name = "custom_config_server"
+required-features = ["server"]
+
+[[example]]
+name = "custom_protocol"
+required-features = ["server"]
+
+[[example]]
+name = "custom_protocol_full"
+required-features = ["server", "client"]
+
+[[example]]
+name = "echo_server_client"
+required-features = ["server", "client"]
+
+[[example]]
+name = "metrics_example"
+required-features = ["server"]
+
+[[example]]
+name = "multi_route_service"
+required-features = ["server", "client"]
+
+[[example]]
+name = "state_example"
+required-features = ["server", "client"]
+
+[[example]]
 name = "tls_example"
-required-features = ["tls"]
+required-features = ["server", "client", "tls"]
+
+# 集成测试只在所需角色启用时编译和运行
+[[test]]
+name = "client_reconnect"
+required-features = ["client"]
+
+[[test]]
+name = "custom_protocol_marks"
+required-features = ["server", "client"]
+
+[[test]]
+name = "server_client_integration"
+required-features = ["server", "client"]
+
+[[test]]
+name = "state_injection"
+required-features = ["server"]
+
+[[test]]
+name = "tls_integration"
+required-features = ["server", "client", "tls"]
+
+[[bin]]
+name = "bench_echo_server"
+required-features = ["server"]
 
 # 标准化网络基准（harness=false，自管理 CLI 与计时）
 [[bench]]
 name = "benchmark"
 harness = false
+required-features = ["server", "client"]
 
 # 编译优化配置
 [profile.dev]

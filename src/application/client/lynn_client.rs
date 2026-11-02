@@ -1,10 +1,10 @@
-use std::{net::ToSocketAddrs, sync::Arc};
+use std::net::ToSocketAddrs;
 
 use tokio::{sync::mpsc, sync::watch, task::JoinHandle};
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
-use crate::application::client::client_common::{SharedWriteReceiver, spawn_check_heart};
+use crate::application::client::client_common::spawn_check_heart;
 use crate::application::client::client_config::{LynnClientConfig, LynnClientConfigBuilder};
 use crate::application::client::client_connection::{ConnectionParams, connection_supervisor};
 use crate::domain::model::handler_result::HandlerResult;
@@ -21,6 +21,8 @@ use crate::domain::model::input_buf_vo::InputBufVO;
 /// `LynnClientConfigBuilder::with_reconnect_max_attempts` /
 /// `with_reconnect_interval_secs`). The user-facing channels survive
 /// reconnections; [`LynnClient::is_connected`] reports the live state.
+/// Dropping the client cancels its connection and heartbeat tasks, even if
+/// cloned senders remain. Queued messages are not guaranteed to be delivered.
 /// # Example
 /// Use default config (If you want to use custom configuration, please use `LynnClientConfigBuilder`)
 /// ```rust,no_run
@@ -49,8 +51,9 @@ use crate::domain::model::input_buf_vo::InputBufVO;
 pub struct LynnClient<'a> {
     /// The configuration for the client.
     lynn_client_config: LynnClientConfig<'a>,
-    /// The handle for the connection supervisor task (reconnects on drop).
+    /// The handle for the connection supervisor task (reconnects on disconnect).
     supervisor_join_handle: Option<JoinHandle<()>>,
+    heartbeat_join_handle: Option<JoinHandle<()>>,
     /// The sender for the write channel, valid across reconnections.
     tx_write: Option<mpsc::Sender<HandlerResult>>,
     /// The receiver for the read channel, valid across reconnections.
@@ -73,6 +76,7 @@ impl<'a> LynnClient<'a> {
         Self {
             lynn_client_config,
             supervisor_join_handle: None,
+            heartbeat_join_handle: None,
             tx_write: None,
             rx_read: None,
             connection_state: None,
@@ -101,6 +105,7 @@ impl<'a> LynnClient<'a> {
         Self {
             lynn_client_config: config,
             supervisor_join_handle: None,
+            heartbeat_join_handle: None,
             tx_write: None,
             rx_read: None,
             connection_state: None,
@@ -131,6 +136,7 @@ impl<'a> LynnClient<'a> {
         Self {
             lynn_client_config: config,
             supervisor_join_handle: None,
+            heartbeat_join_handle: None,
             tx_write: None,
             rx_read: None,
             connection_state: None,
@@ -160,7 +166,7 @@ impl<'a> LynnClient<'a> {
     pub fn is_connected(&self) -> bool {
         self.connection_state
             .as_ref()
-            .map(|state| *state.borrow())
+            .map(|state| state.has_changed().is_ok() && *state.borrow())
             .unwrap_or(false)
     }
 
@@ -171,6 +177,10 @@ impl<'a> LynnClient<'a> {
     ///
     /// A `Result` indicating whether the initial connection was successful.
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.stop_tasks();
+        self.tx_write = None;
+        self.rx_read = None;
+        self.connection_state = None;
         let channel_size = *self.lynn_client_config.get_client_single_channel_size();
         let (tx_read, rx_read) = mpsc::channel::<InputBufVO>(channel_size);
         let (tx_write, rx_write) = mpsc::channel::<HandlerResult>(channel_size);
@@ -180,12 +190,10 @@ impl<'a> LynnClient<'a> {
         // A bad configuration (e.g. TLS cert files) fails fast, before any
         // connect attempt.
         let params = ConnectionParams::from_config(&self.lynn_client_config)?;
-        let shared_rx_write: SharedWriteReceiver = Arc::new(tokio::sync::Mutex::new(rx_write));
-
         self.supervisor_join_handle = Some(tokio::spawn(connection_supervisor(
             params,
             tx_read,
-            shared_rx_write,
+            rx_write,
             state_tx,
             Some(init_tx),
         )));
@@ -241,7 +249,8 @@ impl<'a> LynnClient<'a> {
 
     /// Gets the sender for the write channel.
     ///
-    /// The sender stays valid across automatic reconnections.
+    /// The sender stays valid across automatic reconnections, but does not
+    /// keep the connection alive after the client owner is dropped.
     ///
     /// # Returns
     ///
@@ -276,16 +285,41 @@ impl<'a> LynnClient<'a> {
     pub(crate) async fn check_heart(&mut self) {
         let interval_time = *self.lynn_client_config.get_server_check_heart_interval();
         if let Some(sender) = self.get_sender().await {
-            spawn_check_heart(interval_time, sender);
+            self.heartbeat_join_handle = Some(spawn_check_heart(interval_time, sender));
         } else {
             warn!("Client - [check heart] start failed!!!");
         }
+    }
+
+    fn stop_tasks(&mut self) {
+        if let Some(handle) = self.supervisor_join_handle.take() {
+            handle.abort();
+        }
+        if let Some(handle) = self.heartbeat_join_handle.take() {
+            handle.abort();
+        }
+    }
+}
+
+impl Drop for LynnClient<'_> {
+    fn drop(&mut self) {
+        self.stop_tasks();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn closed_supervisor_does_not_report_connected() {
+        let mut client = LynnClient::new_with_addr("127.0.0.1:9197").await;
+        let (sender, receiver) = watch::channel(true);
+        client.connection_state = Some(receiver);
+        assert!(client.is_connected());
+        drop(sender);
+        assert!(!client.is_connected());
+    }
 
     #[tokio::test]
     async fn new_with_addr_resolves_the_address() {

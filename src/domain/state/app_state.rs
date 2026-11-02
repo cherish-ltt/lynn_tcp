@@ -8,6 +8,8 @@ use std::{ops::Deref, sync::Arc};
 /// the shared value into every request:
 ///
 /// ```rust,no_run
+/// # #[cfg(feature = "server")]
+/// # mod example {
 /// use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_state::AppState};
 ///
 /// struct UserRepo { /* e.g. a sea_orm::DatabaseConnection */ }
@@ -31,6 +33,7 @@ use std::{ops::Deref, sync::Arc};
 ///     let addr = input.get_input_addr().unwrap();
 ///     HandlerResult::new_with_send(1, name.into(), vec![addr])
 /// }
+/// # }
 /// ```
 ///
 /// Multiple state types can coexist: register each type once with

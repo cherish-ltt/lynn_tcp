@@ -7,20 +7,19 @@
 //! User-facing channels are created once in `LynnClient::run` and shared with
 //! every pump, so they stay valid across reconnections.
 
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 use tokio::{
     net::TcpStream,
-    sync::{Mutex, mpsc, oneshot, watch},
+    sync::{mpsc, oneshot, watch},
     time,
 };
 use tracing::{error, info, warn};
 
 use crate::{
-    LynnError,
-    application::client::client_common::{SharedWriteReceiver, spawn_connection_pumps},
+    LynnError, application::client::client_common::run_connection_pumps,
     application::client::client_config::LynnClientConfig,
-    domain::model::input_buf_vo::InputBufVO,
+    domain::model::handler_result::HandlerResult, domain::model::input_buf_vo::InputBufVO,
     infrastructure::tcp::stream::LynnStream,
 };
 
@@ -99,10 +98,9 @@ async fn try_connect(params: &ConnectionParams) -> Result<LynnStream, LynnError>
 
 /// Discards messages queued while the connection was down (e.g. heartbeats),
 /// so senders are not back-pressured by undeliverable frames.
-async fn drain_write_queue(rx_write: &SharedWriteReceiver) -> usize {
+fn drain_write_queue(rx_write: &mut mpsc::Receiver<HandlerResult>) -> usize {
     let mut dropped = 0;
-    let mut guard = rx_write.lock().await;
-    while let Ok(message) = guard.try_recv() {
+    while let Ok(message) = rx_write.try_recv() {
         drop(message);
         dropped += 1;
     }
@@ -117,7 +115,7 @@ async fn drain_write_queue(rx_write: &SharedWriteReceiver) -> usize {
 pub(super) async fn connection_supervisor(
     params: ConnectionParams,
     tx_read: mpsc::Sender<InputBufVO>,
-    rx_write: SharedWriteReceiver,
+    mut rx_write: mpsc::Receiver<HandlerResult>,
     state_tx: watch::Sender<bool>,
     mut init_tx: Option<oneshot::Sender<Result<(), String>>>,
 ) {
@@ -145,20 +143,17 @@ pub(super) async fn connection_supervisor(
                     params.addr
                 );
 
-                let (_close_tx, close_rx) = watch::channel(false);
-                let read_handle = spawn_connection_pumps(
+                run_connection_pumps(
                     stream,
                     params.message_header_mark,
                     params.message_tail_mark,
                     tx_read.clone(),
-                    rx_write.clone(),
-                    close_rx,
-                );
-                let _ = read_handle.await;
+                    &mut rx_write,
+                )
+                .await;
 
                 state_tx.send_replace(false);
-                _close_tx.send_replace(true);
-                let dropped = drain_write_queue(&rx_write).await;
+                let dropped = drain_write_queue(&mut rx_write);
                 if dropped > 0 {
                     warn!(
                         "Client - [connection supervisor] dropped {} stale queued messages after disconnect",
