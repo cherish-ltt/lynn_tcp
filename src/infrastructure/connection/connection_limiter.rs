@@ -1,7 +1,10 @@
 use std::{
     collections::HashMap,
     net::IpAddr,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -184,6 +187,20 @@ pub struct ConnectionLimiter {
 pub(crate) struct ConnectionPermit {
     limiter: Arc<ConnectionLimiter>,
     ip: IpAddr,
+}
+
+#[derive(Default)]
+pub(crate) struct ConnectionPermits {
+    pub(crate) global: Option<Arc<AtomicUsize>>,
+    pub(crate) per_ip: Option<ConnectionPermit>,
+}
+
+impl Drop for ConnectionPermits {
+    fn drop(&mut self) {
+        if let Some(count) = &self.global {
+            count.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
 }
 
 impl Drop for ConnectionPermit {

@@ -7,7 +7,7 @@ use tokio::{
 
 use crate::{
     domain::model::lynn_user::ClientsStructType,
-    infrastructure::connection::connection_limiter::ConnectionPermit,
+    infrastructure::connection::connection_limiter::ConnectionPermits,
 };
 
 pub(crate) struct ConnectionSession {
@@ -16,7 +16,7 @@ pub(crate) struct ConnectionSession {
     pub(crate) clients: ClientsStructType,
     pub(crate) addr: SocketAddr,
     pub(crate) last_communicate_time: Arc<RwLock<SystemTime>>,
-    pub(crate) permit: Option<ConnectionPermit>,
+    pub(crate) permit: ConnectionPermits,
 }
 
 impl Drop for ConnectionSession {
@@ -49,6 +49,7 @@ mod tests {
     use std::{
         io,
         pin::Pin,
+        sync::atomic::{AtomicUsize, Ordering},
         task::{Context, Poll},
         time::Duration,
     };
@@ -95,6 +96,7 @@ mod tests {
         let time = Arc::new(RwLock::new(SystemTime::now()));
         let limiter = Arc::new(ConnectionLimiter::new(0, 1));
         let permit = limiter.acquire(addr.ip()).await;
+        let global = Arc::new(AtomicUsize::new(1));
         let (user, writer, closed) = LynnUser::new(write_half, time.clone(), write_timeout_secs);
         let send = user.send_response(&BytesMut::from(&b"response"[..]));
         clients.insert(addr, user);
@@ -104,7 +106,10 @@ mod tests {
             clients: clients.clone(),
             addr,
             last_communicate_time: time.clone(),
-            permit,
+            permit: ConnectionPermits {
+                per_ip: permit,
+                global: Some(global.clone()),
+            },
         };
         let (read, mut peer) = tokio::io::duplex(64);
         push_read_half(
@@ -132,6 +137,7 @@ mod tests {
         .await
         .unwrap();
         assert!(limiter.acquire(addr.ip()).await.is_some());
+        assert_eq!(global.load(Ordering::Acquire), 0);
         assert_eq!(peer.read(&mut [0]).await.unwrap(), 0);
     }
 
@@ -150,7 +156,10 @@ mod tests {
             clients: clients.clone(),
             addr,
             last_communicate_time: old_time,
-            permit: limiter.acquire(addr.ip()).await,
+            permit: ConnectionPermits {
+                per_ip: limiter.acquire(addr.ip()).await,
+                global: None,
+            },
         };
         let new_permit = limiter.acquire(addr.ip()).await;
         let (new_user, new_writer, _) = LynnUser::new(

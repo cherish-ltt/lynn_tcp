@@ -1,6 +1,9 @@
 use std::{
     net::SocketAddr,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, SystemTime},
 };
 
@@ -22,13 +25,13 @@ use crate::application::server::server_common::{add_client, check_handler_result
 use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
-use crate::infrastructure::connection::connection_limiter::{ConnectionLimiter, ConnectionPermit};
+use crate::infrastructure::connection::connection_limiter::{ConnectionLimiter, ConnectionPermits};
 use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, StreamAcceptor};
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
 /// Reactor event type
 enum EventType {
-    NewSocket((TcpStream, core::net::SocketAddr, Option<ConnectionPermit>)),
+    NewSocket((TcpStream, core::net::SocketAddr, ConnectionPermits)),
     ExecuteTask(TaskBodyOutChannel),
 }
 
@@ -47,7 +50,7 @@ impl ReactorEvent {
     pub(crate) fn crate_new_socket_event(
         socket: TcpStream,
         addr: core::net::SocketAddr,
-        permit: Option<ConnectionPermit>,
+        permit: ConnectionPermits,
     ) -> Self {
         ReactorEvent::new_with_event_type(EventType::NewSocket((socket, addr, permit)))
     }
@@ -304,7 +307,6 @@ impl CoreReactor {
     pub(crate) async fn run(
         &self,
         tcp_listener: TcpListener,
-        clients: ClientsStructType,
         allow_max_connections: Option<&usize>,
         global_queue: ReactorEventSender,
         connection_limiter: Option<(
@@ -314,13 +316,27 @@ impl CoreReactor {
         )>,
         tcp_config: TcpSocketConfig,
     ) {
+        let connection_count = Arc::new(AtomicUsize::new(0));
         loop {
             // Waiting for a new link
             let client_result = tcp_listener.accept().await;
             if let Ok((socket, addr)) = client_result {
                 let mut socket_permit = true;
                 let mut socket = Some(socket);
-                let mut permit = None;
+                let mut permit = ConnectionPermits::default();
+
+                if let Some(max_connections) = allow_max_connections {
+                    if connection_count
+                        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                            (count < *max_connections).then(|| count + 1)
+                        })
+                        .is_err()
+                    {
+                        warn!("Global connection limit reached, rejecting {addr}");
+                        continue;
+                    }
+                    permit.global = Some(connection_count.clone());
+                }
 
                 // Apply TCP socket configuration
                 if let Some(ref s) = socket {
@@ -411,23 +427,12 @@ impl CoreReactor {
                     }
                 }
 
-                // Check global max connections
-                if let Some(max_connections) = allow_max_connections {
-                    if clients.len() >= *max_connections {
-                        socket_permit = false;
-                        warn!(
-                            "Server socket's count is more than MAX_CONNECTIONS, can not accept new client:{}",
-                            addr
-                        );
-                    }
-                }
-
                 // Check connection limiter (rate limit and per-IP limit)
                 if socket_permit {
                     if let Some((_, _, limiter)) = &connection_limiter {
                         let ip = addr.ip();
-                        permit = limiter.acquire(ip).await;
-                        if permit.is_none() {
+                        permit.per_ip = limiter.acquire(ip).await;
+                        if permit.per_ip.is_none() {
                             socket_permit = false;
                             warn!(
                                 "Connection from {} rejected by connection limiter (rate limit or per-IP limit exceeded)",
@@ -519,7 +524,6 @@ impl TcpReactor {
         self.core_reactor
             .run(
                 tcp_listener,
-                clients,
                 allow_max_connections,
                 self.event_manager.get_global_queue(),
                 connection_limiter,

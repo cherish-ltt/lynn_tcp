@@ -26,7 +26,7 @@ use crate::domain::model::lynn_user::LynnUser;
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
-use crate::infrastructure::connection::connection_limiter::ConnectionPermit;
+use crate::infrastructure::connection::connection_limiter::ConnectionPermits;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::io_timeout::with_io_timeout;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
@@ -197,7 +197,7 @@ pub(crate) async fn add_client(
     stream: LynnStream,
     addr: SocketAddr,
     last_communicate_time: Arc<RwLock<SystemTime>>,
-    permit: Option<ConnectionPermit>,
+    permit: ConnectionPermits,
     write_timeout_secs: u64,
 ) -> (BoxedReadHalf, ConnectionSession) {
     let (read_half, write_half): (BoxedReadHalf, BoxedWriteHalf) = split_transport(stream);
