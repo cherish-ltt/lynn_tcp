@@ -7,7 +7,7 @@
 - 业务 handler、AppState、多路由、广播和既有帧格式复用；只改变传输接入。独立角色关闭默认 feature 后使用 `client,kcp` 或 `server,kcp`。
 - 固定 kcp-ovo `=0.5.0`，直接使用 `core::kcp::Kcp`，不使用消息式高层 KcpStream/KcpListener。上游消息 API 缺少独立 accept/关闭会话及框架所需的所有权控制。
 - Rust 1.99.1；上游精确锁定使 Tokio/bytes 必须与本仓库一致，采用 `=1.52.3` / `=1.11.1`，不能把不同 semver-compatible 精确版本当成可以重复安装。
-- 上游无条件声明全局 mimalloc，即使关闭其 `stream` feature 也保留；下游自定义全局分配器与 `kcp` 无法共存。未修改、fork 或发布上游。默认不开 KCP 时没有这个额外分配器。
+- 当前锁定的上游 0.5.0 无条件声明全局 mimalloc，即使关闭其 `stream` feature 也保留；下游自定义全局分配器与 `kcp` 无法共存。默认不开 KCP 时没有这个额外分配器。2026-11-03 复核：[#36](https://github.com/cherish-ltt/kcp-ovo/issues/36) 已关闭，官方注册表 0.5.1 未撤回且已移除 mimalloc；本项目仍锁定 0.5.0，本轮不混入升级，后续须在本项目更新精确版本并重验组合，不必等待该问题再次发布。没有修改、fork 或发布上游。
 
 ## Fast、Normal 与流模式
 
@@ -43,7 +43,7 @@ let custom = KcpConfig {
 
 本适配必须 `stream_mode=false`：HELLO、DATA、EOF 是 KCP 消息封装；直接打开上游流模式会合并/拆分这些边界。因此两端均在启动前**拒绝** stream_mode=true，而非静默忽略。应用仍获得 AsyncRead/AsyncWrite 字节流；将来若采用原生 KCP 流模式，需要单独版本化并实现有界会话封装解析，不能仅翻转 bool。
 
-性能结论见 [KCP 性能研究](kcp-performance.md)。上游 0.5.0 的 RTO 退避与原版 KCP 不同，已报告 [kcp-ovo #38](https://github.com/cherish-ltt/kcp-ovo/issues/38)，未在下游私改算法；不能把原版 fast 的宣传值当本适配保证。
+性能结论与验收总结见 [KCP 性能研究](kcp-performance.md)。上游 0.5.0 的 RTO 退避与原版 KCP 不同，已报告 [kcp-ovo #38](https://github.com/cherish-ltt/kcp-ovo/issues/38)；2026-11-03 复核仍开放，已发布 0.5.1 源码仍有该分支。未在下游私改算法；不能把原版 fast 的宣传值当本适配保证。
 
 ## 安全及互操作
 

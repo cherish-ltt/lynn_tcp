@@ -425,6 +425,7 @@ docs/
 - KCP flush 等待已写字节的传输 ACK，shutdown 等待有序 EOF 确认；均不代表业务交付，强制释放不承诺排空。
 - KCP 保持 10 MiB 帧 body 上限；适配发送分片、接收队列及逐会话报文队列均有界。
 - CI 包含 `kcp`、`client,kcp`、`server,kcp`、`client,server,kcp`；回归覆盖 UDP 仿真、背压、重连、取消及独立进程双传输。
-- kcp-ovo 当前强制全局 mimalloc，必须在文档中告知下游；依赖调整和 MSRV 须以真实组合构建验证。
+- 当前锁定的 kcp-ovo 0.5.0 强制全局 mimalloc，必须告知下游；上游 0.5.1 已移除，但不能以其发布代替本项目精确版本升级与组合验证。
 - KCP 默认采用自定义 fast（nodelay/10ms/fastresend=2/nocwnd），新数据及 ACK 立即驱动；normal 保留周期输出。底层参数必须验证，不得启用破坏 HELLO/DATA/EOF 边界的原生 stream_mode。
 - 性能测试须独立统计请求和响应、校验内容；不得用响应数反填请求数证明无丢失。TCP/KCP 丢包比较须使用同条件包级网络仿真，不能以 TCP 应用代理替代。
+- 高丢包研究保留每轮退出码、请求/响应差值及 qdisc 统计，不删除失败轮次；有限接收期限内的缺失回复不能直接认定为协议永久丢失。

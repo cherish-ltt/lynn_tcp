@@ -351,7 +351,8 @@ Stream/message mode is independent of fast/normal. This adapter requires
 `stream_mode=true`; it still exposes a byte stream to the framework. Fast
 disables congestion-window control, not peer-window or queue bounds, and can
 reduce network fairness. See [configuration](docs/kcp.md) and
-[measured performance](docs/kcp-performance.md), not a promise of TCP parity.
+[measured performance](docs/kcp-performance.md), including the 10%/20%/30%
+packet-loss study and acceptance assessment, not a promise of TCP parity.
 
 ```sh
 cargo run --example kcp_echo --features kcp
@@ -374,11 +375,14 @@ application-level exchange before dropping its owner.
 
 Rust **1.99.1** is now required. To compose the upstream exact constraints,
 Tokio/bytes are pinned to **1.52.3/1.11.1** (including default TCP builds).
-Enabling KCP also activates upstream's **global mimalloc allocator** and Tokio
-`full`; applications declaring a different global allocator cannot link this
-feature without an upstream change. KCP is optional, not a promise of improved
-speed. See [KCP transport contract](docs/kcp.md) for lifecycle, bounds, metrics,
-security, interoperability and test details.
+The currently pinned kcp-ovo **0.5.0** activates a **global mimalloc allocator**
+and Tokio `full`; applications declaring a different global allocator cannot
+link this feature. Upstream [#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)
+is fixed in published 0.5.1, but this project has not upgraded; the loss study
+keeps 0.5.0 for comparability. The RTO issue
+[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38) remains open. KCP is
+optional, not a promise of improved speed. See [KCP transport contract](docs/kcp.md)
+for lifecycle, bounds, metrics, security, interoperability and test details.
 
 ### TLS 1.3 Encryption (feature `tls`)
 

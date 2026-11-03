@@ -342,7 +342,8 @@ TCP 保持默认。启用 `kcp` 后，分别使用
 消息/流模式与 fast/normal 独立。本适配的 HELLO/DATA/EOF 封装要求**消息模式**，
 显式拒绝 `stream_mode=true`，但框架仍使用字节流。fast 关闭拥塞窗口控制，
 不关闭对端窗口或队列上限，可能降低网络公平性。详见 [配置说明](docs/kcp.md)
-和 [性能实测](docs/kcp-performance.md)，不承诺等同 TCP。
+和 [性能实测](docs/kcp-performance.md)（含 10%/20%/30% 丢包研究及验收总结），
+不承诺等同 TCP。
 
 ```sh
 cargo run --example kcp_echo --features kcp
@@ -361,10 +362,12 @@ TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
 **不代表业务交付**；释放 owner 前应完成应用层确认交互。
 
 现要求 Rust **1.99.1**。为兼容上游精确约束，Tokio/bytes 锁定为
-**1.52.3/1.11.1**（包括默认 TCP 构建）。启用 KCP 还会引入上游的
-**全局 mimalloc 分配器**及 Tokio `full`；下游若声明另一个全局分配器，未修改上游前
-不能链接此 feature。KCP 默认关闭，不承诺更快。生命周期、内存边界、指标、安全、
-互操作与测试见 [KCP 传输契约](docs/kcp.md)。
+**1.52.3/1.11.1**（包括默认 TCP 构建）。当前锁定的 kcp-ovo **0.5.0** 会引入
+**全局 mimalloc 分配器**及 Tokio `full`，下游若声明另一个全局分配器，不能链接此 feature。
+上游 [#36](https://github.com/cherish-ltt/kcp-ovo/issues/36) 已在发布的 0.5.1 修复，
+本项目尚未升级，本轮丢包研究保留 0.5.0 以便对照；RTO 问题
+[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38) 仍开放。KCP 默认关闭，不承诺更快。
+生命周期、内存边界、指标、安全、互操作与测试见 [KCP 传输契约](docs/kcp.md)。
 
 ### TLS 1.3 传输加密（feature `tls`）
 
