@@ -61,13 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   Heartbeat timeout:  {}s", heart_timeout);
     println!();
 
-    let _server = LynnServer::new_with_config(config)
+    LynnServer::new_with_config(config)
         .await
         .add_router(1, custom_ping_handler)
         .add_router(2, custom_echo_handler)
         .add_router(3, custom_broadcast_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }

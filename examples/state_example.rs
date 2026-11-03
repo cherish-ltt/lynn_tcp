@@ -78,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 1: start the server with two registered states
     let _server_handle = tokio::spawn(async {
-        let _server = LynnServer::new()
+        LynnServer::new()
             .await
             .with_state(UserRepo::new())
             .with_state(AppConfig {
@@ -87,7 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .add_router(1, find_user)
             .add_router(2, service_info)
             .start()
-            .await;
+            .await
+            .expect("server failed");
     });
 
     tokio::time::sleep(Duration::from_millis(200)).await;

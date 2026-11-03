@@ -76,13 +76,13 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let _ = LynnServer::new()
+//!     LynnServer::new()
 //!         .await
 //!         .add_router(1, my_service)
 //!         .add_router(2, my_service_with_buf)
 //!         .add_router(3, my_service_with_clients)
 //!         .start()
-//!         .await;
+//!         .await?;
 //!     Ok(())
 //! }
 //!
@@ -110,7 +110,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let _ = LynnServer::new_with_config(
+//!     LynnServer::new_with_config(
 //!         LynnServerConfigBuilder::new()
 //!             .with_addr("0.0.0.0:9177").unwrap()
 //!             .with_server_max_connections(Some(&200))
@@ -124,7 +124,7 @@
 //!         .add_router(2, my_service_with_buf)
 //!         .add_router(3, my_service_with_clients)
 //!         .start()
-//!         .await;
+//!         .await?;
 //!     Ok(())
 //! }
 //!

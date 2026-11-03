@@ -105,6 +105,8 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
 
+`LynnServer::start().await` 返回 `lynn_tcp::Result<()>`；必须传播或处理启动错误（包括监听绑定和 TLS 初始化失败）。依赖 unit 输出的代码（如 `JoinHandle<()>`）需要适配新的返回类型。
+
 #### 最小服务器示例
 
 ```rust
@@ -114,13 +116,13 @@ use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let _ = LynnServer::new()
+    LynnServer::new()
         .await
         .add_router(1, ping_handler)
         .add_router(2, echo_handler)
         .add_router(3, broadcast_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -160,11 +162,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_tcp_keepalive_time_secs(&120)
         .build();
 
-    let _ = LynnServer::new_with_config(config)
+    LynnServer::new_with_config(config)
         .await
         .add_router(1, my_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -343,13 +345,13 @@ TLS 配置错误（文件缺失、证书私钥不配对）会在启动时立即�
 use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_state::AppState};
 
 #[tokio::main]
-async fn main() {
-    let _ = LynnServer::new()
+async fn main() -> lynn_tcp::Result<()> {
+    LynnServer::new()
         .await
         .with_state(UserRepo::new()) // seaorm feature 下也可：.with_db(db)
         .add_router(1, find_user)
         .start()
-        .await;
+        .await
 }
 
 // `repo` 直接解引用为 &UserRepo —— 无全局静态、无需手动传递 Arc。
