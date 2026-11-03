@@ -14,6 +14,7 @@ use tokio::{
 };
 use tracing::error;
 
+use crate::infrastructure::metrics::metrics::METRICS;
 use crate::infrastructure::tcp::io_timeout::with_io_timeout;
 use crate::{
     const_config::DEFAULT_SYSTEM_CHANNEL_SIZE, infrastructure::tcp::stream::BoxedWriteHalf,
@@ -65,9 +66,11 @@ impl LynnUser {
                     write_half.flush().await
                 };
                 if let Err(e) = with_io_timeout(write_timeout_secs, write).await {
+                    METRICS.messages.dropped_total.inc();
                     error!("Failed to write to socket: {}", e);
                     return;
                 }
+                METRICS.messages.sent_total.inc();
             }
             if let Err(e) = with_io_timeout(write_timeout_secs, write_half.shutdown()).await {
                 error!("Failed to shut down socket: {}", e);
@@ -103,6 +106,7 @@ impl LynnUser {
         let response = response.clone();
         async move {
             if let Err(e) = sender.send(LynnUserSignal::SendResponse(response)).await {
+                METRICS.messages.dropped_total.inc();
                 error!("Send response error:{}", e);
             }
         }

@@ -193,6 +193,8 @@ pub(crate) struct ConnectionPermit {
 pub(crate) struct ConnectionPermits {
     pub(crate) global: Option<Arc<AtomicUsize>>,
     pub(crate) per_ip: Option<ConnectionPermit>,
+    pub(crate) observation:
+        Option<crate::infrastructure::metrics::transport::ConnectionObservation>,
 }
 
 impl Drop for ConnectionPermits {

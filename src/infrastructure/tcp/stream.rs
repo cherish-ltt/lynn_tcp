@@ -87,6 +87,8 @@ impl AsyncWrite for LynnStream {
 /// Splits a transport into a boxed read half (for the per-connection read
 /// loop) and a boxed write half (for the clients-map writer task).
 pub(crate) fn split_transport(stream: LynnStream) -> (BoxedReadHalf, BoxedWriteHalf) {
+    #[cfg(feature = "server")]
+    let stream = crate::infrastructure::metrics::transport::MeasuredIo::new(stream);
     let (read_half, write_half) = tokio::io::split(stream);
     (Box::new(read_half), Box::new(write_half))
 }

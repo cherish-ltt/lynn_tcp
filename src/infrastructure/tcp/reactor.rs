@@ -29,6 +29,7 @@ use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::connection::connection_limiter::{ConnectionLimiter, ConnectionPermits};
+use crate::infrastructure::metrics::{metrics::METRICS, transport::ConnectionObservation};
 use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, StreamAcceptor};
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
@@ -227,7 +228,12 @@ impl EventManager {
                                 // down this worker.
                                 match tasks
                                     .spawn(async move {
+                                        let timer = METRICS
+                                            .messages
+                                            .processing_duration_seconds
+                                            .start_timer();
                                         let result = task.handler(context).await;
+                                        timer.observe_duration();
                                         check_handler_result(
                                             result,
                                             clients,
@@ -369,7 +375,11 @@ impl CoreReactor {
             if let Ok((socket, addr)) = client_result {
                 let mut socket_permit = true;
                 let mut socket = Some(socket);
-                let mut permit = ConnectionPermits::default();
+                let mut permit = ConnectionPermits {
+                    observation: Some(ConnectionObservation::accepted()),
+                    global: None,
+                    per_ip: None,
+                };
 
                 if let Some(max_connections) = allow_max_connections {
                     if connection_count

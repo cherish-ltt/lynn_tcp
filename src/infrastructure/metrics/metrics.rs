@@ -14,13 +14,13 @@ use prometheus::{
 /// Connection metrics
 #[cfg(feature = "metrics")]
 pub struct ConnectionMetrics {
-    /// Total number of connections established
+    /// Total server transport connections accepted, including rejected setup
     pub total: Counter,
-    /// Current number of active connections
+    /// Current server transport connections, including queued setup
     pub active: Gauge,
     /// Total number of connections closed
     pub closed_total: Counter,
-    /// Total number of failed connection attempts
+    /// Accepted server connections closed before session setup completed
     pub failed_total: Counter,
 }
 
@@ -44,9 +44,9 @@ pub struct MessageMetrics {
 /// Network traffic metrics
 #[cfg(feature = "metrics")]
 pub struct NetworkMetrics {
-    /// Total bytes received
+    /// Server frame bytes read, excluding transport overhead
     pub bytes_received_total: Counter,
-    /// Total bytes sent
+    /// Server frame bytes written, excluding transport overhead
     pub bytes_sent_total: Counter,
     /// TCP retransmits
     pub tcp_retransmits_total: Counter,
@@ -80,11 +80,11 @@ lazy_static! {
     pub static ref METRICS: Metrics = {
         // Connection metrics
         let connections_total = register_counter!(
-            "lynn_connections_total", "Total number of connections established"
+            "lynn_connections_total", "Total server transport connections accepted, including rejected setup"
         ).unwrap();
 
         let connections_active = register_gauge!(
-            "lynn_connections_active", "Current number of active connections"
+            "lynn_connections_active", "Current server transport connections, including queued setup"
         ).unwrap();
 
         let connections_closed_total = register_counter!(
@@ -92,7 +92,7 @@ lazy_static! {
         ).unwrap();
 
         let connections_failed_total = register_counter!(
-            "lynn_connections_failed_total", "Total number of failed connection attempts"
+            "lynn_connections_failed_total", "Accepted server connections closed before session setup completed"
         ).unwrap();
 
         // Message metrics
@@ -130,11 +130,11 @@ lazy_static! {
 
         // Network metrics
         let network_bytes_received_total = register_counter!(
-            "lynn_network_bytes_received_total", "Total bytes received"
+            "lynn_network_bytes_received_total", "Server frame bytes read, excluding transport overhead"
         ).unwrap();
 
         let network_bytes_sent_total = register_counter!(
-            "lynn_network_bytes_sent_total", "Total bytes sent"
+            "lynn_network_bytes_sent_total", "Server frame bytes written, excluding transport overhead"
         ).unwrap();
 
         let network_tcp_retransmits_total = register_counter!(
@@ -191,6 +191,7 @@ lazy_static! {
 /// Exports metrics in Prometheus text format
 #[cfg(feature = "metrics")]
 pub fn export_metrics() -> String {
+    lazy_static::initialize(&METRICS);
     let encoder = TextEncoder::new();
     let metric_families = prometheus::gather();
     match encoder.encode_to_string(&metric_families) {
