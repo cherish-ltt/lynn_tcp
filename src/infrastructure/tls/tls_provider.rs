@@ -92,14 +92,13 @@ pub(crate) fn build_client_tls(config: &TlsClientConfig, fallback_addr: &str) ->
         .with_protocol_versions(&[&rustls::version::TLS13])
         .map_err(|e| LynnError::tls(format!("failed to enable TLS 1.3: {e}")))?;
 
-    let client_config = if config.danger_accept_invalid_certs {
+    let builder = if config.danger_accept_invalid_certs {
         tracing::warn!(
             "TLS server certificate verification is DISABLED (danger_accept_invalid_certs); only use in development"
         );
         builder
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoServerCertVerifier::new()))
-            .with_no_client_auth()
     } else {
         let ca_path = config.ca_cert_path.as_deref().ok_or_else(|| {
             LynnError::tls(
@@ -107,13 +106,18 @@ pub(crate) fn build_client_tls(config: &TlsClientConfig, fallback_addr: &str) ->
             )
         })?;
         let roots = load_root_store(ca_path)?;
-        let builder = builder.with_root_certificates(roots);
-        match (&config.client_cert_path, &config.client_key_path) {
-            (Some(cert_path), Some(key_path)) => builder
-                .with_client_auth_cert(load_certs(cert_path)?, load_private_key(key_path)?)
-                .map_err(|e| LynnError::tls(format!("invalid client certificate/key pair: {e}")))?,
-            _ => builder.with_no_client_auth(),
-        }
+        builder.with_root_certificates(roots)
+    };
+    let client_config = match (&config.client_cert_path, &config.client_key_path) {
+        (Some(cert_path), Some(key_path)) => builder
+            .with_client_auth_cert(load_certs(cert_path)?, load_private_key(key_path)?)
+            .map_err(|e| LynnError::tls(format!("invalid client certificate/key pair: {e}")))?,
+        (None, None) => builder.with_no_client_auth(),
+        _ => {
+            return Err(LynnError::tls(
+                "TLS client authentication requires both certificate and private key",
+            ));
+        },
     };
 
     Ok(ClientTls {
@@ -194,6 +198,10 @@ impl ServerCertVerifier for NoServerCertVerifier {
         self.supported_schemes.clone()
     }
 }
+
+#[cfg(test)]
+#[path = "tls_identity_tests.rs"]
+mod identity_tests;
 
 #[cfg(test)]
 mod tests {
