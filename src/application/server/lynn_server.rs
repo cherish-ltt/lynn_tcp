@@ -11,7 +11,6 @@ use tracing_subscriber::fmt;
 
 use crate::application::server::server_common::spawn_check_heart;
 use crate::application::server::server_config::LynnServerConfig;
-use crate::const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK};
 use crate::domain::handler::handler_system::{AsyncFunc, HandlerContext, IHandler, IntoSystem};
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType, LynnUser};
 use crate::domain::routing::router::LynnRouter;
@@ -300,7 +299,6 @@ impl<'a> LynnServer<'a> {
     }
 
     pub async fn start(mut self) {
-        self.init_marks().await;
         let server_arc = Arc::new(self);
         if let Err(e) = server_arc.run().await {
             error!("{}", e);
@@ -380,11 +378,6 @@ impl<'a> LynnServer<'a> {
             )
             .await;
         Ok(())
-    }
-
-    async fn init_marks(&self) {
-        SERVER_MESSAGE_HEADER_MARK.get_or_init(|| *self.lynn_config.get_message_header_mark());
-        SERVER_MESSAGE_TAIL_MARK.get_or_init(|| *self.lynn_config.get_message_tail_mark());
     }
 
     /// Logs server information.

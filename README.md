@@ -369,6 +369,8 @@ State is resolved per request, so `with_state` may be called before or after `ad
 
 #### Receive protocol errors
 
+Custom header/tail marks belong to each server instance and apply to both requests and responses. Servers with different marks can run simultaneously or sequentially in the same process without sharing protocol configuration.
+
 Both client and server reject malformed frame headers, lengths, and trailers and close the affected transport, including TLS. Valid fragmented/coalesced frames remain supported. The receive parser retains at most the 10 MiB frame limit plus the 10-byte header and one 1 KiB socket read; a terminal parse error releases its buffer and rejects further input. This is a per-parser bound, not a process-wide memory quota. Clients retain their configured reconnect policy after a protocol error.
 
 ### Client Automatic Reconnection

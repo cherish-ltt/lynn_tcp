@@ -185,7 +185,13 @@ impl EventManager {
                                 // down this worker.
                                 match tokio::spawn(async move {
                                     let result = task.handler(context).await;
-                                    check_handler_result(result, clients).await;
+                                    check_handler_result(
+                                        result,
+                                        clients,
+                                        message_header_mark,
+                                        message_tail_mark,
+                                    )
+                                    .await;
                                     drop(permit);
                                 })
                                 .await
