@@ -86,6 +86,7 @@
         }
       ],
       "title": "Active Connections",
+      "description": "Server connections from accept through setup/session release; process-wide.",
       "type": "timeseries"
     },
     {
@@ -139,6 +140,7 @@
         }
       ],
       "title": "Message Rate",
+      "description": "Decoded server frames including heartbeats; not handler calls.",
       "type": "stat"
     },
     {
@@ -214,6 +216,7 @@
         }
       ],
       "title": "Network Traffic",
+      "description": "Successful server frame I/O bytes; excludes TLS overhead and OS retransmissions.",
       "type": "timeseries"
     },
     {
@@ -289,6 +292,7 @@
         }
       ],
       "title": "Message Size Distribution",
+      "description": "Complete decoded frame size including framing.",
       "type": "timeseries"
     },
     {
@@ -335,6 +339,7 @@
         }
       ],
       "title": "Errors by Type",
+      "description": "Custom collector required; not automatically registered by lynn_tcp.",
       "type": "piechart"
     },
     {
@@ -415,6 +420,7 @@
         }
       ],
       "title": "Message Processing Duration",
+      "description": "Handler execution only; excludes queueing and response writes.",
       "type": "timeseries"
     },
     {
@@ -468,6 +474,7 @@
         }
       ],
       "title": "Memory Usage",
+      "description": "External/manual collector required; zero is not measured memory usage.",
       "type": "stat"
     },
     {
@@ -521,6 +528,7 @@
         }
       ],
       "title": "Active Threads",
+      "description": "External/manual collector required; zero is not measured thread count.",
       "type": "stat"
     },
     {
@@ -574,6 +582,7 @@
         }
       ],
       "title": "Total Connections (All Time)",
+      "description": "Accepted server connections including rejected setup; process-wide.",
       "type": "stat"
     },
     {
@@ -631,6 +640,7 @@
         }
       ],
       "title": "Rate Limit Rejects",
+      "description": "Custom collector required; not automatically registered by lynn_tcp.",
       "type": "stat"
     }
   ],

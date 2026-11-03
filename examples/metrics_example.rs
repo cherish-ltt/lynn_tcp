@@ -1,148 +1,37 @@
-//! Example of using lynn_tcp with Prometheus metrics
-//!
-//! Run this example with: cargo run --example metrics_example --features metrics
-//!
-//! Then visit http://localhost:9091/metrics to see the Prometheus metrics
-//! Or visit http://localhost:9091/health for health check
+//! Server lifecycle, frame and byte metrics are collected automatically.
+//! Run: cargo run --example metrics_example
+//! Inspect: curl http://127.0.0.1:9091/metrics
 
 use lynn_tcp::{lynn_metrics::*, lynn_server::*, lynn_tcp_dependents::*};
-use tracing_subscriber::fmt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    fmt::init();
-
-    // Spawn metrics server
-    let metrics_config = MetricsServerConfig {
-        bind_addr: "0.0.0.0:9091".to_string(),
+    tracing_subscriber::fmt::init();
+    let mut args = std::env::args().skip(1);
+    let server_addr = args.next().unwrap_or_else(|| "127.0.0.1:9177".into());
+    let metrics_addr = args.next().unwrap_or_else(|| "127.0.0.1:9091".into());
+    let metrics = spawn_metrics_server(MetricsServerConfig {
+        bind_addr: metrics_addr,
         enabled: true,
-    };
-
-    println!("🚀 Starting Lynn TCP server with metrics...");
-    println!("📊 Metrics available at: http://localhost:9091/metrics");
-    println!("💚 Health check at: http://localhost:9091/health");
-    println!();
-
-    let _metrics_handle = spawn_metrics_server(metrics_config);
-
-    // Record some initial metrics
-    #[cfg(feature = "metrics")]
-    {
-        METRICS
-            .system
-            .memory_used_bytes
-            .set(128.0 * 1024.0 * 1024.0); // 128MB
-        METRICS.system.active_threads.set(4.0);
-    }
-
-    // Start the server
-    LynnServer::new()
+    });
+    let config = LynnServerConfigBuilder::new()
+        .with_addr(server_addr)?
+        .build();
+    let result = LynnServer::new_with_config(config)
         .await
-        .add_router(1, my_service)
-        .add_router(2, my_service_with_metrics)
+        .add_router(1, echo)
         .start()
-        .await?;
-
+        .await;
+    metrics.abort();
+    result?;
     Ok(())
 }
 
-/// Simple handler
-pub async fn my_service() -> HandlerResult {
-    #[cfg(feature = "metrics")]
-    {
-        // Track active connections
-        METRICS.connections.total.inc();
-        METRICS.messages.received_total.inc();
-    }
-
-    HandlerResult::new_without_send()
-}
-
-/// Handler with metrics tracking
-pub async fn my_service_with_metrics(input_buf_vo: InputBufVO) -> HandlerResult {
-    #[cfg(feature = "metrics")]
-    {
-        // Track message size
-        let data_len = input_buf_vo.get_all_bytes().len();
-        METRICS.messages.size_bytes.observe(data_len as f64);
-
-        METRICS.messages.received_total.inc();
-    }
-
-    HandlerResult::new_without_send()
-}
-
-/// Example of manually tracking metrics
-#[allow(dead_code)]
-fn example_manual_metrics() {
-    #[cfg(feature = "metrics")]
-    {
-        // Connection metrics
-        METRICS.connections.total.inc();
-        METRICS.connections.active.inc();
-        METRICS.connections.closed_total.inc();
-        METRICS.connections.failed_total.inc();
-
-        // Message metrics
-        METRICS.messages.received_total.inc();
-        METRICS.messages.sent_total.inc();
-        METRICS.messages.invalid_total.inc();
-        METRICS.messages.dropped_total.inc();
-
-        // Network metrics
-        METRICS.network.bytes_received_total.inc_by(1024.0);
-        METRICS.network.bytes_sent_total.inc_by(2048.0);
-
-        // System metrics
-        METRICS
-            .system
-            .memory_used_bytes
-            .set(256.0 * 1024.0 * 1024.0);
-        METRICS.system.active_threads.set(8.0);
-        METRICS.system.queue_size.set(100.0);
-
-        // Histogram observation
-        METRICS.messages.size_bytes.observe(512.0);
-        METRICS.messages.processing_duration_seconds.observe(0.025);
-    }
-}
-
-/// Example of timing operations
-#[allow(dead_code)]
-async fn example_timing() {
-    #[cfg(feature = "metrics")]
-    {
-        // Method 1: Manual timing
-        let start = std::time::Instant::now();
-        // ... do some work ...
-        let duration = start.elapsed().as_secs_f64();
-        METRICS
-            .messages
-            .processing_duration_seconds
-            .observe(duration);
-
-        // Method 2: Using Timer trait helper
-        METRICS
-            .messages
-            .processing_duration_seconds
-            .observe_duration(|| {
-                // ... do some work ...
-                println!("Doing work...");
-            });
-    }
-}
-
-/// Export metrics as string (for custom endpoints)
-#[allow(dead_code)]
-fn export_metrics_text() -> String {
-    #[cfg(feature = "metrics")]
-    {
-        export_metrics()
-    }
-
-    #[cfg(not(feature = "metrics"))]
-    {
-        "# Metrics feature is disabled\n".to_string()
-    }
+async fn echo(input: InputBufVO) -> HandlerResult {
+    HandlerResult::new_with_send(
+        1,
+        input.get_all_bytes().into(),
+        vec![input.get_input_addr().unwrap()],
+    )
+    .expect("received payload fits the protocol limit")
 }

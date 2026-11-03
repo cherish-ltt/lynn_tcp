@@ -112,62 +112,23 @@ sudo systemctl start grafana-server
 | `lynn_rate_limit_rejected_total` | Counter | 速率限制拒绝次数 |
 | `lynn_validation_errors_total` | Counter | 验证错误次数 |
 
-## 在代码中使用 Metrics
+## 自动采集边界与迁移
 
-### 基础使用
+- 仅采集服务端；客户端、指标 HTTP 监听器和业务自定义指标不混入内置计数。同进程多个服务端累计到进程级全局指标。
+- `connections.total/active` 在 TCP accept 后立即增加，包含等待准入、握手和分派的连接；配额所有权释放时 `active` 恰好减一、`closed_total` 恰好加一。准入拒绝、握手失败/超时及初始化阶段取消计入 `failed_total`；已建立会话的后续 I/O 错误不计为初始化失败。
+- `messages.received_total` 在完整有界帧解析成功时增加，包含心跳、未知路由/构造类型；`size_bytes` 记录完整帧大小（含 10 字节头及 2 字节尾）。错误帧计入 `invalid_total`，不计入接收帧数；未完成帧 EOF 不算已解析错误帧。
+- `messages.sent_total` 仅在每个目标响应完整写入并刷新后增加，不代表对端确认。广播按实际目标分别计数。
+- `messages.dropped_total` 记录可观测到的处理许可拒绝、未知路由/构造类型、目标缺失、入队失败或响应写入失败。它不是所有丢弃帧的穷尽计数：owner 强制取消时尚在队列中的响应不逐项排空统计。
+- `processing_duration_seconds` 记录 handler 执行时间，不含等待 worker、响应入队与网络发送；panic 或取消也通过计时器释放记录截至终止时的耗时。
+- `network.bytes_*` 在成功的传输读写返回时累计真实字节数，包含帧头尾、错误输入和部分写入；Pending、EOF、失败及取消不会把请求写入长度误计为成功长度。TLS 计量的是解密后/加密前框架字节，不包含握手、TLS 记录开销、IP/TCP 头和重传。
+- `tcp_retransmits_total`、`tcp_errors_total`、系统内存/线程/队列指标未自动采集，需调用方通过独立采集器赋值；不能用默认零值判断 OS 或进程健康。本文中的额外错误/限流指标名称是自定义采集约定，框架不会自动注册它们。
+- exporter 首次调用即初始化内置指标；未产生流量时正常导出零值。
 
-```rust
-use lynn_tcp::lynn_metrics::*;
+### 从手工统计迁移
 
-// 启动 metrics server
-let config = MetricsServerConfig {
-    bind_addr: "0.0.0.0:9091".to_string(),
-    enabled: true,
-};
-let _handle = spawn_metrics_server(config);
+删除旧 handler/示例中对上述自动指标的 `inc`、`inc_by`、`observe`，否则会双计数；公共 `METRICS` API 保持可用，但不再用于重复记录框架拥有的事件。当前不提供关闭自动采集的手工模式开关；业务指标应使用独立命名（例如 `myapp_orders_total`），由自己的 Prometheus 注册表/默认注册表管理。
 
-// 记录指标
-METRICS.connections.total.inc();
-METRICS.connections.active.inc();
-METRICS.messages.received_total.inc();
-```
-
-### 在 Handler 中使用
-
-```rust
-pub async fn my_handler(input_buf_vo: InputBufVO) -> HandlerResult {
-    // 记录消息接收
-    METRICS.messages.received_total.inc();
-
-    // 记录消息大小
-    if let Some(data) = input_buf_vo.get_all_bytes().len() {
-        METRICS.messages.size_bytes.observe(data as f64);
-    }
-
-    // 使用 Timer 记录处理时间
-    METRICS.messages.processing_duration_seconds.observe_duration(|| {
-        // 处理消息...
-        HandlerResult::new_without_send()
-    })
-}
-```
-
-### 错误跟踪
-
-```rust
-match parse_message(data) {
-    Ok(msg) => {
-        METRICS.messages.received_total.inc();
-        // ...
-    }
-    Err(e) => {
-        METRICS.errors.total
-            .with_label_values(&["parse_error"])
-            .inc();
-        METRICS.messages.invalid_total.inc();
-    }
-}
-```
+`cargo run --example metrics_example` 提供真实 echo 与 exporter，不伪造连接、内存或线程数据。只启用 `metrics` 而不启用 `server` 时，仅提供注册和导出 API，不运行业务传输采集。
 
 ## PromQL 查询示例
 

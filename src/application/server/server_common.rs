@@ -24,6 +24,7 @@ use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::connection::connection_limiter::ConnectionPermits;
+use crate::infrastructure::metrics::metrics::METRICS;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::io_timeout::with_io_timeout;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
@@ -139,6 +140,7 @@ async fn send_response(
         if let Some(send) = send {
             send.await;
         } else {
+            METRICS.messages.dropped_total.inc();
             delay_socket.push(*socket_addr);
         }
     }
@@ -175,6 +177,7 @@ pub(crate) async fn input_dto_build(
             )));
         },
         Err(_) => {
+            METRICS.messages.dropped_total.inc();
             // If the permit cannot be acquired, log a warning.
             warn!("addr:{} PROCESS_PERMIT_SIZE is full", addr)
         },
@@ -187,9 +190,12 @@ pub(crate) async fn add_client(
     stream: LynnStream,
     addr: SocketAddr,
     last_communicate_time: Arc<RwLock<SystemTime>>,
-    permit: ConnectionPermits,
+    mut permit: ConnectionPermits,
     write_timeout_secs: u64,
 ) -> (BoxedReadHalf, ConnectionSession) {
+    if let Some(observation) = &mut permit.observation {
+        observation.established = true;
+    }
     let (read_half, write_half): (BoxedReadHalf, BoxedWriteHalf) = split_transport(stream);
     let (lynn_user, writer, closed) = LynnUser::new(
         write_half,
@@ -236,6 +242,7 @@ pub(crate) async fn read_connection(
                 Ok(0) => break true,
                 Ok(n) => {
                     if let Err(error) = big_buf.extend_from_slice(&buf[..n]) {
+                        METRICS.messages.invalid_total.inc();
                         warn!("Invalid frame from {addr}: {error}");
                         break false;
                     }
@@ -244,10 +251,16 @@ pub(crate) async fn read_connection(
                             Ok(Some(payload)) => payload,
                             Ok(None) => break,
                             Err(error) => {
+                                METRICS.messages.invalid_total.inc();
                                 warn!("Invalid frame from {addr}: {error}");
                                 break 'read_loop false;
                             },
                         };
+                        METRICS.messages.received_total.inc();
+                        METRICS
+                            .messages
+                            .size_bytes
+                            .observe((payload.len() + 12) as f64);
                         let mut input_buf_vo = InputBufVO::new(payload, addr);
                         if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
                             match constructor_id {
@@ -273,13 +286,16 @@ pub(crate) async fn read_connection(
                                             )
                                             .await;
                                         } else {
+                                            METRICS.messages.dropped_total.inc();
                                             warn!("router_map_async no method match,{}", method_id);
                                         }
                                     } else {
+                                        METRICS.messages.dropped_total.inc();
                                         warn!("router_map_async input_buf_vo no method_id");
                                     }
                                 },
                                 _ => {
+                                    METRICS.messages.dropped_total.inc();
                                     warn!("Unknown constructor_id: {}", constructor_id);
                                 },
                             }

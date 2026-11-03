@@ -260,6 +260,20 @@ requests close the connection. Unknown paths still return HTTP 404.
 
 ---
 
+### Automatic Transport Metrics
+
+With `server` enabled, accepted server connections, active/closed/setup-failed
+connections, decoded frames, completed response writes, frame sizes and handler
+durations are collected automatically. The byte counters measure successful
+server-side frame I/O, including partial writes and framing, but exclude TLS
+handshakes, encryption overhead and TCP retransmissions. Clients and the metrics
+HTTP listener do not contribute to these counters.
+
+Remove manual increments of these built-in counters when upgrading; use separate
+application metric names for business events. Process memory, threads, queue size
+and OS retransmissions still require an external/manual collector. See
+[METRICS.md](METRICS.md) for exact boundaries, cancellation limits and migration.
+
 ### Available Configuration (LynnServerConfigBuilder)
 
 | Method | Description | Default |

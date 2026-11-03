@@ -109,6 +109,7 @@ mod tests {
             permit: ConnectionPermits {
                 per_ip: permit,
                 global: Some(global.clone()),
+                observation: None,
             },
         };
         let (read, mut peer) = tokio::io::duplex(64);
@@ -158,6 +159,7 @@ mod tests {
             permit: ConnectionPermits {
                 per_ip: limiter.acquire(addr.ip()).await,
                 global: None,
+                observation: None,
             },
         };
         let new_permit = limiter.acquire(addr.ip()).await;

@@ -63,6 +63,11 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
 
+      - name: Metrics process blackbox
+        run: |
+          cargo build --locked --example metrics_example
+          python3 tests/metrics_blackbox.py target/debug/examples/metrics_example
+
       - name: Check all features
         run: cargo check --all-features --all-targets
 
