@@ -287,6 +287,7 @@ docs/
 ├── update_logs/        # 每个版本的中文更新日志（vX.Y.Z.md）
 ├── version.md          # 全版本英文历史记录
 ├── kcp.md              # KCP 传输、边界与验证契约
+├── kcp-performance.md  # KCP 参数及同条件性能研究
 ├── benchmark/          # 基准测试结果存档（JSON，按版本与机型命名）
 ├── FlowChart.png       # v1.x 架构流程图
 ├── FlowChart-v2.png    # v2.x（DDD + 洋葱架构）流程图
@@ -425,3 +426,5 @@ docs/
 - KCP 保持 10 MiB 帧 body 上限；适配发送分片、接收队列及逐会话报文队列均有界。
 - CI 包含 `kcp`、`client,kcp`、`server,kcp`、`client,server,kcp`；回归覆盖 UDP 仿真、背压、重连、取消及独立进程双传输。
 - kcp-ovo 当前强制全局 mimalloc，必须在文档中告知下游；依赖调整和 MSRV 须以真实组合构建验证。
+- KCP 默认采用自定义 fast（nodelay/10ms/fastresend=2/nocwnd），新数据及 ACK 立即驱动；normal 保留周期输出。底层参数必须验证，不得启用破坏 HELLO/DATA/EOF 边界的原生 stream_mode。
+- 性能测试须独立统计请求和响应、校验内容；不得用响应数反填请求数证明无丢失。TCP/KCP 丢包比较须使用同条件包级网络仿真，不能以 TCP 应用代理替代。

@@ -11,6 +11,10 @@ use tokio::{
 use super::{HELLO, KcpConfig, PACKETS, stream::KcpStream};
 
 async fn pair() -> (KcpStream, KcpStream) {
+    pair_with_config(KcpConfig::default()).await
+}
+
+async fn pair_with_config(config: KcpConfig) -> (KcpStream, KcpStream) {
     let a = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
     let b = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
     let (tx, rx) = mpsc::channel(PACKETS);
@@ -18,9 +22,8 @@ async fn pair() -> (KcpStream, KcpStream) {
     let conv = 42;
     a.connect(b.local_addr().unwrap()).await.unwrap();
     let (left, ready) =
-        KcpStream::start(a, b.local_addr().unwrap(), conv, KcpConfig::default(), None).unwrap();
-    let (right, other) =
-        KcpStream::start(b.clone(), source, conv, KcpConfig::default(), Some(rx)).unwrap();
+        KcpStream::start(a, b.local_addr().unwrap(), conv, config.clone(), None).unwrap();
+    let (right, other) = KcpStream::start(b.clone(), source, conv, config, Some(rx)).unwrap();
     tokio::spawn(async move {
         let mut bytes = [0; 65536];
         loop {
@@ -40,6 +43,49 @@ async fn pair() -> (KcpStream, KcpStream) {
     .await
     .unwrap();
     (left, right)
+}
+
+#[tokio::test]
+async fn fast_data_and_ack_do_not_wait_for_the_periodic_tick() {
+    let mut config = KcpConfig::default();
+    config.protocol.interval = 5000;
+    timeout(Duration::from_secs(1), async {
+        let (mut client, mut server) = pair_with_config(config).await;
+        client.write_all(b"fast").await.unwrap();
+        let mut payload = [0; 4];
+        server.read_exact(&mut payload).await.unwrap();
+        assert_eq!(&payload, b"fast");
+        client.flush().await.unwrap();
+        server.write_all(b"reply").await.unwrap();
+        let mut response = [0; 5];
+        client.read_exact(&mut response).await.unwrap();
+        assert_eq!(&response, b"reply");
+        server.flush().await.unwrap();
+    })
+    .await
+    .expect("nodelay must drive new data and ACKs without a timer tick");
+}
+
+#[tokio::test]
+async fn normal_and_custom_windows_preserve_message_order() {
+    for mut config in [KcpConfig::normal_mode(), KcpConfig::default()] {
+        config.protocol.interval = 5;
+        config.protocol.snd_wnd = 16;
+        config.protocol.rcv_wnd = 16;
+        let (mut client, mut server) = pair_with_config(config).await;
+        let sender = tokio::spawn(async move {
+            client.write_all(&vec![13; 100_000]).await.unwrap();
+            client.shutdown().await.unwrap();
+            client
+        });
+        let mut received = Vec::new();
+        timeout(Duration::from_secs(5), server.read_to_end(&mut received))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(received, vec![13; 100_000]);
+        drop(sender.await.unwrap());
+    }
 }
 
 #[tokio::test]
@@ -150,6 +196,7 @@ async fn idle_timeout_and_cancelled_connect_release_socket() {
         7,
         KcpConfig {
             idle_timeout_secs: 1,
+            ..KcpConfig::default()
         },
         None,
     )
@@ -180,7 +227,8 @@ fn adapter_chunks_fit_upstream_message_and_receive_window_limits() {
     assert!(kcp.waitsnd() < kcp.rcv_wnd as usize);
     assert!(
         KcpConfig {
-            idle_timeout_secs: 0
+            idle_timeout_secs: 0,
+            ..KcpConfig::default()
         }
         .validate()
         .is_err()

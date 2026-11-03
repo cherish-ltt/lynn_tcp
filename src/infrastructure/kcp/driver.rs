@@ -25,16 +25,8 @@ impl Driver {
         config: KcpConfig,
         incoming: Option<mpsc::Receiver<Vec<u8>>>,
     ) -> io::Result<Self> {
-        let mut kcp = Kcp::new(
-            conv,
-            kcp_ovo::KcpConfig {
-                nodelay: true,
-                interval: 10,
-                fastresend: 2,
-                ..Default::default()
-            },
-        )
-        .map_err(io::Error::other)?;
+        config.validate().map_err(io::Error::other)?;
+        let mut kcp = Kcp::new(conv, config.protocol).map_err(io::Error::other)?;
         let output = socket.clone();
         let connected = incoming.is_none();
         kcp.set_output(move |packet| {
@@ -70,9 +62,10 @@ impl Driver {
         let mut offset = 0;
         let mut local_eof = false;
         let mut remote_eof = false;
+        let mut output_ready = client;
         let start = Instant::now();
         let mut last_packet = start;
-        let mut tick = interval(Duration::from_millis(10));
+        let mut tick = interval(Duration::from_millis(self.kcp.interval));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut input = vec![0; 65536];
         let mut data = vec![0; CHUNK];
@@ -90,6 +83,7 @@ impl Driver {
                         }
                         if !client {
                             self.kcp.send(HELLO).map_err(io::Error::other)?;
+                            output_ready = true;
                         }
                         established = true;
                         if let Some(ready) = ready.take() {
@@ -113,6 +107,13 @@ impl Driver {
                     Err(error) => return Err(io::Error::other(error)),
                 }
             }
+            if output_ready && self.kcp.nodelay {
+                let now = start.elapsed().as_millis() as u64;
+                // Upstream update gates flush on ts_flush even after send/input.
+                self.kcp.ts_flush = now;
+                self.kcp.update(now).await.map_err(io::Error::other)?;
+            }
+            output_ready = false;
             if self.kcp.waitsnd() == 0 {
                 acknowledged.send_replace((consumed, local_eof));
             }
@@ -132,10 +133,12 @@ impl Driver {
                     let (header, payload) = KcpPacketHeader::from_bytes(&mut bytes::Bytes::copy_from_slice(&packet)).map_err(io::Error::other)?;
                     if header.conv != self.kcp.conv { continue; }
                     if header.len as usize != payload.len() || packet.len() > 1400 || header.frg as usize >= (CHUNK + 1).div_ceil(1372) { return Err(io::Error::other("invalid KCP datagram length or fragmentation")); }
+                    self.kcp.current = start.elapsed().as_millis() as u64;
                     self.kcp.input(&packet).map_err(io::Error::other)?;
+                    output_ready = true;
                     last_packet = Instant::now();
                 },
-                n = read.read(&mut data), if established && !local_eof && self.kcp.waitsnd() < 32 => {
+                n = read.read(&mut data), if established && !local_eof && self.kcp.waitsnd() < usize::from(self.kcp.snd_wnd) => {
                     let n = n?;
                     if n == 0 { self.kcp.send(&[2]).map_err(io::Error::other)?; local_eof = true; }
                     else {
@@ -143,6 +146,7 @@ impl Driver {
                         self.kcp.send(&message).map_err(io::Error::other)?;
                         consumed += n as u64;
                     }
+                    output_ready = true;
                 },
                 n = write.write(&pending[offset..]), if offset < pending.len() => {
                     let n = n?;

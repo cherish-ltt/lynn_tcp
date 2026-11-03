@@ -332,6 +332,18 @@ TCP 保持默认。启用 `kcp` 后，分别使用
 `lynn_tcp::lynn_kcp::KcpConfig` 导入。两端复用相同 handler、帧协议、路由和状态；
 单个实例只监听一种传输。
 
+适配始终使用**底层 Kcp 控制块**，不使用上游高阶 Stream/Listener API。
+`KcpConfig::default()` 为自定义 **fast**：
+`nodelay=true, interval=10, fastresend=2, nocwnd=true`；新数据和 ACK 立即输出，
+不等待定时 tick。`KcpConfig::normal_mode()` 使用上游 normal 预设
+（false/100/0/false）。通过 `KcpConfig::protocol` 和重导出的 `KcpOptions`
+自定义底层参数。
+
+消息/流模式与 fast/normal 独立。本适配的 HELLO/DATA/EOF 封装要求**消息模式**，
+显式拒绝 `stream_mode=true`，但框架仍使用字节流。fast 关闭拥塞窗口控制，
+不关闭对端窗口或队列上限，可能降低网络公平性。详见 [配置说明](docs/kcp.md)
+和 [性能实测](docs/kcp-performance.md)，不承诺等同 TCP。
+
 ```sh
 cargo run --example kcp_echo --features kcp
 # 独立客户端：default-features = false, features = ["client", "kcp"]

@@ -3,11 +3,47 @@
 ## 选择与兼容
 
 - TCP 默认不变；feature `kcp` 默认关闭，双端 builder 的 `with_kcp(KcpConfig)` 显式选择 UDP/KCP；不自动回退、不同时监听。
-- TCP 专用的 nodelay、keepalive 和 socket buffer 配置不作用于 KCP；KCP 参数采用本文说明的固定配置，框架读写超时继续生效。
+- TCP 专用的 nodelay、keepalive 和 socket buffer 配置不作用于 KCP；KCP 通过 `KcpConfig::protocol` 设置底层参数，框架读写超时继续生效。
 - 业务 handler、AppState、多路由、广播和既有帧格式复用；只改变传输接入。独立角色关闭默认 feature 后使用 `client,kcp` 或 `server,kcp`。
 - 固定 kcp-ovo `=0.5.0`，直接使用 `core::kcp::Kcp`，不使用消息式高层 KcpStream/KcpListener。上游消息 API 缺少独立 accept/关闭会话及框架所需的所有权控制。
 - Rust 1.99.1；上游精确锁定使 Tokio/bytes 必须与本仓库一致，采用 `=1.52.3` / `=1.11.1`，不能把不同 semver-compatible 精确版本当成可以重复安装。
 - 上游无条件声明全局 mimalloc，即使关闭其 `stream` feature 也保留；下游自定义全局分配器与 `kcp` 无法共存。未修改、fork 或发布上游。默认不开 KCP 时没有这个额外分配器。
+
+## Fast、Normal 与流模式
+
+始终使用底层 `kcp_ovo::core::kcp::Kcp`，不是上游高阶 Stream/Listener API。**消息/流是边界语义，fast/normal 是定时、重传和拥塞参数，两者不是互斥的三种传输。**
+
+| 配置 | nodelay | interval ms | fastresend | nocwnd | stream_mode |
+|---|---|---:|---:|---|---|
+| 上游 normal/default | false | 100 | 0 | false | false |
+| 上游 fast_mode() | true | 20 | 2 | true | false |
+| 上游 stream_mode() | true | 20 | 2 | true | true |
+| Lynn 默认（自定义 fast） | true | 10 | 2 | true | false |
+
+Lynn 默认 fast 在 send/input 后立即驱动输出，定时 tick 负责重传和空闲检查，不让新数据/ACK 等待 10 ms。使用上游公开 `ts_flush/current/update`，不绕过发送窗口、ACK 或重传算法；normal 保留周期输出。`nocwnd=true` 只关闭拥塞窗口约束，发送/对端接收窗口及本地有界队列仍在；可能降低公平性并加重拥塞，不适合不加带宽约束地部署在共享公网。
+
+```rust
+use lynn_tcp::lynn_kcp::{KcpConfig, KcpOptions};
+
+let fast = KcpConfig::default();
+let normal = KcpConfig::normal_mode();
+let custom = KcpConfig {
+    idle_timeout_secs: 60,
+    protocol: KcpOptions {
+        interval: 10,
+        snd_wnd: 128,
+        rcv_wnd: 128,
+        ..KcpOptions::fast_mode()
+    },
+};
+// Pass the chosen value to both endpoint builders' with_kcp(...).
+```
+
+验证约束：MTU 固定 1400，interval 为 1..=5000 ms，fastresend 非负，snd_wnd 非零，rcv_wnd 至少 12（保证完整 16 KiB 块可重组）。接收窗口不是吞吐开关的替代品，增大会按段数增加内存和在途流量。旧版 PR 的 `KcpConfig { idle_timeout_secs: n }` 字面量须增加 `..KcpConfig::default()`。
+
+本适配必须 `stream_mode=false`：HELLO、DATA、EOF 是 KCP 消息封装；直接打开上游流模式会合并/拆分这些边界。因此两端均在启动前**拒绝** stream_mode=true，而非静默忽略。应用仍获得 AsyncRead/AsyncWrite 字节流；将来若采用原生 KCP 流模式，需要单独版本化并实现有界会话封装解析，不能仅翻转 bool。
+
+性能结论见 [KCP 性能研究](kcp-performance.md)。上游 0.5.0 的 RTO 退避与原版 KCP 不同，已报告 [kcp-ovo #38](https://github.com/cherish-ltt/kcp-ovo/issues/38)，未在下游私改算法；不能把原版 fast 的宣传值当本适配保证。
 
 ## 安全及互操作
 
@@ -27,7 +63,7 @@ kcp-ovo 使用自有 28 字节大端 KCP 头，不兼容原版 24 字节 KCP。�
 ## 长度、背压与交付
 
 - 框架完整 body 上限仍为 10 MiB（业务 payload 最大 10 MiB - 5）；适配把字节流按最多 16 KiB 分块，每块另加 1 字节 DATA 类型，远小于上游分片/接收窗口上限。
-- 固定 MTU 1400，KCP send/receive window 为 32/128，10 ms update，启用 nodelay/fastresend=2，保留拥塞控制。发送 backlog 达到 32 段时暂停读取本地流；单次分块允许最多额外 12 段，队列不会随用户输入无界增长。
+- 固定 MTU 1400，默认 send/receive window 为 32/128，10 ms tick，自定义 fast 启用 nodelay/fastresend=2/nocwnd。发送 backlog 达到配置 snd_wnd 时暂停读取本地流；单次分块允许最多额外 12 段，队列不会随用户输入无界增长。
 - 双向本地 duplex 各最多 64 KiB；服务端每会话 UDP 队列最多 128 包、每包不超过 1400 字节。队列满时丢弃 UDP 包并由 KCP 重传恢复，不 detach 无限发送。接收重组受窗口及分片数校验限制，再进入原有有界帧解析器。
 - `send_data()` 仅表示业务队列入队；AsyncWrite 成功仅表示适配缓冲接收字节；`flush()` 等待之前写入字节全部获得对端 KCP ACK；ACK 不等价于对端 handler 成功或持久化。
 - `shutdown()` 在 flush 后发送可靠有序 EOF 并等待其确认；Drop 不保证执行 shutdown。丢失最后 ACK 的对端可能仍等重传/idle timeout，因此不承诺双方同时释放。
@@ -41,6 +77,7 @@ cargo test --locked --all-features --lib infrastructure::kcp
 cargo run --example kcp_echo --features kcp
 LYNN_BENCH_TRANSPORT=tcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
 LYNN_BENCH_TRANSPORT=kcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
+LYNN_BENCH_TRANSPORT=kcp LYNN_BENCH_KCP_MODE=normal cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
 ```
 
 测试包括空/边界/大帧、路由和 AppState、同地址 conv 隔离、总连接/每 IP 配额回收、重连、owner 取消、协议错误关闭、非读取对端背压、半关闭及 user-space UDP 代理丢包/重复/延迟/乱序。独立服务进程黑盒使用公开 LynnClient，验证两种传输同一 handler 的内容一致性；不同 feature 的测试须串行执行或使用不同 target 目录，避免子进程可执行文件被另一构建替换。

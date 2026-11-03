@@ -287,4 +287,5 @@ pub mod lynn_client {
 #[cfg(all(feature = "kcp", any(feature = "client", feature = "server")))]
 pub mod lynn_kcp {
     pub use crate::infrastructure::kcp::KcpConfig;
+    pub use kcp_ovo::KcpConfig as KcpOptions;
 }

@@ -38,6 +38,7 @@ async fn start_server(
         .unwrap()
         .with_kcp(KcpConfig {
             idle_timeout_secs: 5,
+            ..KcpConfig::default()
         })
         .with_server_max_taskpool_size(&4)
         .with_connection_rate_limit(&0)
@@ -62,6 +63,7 @@ async fn client(addr: SocketAddr) -> LynnClient<'static> {
         .unwrap()
         .with_kcp(KcpConfig {
             idle_timeout_secs: 5,
+            ..KcpConfig::default()
         })
         .with_server_check_heart_interval(&1)
         .with_reconnect_max_attempts(&1)
@@ -197,6 +199,7 @@ async fn invalid_config_and_udp_bind_errors_are_explicit() {
     let config = LynnServerConfigBuilder::new()
         .with_kcp(KcpConfig {
             idle_timeout_secs: 0,
+            ..KcpConfig::default()
         })
         .build();
     assert!(
@@ -205,6 +208,27 @@ async fn invalid_config_and_udp_bind_errors_are_explicit() {
             .start()
             .await
             .is_err()
+    );
+    let stream_config = KcpConfig {
+        protocol: lynn_tcp::lynn_kcp::KcpOptions::stream_mode(),
+        ..KcpConfig::default()
+    };
+    let config = LynnServerConfigBuilder::new()
+        .with_kcp(stream_config.clone())
+        .build();
+    assert!(matches!(
+        LynnServer::new_with_config(config).await.start().await,
+        Err(lynn_tcp::LynnError::Config(_))
+    ));
+    let config = LynnClientConfigBuilder::new()
+        .with_kcp(stream_config)
+        .build();
+    assert!(
+        !LynnClient::new_with_config(config)
+            .await
+            .start()
+            .await
+            .is_connected()
     );
     #[cfg(feature = "tls")]
     {
@@ -323,6 +347,7 @@ async fn client_reconnects_after_server_restart_and_sender_does_not_retain_old_s
         .unwrap()
         .with_kcp(KcpConfig {
             idle_timeout_secs: 1,
+            ..KcpConfig::default()
         })
         .with_reconnect_max_attempts(&10)
         .with_reconnect_interval_secs(&1)
@@ -385,6 +410,7 @@ async fn concurrent_kcp_requests_have_exact_payloads_and_server_metrics() {
                 .unwrap()
                 .with_kcp(KcpConfig {
                     idle_timeout_secs: 5,
+                    ..KcpConfig::default()
                 })
                 .with_server_check_heart_interval(&3600)
                 .build();

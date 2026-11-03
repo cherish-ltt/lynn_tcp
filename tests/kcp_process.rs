@@ -22,10 +22,11 @@ impl Drop for Server {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn independent_server_process_supports_tcp_and_kcp_without_handler_changes() {
-    for transport in ["tcp", "kcp"] {
+    for (transport, mode) in [("tcp", "fast"), ("kcp", "fast"), ("kcp", "normal")] {
         let mut server = Server(
             Command::new(env!("CARGO_BIN_EXE_bench_echo_server"))
                 .env("LYNN_BENCH_TRANSPORT", transport)
+                .env("LYNN_BENCH_KCP_MODE", mode)
                 .stdout(Stdio::piped())
                 .spawn()
                 .unwrap(),
@@ -61,7 +62,11 @@ async fn independent_server_process_supports_tcp_and_kcp_without_handler_changes
                             .unwrap()
                             .with_reconnect_max_attempts(&1);
                         let config = if transport == "kcp" {
-                            config.with_kcp(KcpConfig::default())
+                            config.with_kcp(if mode == "normal" {
+                                KcpConfig::normal_mode()
+                            } else {
+                                KcpConfig::default()
+                            })
                         } else {
                             config
                         };
@@ -100,6 +105,6 @@ async fn independent_server_process_supports_tcp_and_kcp_without_handler_changes
         .await
         .unwrap();
         assert!(server.0.try_wait().unwrap().is_none());
-        println!("{transport}: independent process, 16 clients, 800 exact responses");
+        println!("{transport}/{mode}: independent process, 16 clients, 800 exact responses");
     }
 }

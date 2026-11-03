@@ -77,7 +77,11 @@ fn main() {
             .with_connection_rate_limit(&UNLIMITED_RATE);
         #[cfg(feature = "kcp")]
         let config = if kcp {
-            config.with_kcp(lynn_tcp::lynn_kcp::KcpConfig::default())
+            config.with_kcp(match std::env::var("LYNN_BENCH_KCP_MODE").as_deref() {
+                Ok("normal") => lynn_tcp::lynn_kcp::KcpConfig::normal_mode(),
+                Ok("fast") | Err(_) => lynn_tcp::lynn_kcp::KcpConfig::default(),
+                _ => panic!("LYNN_BENCH_KCP_MODE must be fast or normal"),
+            })
         } else {
             config
         };

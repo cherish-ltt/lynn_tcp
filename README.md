@@ -339,6 +339,20 @@ TCP remains the default. Enable `kcp`, then use
 `lynn_tcp::lynn_kcp::KcpConfig`. Both endpoints reuse the same handlers,
 framing, routes and state. A single instance listens on one transport only.
 
+The adapter uses the **low-level Kcp control block**, never the upstream
+high-level Stream/Listener API. `KcpConfig::default()` is custom **fast**:
+`nodelay=true, interval=10, fastresend=2, nocwnd=true`; new data and ACKs are
+flushed immediately, not delayed until the timer. `KcpConfig::normal_mode()`
+uses the upstream normal preset (false/100/0/false). Customize low-level
+options via `KcpConfig::protocol` and the re-exported `KcpOptions`.
+
+Stream/message mode is independent of fast/normal. This adapter requires
+**message mode** for its HELLO/DATA/EOF envelope and explicitly rejects
+`stream_mode=true`; it still exposes a byte stream to the framework. Fast
+disables congestion-window control, not peer-window or queue bounds, and can
+reduce network fairness. See [configuration](docs/kcp.md) and
+[measured performance](docs/kcp-performance.md), not a promise of TCP parity.
+
 ```sh
 cargo run --example kcp_echo --features kcp
 # Isolated client: default-features = false, features = ["client", "kcp"]
