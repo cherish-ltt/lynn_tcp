@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use bytes::BytesMut;
 
-use crate::domain::model::message_validation::validate_message_length;
+use crate::domain::model::message_validation::MAX_MESSAGE_SIZE;
 
 /// A struct representing a value object for an input buffer.
 ///
@@ -213,22 +213,16 @@ impl InputBufVOTrait for InputBufVO {
     /// The next string from the input buffer.
     fn next_str_with_len(&mut self, len: u64) -> Option<String> {
         // Validate the length to prevent memory exhaustion attacks
-        let validated_len = match validate_message_length(len) {
-            Ok(l) => l,
-            Err(e) => {
-                tracing::warn!("Invalid string length in next_str_with_len: {}", e);
-                return None;
-            },
-        };
-
-        let length = self.data.len();
-        if length < self.index + validated_len {
-            None
-        } else {
-            let bytes = &mut self.data[self.index..self.index + validated_len].to_vec();
-            self.index += validated_len;
-            Some(String::from_utf8_lossy(bytes).to_string())
+        let len = usize::try_from(len).ok()?;
+        if len > MAX_MESSAGE_SIZE {
+            tracing::warn!("Invalid string length in next_str_with_len: {}", len);
+            return None;
         }
+        let end = self.index.checked_add(len)?;
+        let bytes = self.data.get(self.index..end)?;
+        let value = String::from_utf8_lossy(bytes).into_owned();
+        self.index = end;
+        Some(value)
     }
 
     /// Retrieves all the bytes from the input buffer.
@@ -326,6 +320,38 @@ mod tests {
     fn oversized_string_len_is_rejected() {
         let mut vo = InputBufVO::new(sample_body(), "127.0.0.1:1".parse().unwrap());
         assert_eq!(vo.next_str_with_len(u64::MAX), None);
+    }
+
+    #[test]
+    fn short_string_fields_advance_only_their_own_bytes() {
+        for len in 0..=3 {
+            let mut vo = InputBufVO::new_without_socket_addr(sample_body());
+            assert_eq!(
+                vo.next_str_with_len(len).as_deref(),
+                Some(&"hey"[..len as usize])
+            );
+            assert_eq!(vo.get_remaining_data_len(), 3 - len as usize);
+        }
+        let mut vo = InputBufVO::new_without_socket_addr(sample_body());
+        assert_eq!(vo.next_str_with_len(0).as_deref(), Some(""));
+        assert_eq!(vo.next_str_with_len(1).as_deref(), Some("h"));
+        assert_eq!(vo.next_str_with_len(1).as_deref(), Some("e"));
+        assert_eq!(vo.next_u8(), Some(b'y'));
+        assert_eq!(vo.next_str_with_len(0).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn rejected_string_lengths_preserve_the_cursor() {
+        let mut vo = InputBufVO::new_without_socket_addr(sample_body());
+        for len in [
+            4,
+            crate::domain::model::message_validation::MAX_MESSAGE_SIZE as u64 + 1,
+            u64::MAX,
+        ] {
+            assert_eq!(vo.next_str_with_len(len), None);
+            assert_eq!(vo.get_remaining_data_len(), 3);
+        }
+        assert_eq!(vo.next_str_with_len(3).as_deref(), Some("hey"));
     }
 
     #[test]
