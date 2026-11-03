@@ -71,10 +71,11 @@ fn main() {
         use std::io::Write as _;
         std::io::stdout().flush().expect("flush READY line");
 
-        let _server = LynnServer::new_with_config(config)
+        LynnServer::new_with_config(config)
             .await
             .add_router(METHOD_ID, echo_handler)
             .start()
-            .await;
+            .await
+            .expect("server failed");
     });
 }

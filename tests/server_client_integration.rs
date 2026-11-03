@@ -113,7 +113,7 @@ async fn spawn_default_server(
     let server_addr = addr.clone();
     tokio::spawn(async move {
         let server = LynnServer::new_with_addr(server_addr).await;
-        register(server).start().await;
+        register(server).start().await.unwrap();
     });
     wait_server(&addr).await;
     addr
@@ -288,7 +288,8 @@ async fn zero_process_permit_drops_requests() {
             .await
             .add_router(1, echo_two_params)
             .start()
-            .await;
+            .await
+            .unwrap();
     });
     wait_server(&addr).await;
     let mut client = start_client(&addr).await;
@@ -312,7 +313,8 @@ async fn per_ip_connection_limit_rejects_extra_connections() {
             .await
             .add_router(1, echo_two_params)
             .start()
-            .await;
+            .await
+            .unwrap();
     });
     // No probe here: wait_server's probe socket would consume the 1-per-IP budget.
     tokio::time::sleep(Duration::from_millis(400)).await;
@@ -346,7 +348,8 @@ async fn zero_max_connections_rejects_everyone() {
             .await
             .add_router(1, echo_two_params)
             .start()
-            .await;
+            .await
+            .unwrap();
     });
     tokio::time::sleep(Duration::from_millis(400)).await;
 

@@ -72,6 +72,12 @@ Lynn_tcp v2.0 遵循洋葱架构，分为三个清晰层次：
 
 ---
 
+### 服务端生命周期
+
+释放服务端或取消 `LynnServer::start()` 会取消其 worker、handler、心跳、待决握手及活跃连接。取消为异步过程，不保证请求/响应队列排空或 TLS 优雅关闭；需要确认交付的交互应在取消前完成。
+
+TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配置的 worker 数。超出握手并发限制时立即拒绝；每个握手仍持有全局/每 IP 连接许可，并保留原有 10 秒握手超时。明文 TCP 初始化路径不变。
+
 ### 快速开始
 
 #### 依赖配置
@@ -105,6 +111,10 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
 
+`LynnServer::start().await` 返回 `lynn_tcp::Result<()>`；必须传播或处理启动错误（包括监听绑定和 TLS 初始化失败）。依赖 unit 输出的代码（如 `JoinHandle<()>`）需要适配新的返回类型。
+
+服务端任务池至少需要一个 worker；零值在监听前返回配置错误。旧版 threadpool setter 同样受此约束，不改变其他配置中零值禁用限制的语义。
+
 #### 最小服务器示例
 
 ```rust
@@ -114,13 +124,13 @@ use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let _ = LynnServer::new()
+    LynnServer::new()
         .await
         .add_router(1, ping_handler)
         .add_router(2, echo_handler)
         .add_router(3, broadcast_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -160,11 +170,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_tcp_keepalive_time_secs(&120)
         .build();
 
-    let _ = LynnServer::new_with_config(config)
+    LynnServer::new_with_config(config)
         .await
         .add_router(1, my_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -252,7 +262,7 @@ metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达
 | 方法 | 说明 | 默认值 |
 |------|------|--------|
 | `with_addr()` | 服务器监听地址 | `0.0.0.0:9177` |
-| `with_server_max_connections()` | 最大并发连接数 | `100_000` |
+| `with_server_max_connections()` | 已接受连接总上限，包含排队、TLS 握手与在线会话（`None` = 不限制） | `100_000` |
 | `with_server_max_taskpool_size()` | 异步任务池大小（吞吐量） | `512` |
 | `with_server_single_process_permit()` | 每连接排队及执行中的请求上限（0=拒绝请求） | `14` |
 | `with_server_check_heart_interval()` | 心跳检测间隔（秒） | `60` |
@@ -291,6 +301,12 @@ I/O 超时适用于明文 TCP 和握手后的 TLS。每次收到字节都会重�
 | `with_connect_timeout_secs()` | 单次连接/TLS 握手超时（秒） | `3` |
 | `with_tls()` *（feature `tls`）* | 使用 `TlsClientConfig` 开启 TLS 1.3（CA、SNI、mTLS） | 关闭 |
 
+客户端逐帧刷新，TLS 背压解除后最后一条请求不必等待后续消息或心跳。
+写入或刷新失败会结束连接，不重试可能已部分发送的帧；释放客户端仍可取消阻塞中的刷新。
+
+首次连接立即尝试；连接失败或已建立连接结束后均等待配置的重连间隔，
+包括对端接受后立即关闭的情况。零值显式禁用等待，释放客户端会取消等待。
+
 ---
 
 ### TLS 1.3 传输加密（feature `tls`）
@@ -324,11 +340,14 @@ let config = LynnClientConfigBuilder::new()
             .with_ca_cert_path("ca.pem")
             .with_server_name("localhost") // 可选的 SNI 覆盖
             .build(),
-    )?
+    )
     .build();
 ```
 
 TLS 配置错误（文件缺失、证书私钥不配对）会在启动时立即报错；握手失败的连接会被直接关闭。可运行演示：`cargo run --example tls_example --features tls`。
+
+显式配置的 mTLS 客户端身份在仅供开发的 `danger_accept_invalid_certs` 模式下仍会保留。
+客户端证书与私钥必须同时提供；残缺或无效身份会使配置失败，不会静默关闭 mTLS。
 
 未设置 `with_server_name` 时，证书名称校验使用服务器的 IPv4 或 IPv6 地址
 （例如 `[::1]:9177` 需要证书包含 `::1` IP SAN）。显式服务器名称优先，默认仍校验 CA 信任及证书名称。
@@ -343,13 +362,13 @@ TLS 配置错误（文件缺失、证书私钥不配对）会在启动时立即�
 use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_state::AppState};
 
 #[tokio::main]
-async fn main() {
-    let _ = LynnServer::new()
+async fn main() -> lynn_tcp::Result<()> {
+    LynnServer::new()
         .await
         .with_state(UserRepo::new()) // seaorm feature 下也可：.with_db(db)
         .add_router(1, find_user)
         .start()
-        .await;
+        .await
 }
 
 // `repo` 直接解引用为 &UserRepo —— 无全局静态、无需手动传递 Arc。
@@ -364,6 +383,10 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 ---
 
 #### 接收协议错误
+
+自定义帧头和帧尾标记属于各服务端实例，同时用于请求解析与响应编码；不同标记的服务端可在同一进程同时或先后运行，不共享协议配置。
+
+`InputBufVOTrait::next_str_with_len` 支持空字符串和短字符串字段，成功时只消费指定字节数，长度超限或越界时不移动游标；字段长度不受完整帧的元数据最小长度限制。
 
 `HandlerResult::new_with_send` 和 `new_with_send_to_server` 现在返回 `lynn_tcp::Result<HandlerResult>`；payload 超过 **10 MiB 减 5 字节**时，在分配完整帧或入队前返回 `LynnError::Protocol`，同样覆盖直接使用 `get_sender()` 和服务端广播的路径。请用 `?` 或 `match` 处理构造错误；拒绝本地超限消息不会关闭已有连接。这是构造器返回类型变更，调用方需要适配；`new_without_send` 与心跳行为不变，入队成功仍不代表交付成功。
 

@@ -73,11 +73,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 1: Start the server in a background task
     let _server_handle = tokio::spawn(async {
-        let _server = LynnServer::new()
+        LynnServer::new()
             .await
             .add_router(1, echo_handler)
             .start()
-            .await;
+            .await
+            .expect("server failed");
     });
 
     // Give the server time to start listening

@@ -27,13 +27,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 Starting basic Lynn TCP server on default address 0.0.0.0:9177...");
     println!();
 
-    let _server = LynnServer::new()
+    LynnServer::new()
         .await
         .add_router(1, ping_handler)
         .add_router(2, echo_handler)
         .add_router(3, broadcast_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }

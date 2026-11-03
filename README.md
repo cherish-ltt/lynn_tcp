@@ -73,6 +73,12 @@ Lynn_tcp v2.0 is organized into three clean layers following the Onion Architect
 
 ---
 
+### Server Lifecycle
+
+Dropping a server or cancelling `LynnServer::start()` cancels its workers, handlers, heartbeat, pending handshakes and active connections. Cancellation is asynchronous and does not drain queued requests/responses or guarantee a graceful TLS shutdown; complete required exchanges before cancelling.
+
+TLS connection setup runs outside business workers, with at most the configured worker count in flight. Excess handshakes are rejected immediately; each retains its global/per-IP connection permits and the existing 10-second handshake timeout. Plain TCP setup is unchanged.
+
 ### Quick Start
 
 #### Dependencies
@@ -106,6 +112,10 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
 
+`LynnServer::start().await` returns `lynn_tcp::Result<()>`; propagate or handle startup errors (including bind and TLS initialization failures). Code that expects unit output, such as `JoinHandle<()>`, must adapt to the new result type.
+
+The server taskpool must contain at least one worker; a zero value returns a configuration error before listening. This also applies to the deprecated threadpool setter, without changing other settings where zero disables a limit.
+
 #### Minimal Server
 
 ```rust
@@ -115,13 +125,13 @@ use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let _ = LynnServer::new()
+    LynnServer::new()
         .await
         .add_router(1, ping_handler)
         .add_router(2, echo_handler)
         .add_router(3, broadcast_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -161,11 +171,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_tcp_keepalive_time_secs(&120)
         .build();
 
-    let _ = LynnServer::new_with_config(config)
+    LynnServer::new_with_config(config)
         .await
         .add_router(1, my_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -253,7 +263,7 @@ requests close the connection. Unknown paths still return HTTP 404.
 | Method | Description | Default |
 |--------|-------------|---------|
 | `with_addr()` | Server listen address | `0.0.0.0:9177` |
-| `with_server_max_connections()` | Max concurrent connections | `100_000` |
+| `with_server_max_connections()` | Max accepted connections, including queued/TLS handshakes and active sessions (`None` = unlimited) | `100_000` |
 | `with_server_max_taskpool_size()` | Async task pool size (throughput) | `512` |
 | `with_server_single_process_permit()` | Max queued/running requests per connection (0 = reject requests) | `14` |
 | `with_server_check_heart_interval()` | Heartbeat check interval (s) | `60` |
@@ -294,6 +304,14 @@ Every response is flushed, including small TLS responses; zero disables the dead
 | `with_connect_timeout_secs()` | Per-attempt connect/TLS-handshake timeout (s) | `3` |
 | `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsClientConfig` (CA, SNI, mTLS) | off |
 
+The client flushes each frame, so TLS backpressure does not leave the last request waiting
+for another message or heartbeat. Write or flush failure ends the connection; partially
+sent frames are not retried. Dropping the client can still cancel blocked flushing.
+
+The first connection attempt is immediate. The reconnect interval applies after both
+failed attempts and established connections ending, including peers that accept then
+immediately close. Zero explicitly disables this delay; dropping the client cancels it.
+
 ---
 
 ### TLS 1.3 Encryption (feature `tls`)
@@ -327,11 +345,15 @@ let config = LynnClientConfigBuilder::new()
             .with_ca_cert_path("ca.pem")
             .with_server_name("localhost") // optional SNI override
             .build(),
-    )?
+    )
     .build();
 ```
 
 Miss-configured TLS fails fast (missing files, invalid pairs) and handshake failures simply drop the offending connection. Run the runnable demo: `cargo run --example tls_example --features tls`.
+
+An explicitly configured mTLS client identity is preserved even in development-only
+`danger_accept_invalid_certs` mode. Client certificates and private keys must be supplied
+together; incomplete or invalid identities fail configuration instead of silently disabling mTLS.
 
 Without `with_server_name`, certificate name verification uses the server's IPv4 or IPv6
 address (for example, `[::1]:9177` requires an `::1` IP SAN). An explicit server name takes
@@ -347,13 +369,13 @@ Register any `Send + Sync + 'static` value once and extract it in handler parame
 use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_state::AppState};
 
 #[tokio::main]
-async fn main() {
-    let _ = LynnServer::new()
+async fn main() -> lynn_tcp::Result<()> {
+    LynnServer::new()
         .await
         .with_state(UserRepo::new()) // or .with_db(db) with feature "seaorm"
         .add_router(1, find_user)
         .start()
-        .await;
+        .await
 }
 
 // `repo` derefs to &UserRepo — no global statics, no manual Arc plumbing.
@@ -368,6 +390,10 @@ State is resolved per request, so `with_state` may be called before or after `ad
 ---
 
 #### Receive protocol errors
+
+Custom header/tail marks belong to each server instance and apply to both requests and responses. Servers with different marks can run simultaneously or sequentially in the same process without sharing protocol configuration.
+
+`InputBufVOTrait::next_str_with_len` accepts empty and short string fields, consumes only the requested bytes on success, and leaves the cursor unchanged for oversized or out-of-bounds lengths. Field lengths do not inherit the frame's metadata minimum.
 
 `HandlerResult::new_with_send` and `new_with_send_to_server` return `lynn_tcp::Result<HandlerResult>`. Payloads above **10 MiB minus 5 bytes** fail with `LynnError::Protocol` before frame allocation or enqueueing, including direct `get_sender()` sends and server broadcasts. Handle this construction error with `?` or `match`; rejecting a local oversized message does not close existing connections. This changes the constructor return types; update callers accordingly. `new_without_send` and heartbeat behavior are unchanged. Queue acceptance still does not guarantee delivery.
 

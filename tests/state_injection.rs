@@ -103,7 +103,7 @@ async fn spawn_server(
                 .build(),
         )
         .await;
-        build(server).start().await;
+        build(server).start().await.unwrap();
     });
     // Wait until the port accepts connections.
     for _ in 0..120 {

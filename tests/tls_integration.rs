@@ -69,7 +69,8 @@ async fn spawn_tls_server(addr: String, cert_path: String, key_path: String) {
         .await
         .add_router(1, echo_handler)
         .start()
-        .await;
+        .await
+        .unwrap();
 }
 
 async fn wait_server(addr: &str) {
@@ -352,15 +353,17 @@ async fn tls_server_with_missing_cert_files_fails_to_start() {
             .await
             .add_router(1, echo_handler)
             .start()
-            .await;
+            .await
     });
 
-    // start() logs the error and returns; nothing must be listening.
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    let result = timeout(Duration::from_secs(2), server)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(result, Err(lynn_tcp::LynnError::Tls(_))));
     let connect = TcpStream::connect(format!("127.0.0.1:{port}")).await;
     assert!(
         connect.is_err(),
         "server with invalid TLS config must not listen"
     );
-    server.abort();
 }

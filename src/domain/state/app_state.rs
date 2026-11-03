@@ -18,13 +18,13 @@ use std::{ops::Deref, sync::Arc};
 /// }
 ///
 /// #[tokio::main]
-/// async fn main() {
+/// async fn main() -> lynn_tcp::Result<()> {
 ///     LynnServer::new()
 ///         .await
 ///         .with_state(UserRepo {})
 ///         .add_router(1, find_user_handler)
 ///         .start()
-///         .await;
+///         .await
 /// }
 ///
 /// async fn find_user_handler(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult {

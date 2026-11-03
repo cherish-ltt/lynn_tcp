@@ -70,11 +70,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // TLS stays OFF unless configured: passing cert/key enables TLS 1.3.
             .with_tls_cert_paths(&server_cert, &key_path)
             .build();
-        let _server = LynnServer::new_with_config(config)
+        LynnServer::new_with_config(config)
             .await
             .add_router(1, echo_handler)
             .start()
-            .await;
+            .await
+            .expect("server failed");
     });
 
     tokio::time::sleep(Duration::from_millis(300)).await;
