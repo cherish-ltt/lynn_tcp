@@ -228,7 +228,13 @@ impl EventManager {
                                 match tasks
                                     .spawn(async move {
                                         let result = task.handler(context).await;
-                                        check_handler_result(result, clients, message_header_mark, message_tail_mark).await;
+                                        check_handler_result(
+                                            result,
+                                            clients,
+                                            message_header_mark,
+                                            message_tail_mark,
+                                        )
+                                        .await;
                                         drop(permit);
                                     })
                                     .await

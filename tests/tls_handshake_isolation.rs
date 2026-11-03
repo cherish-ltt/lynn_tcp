@@ -52,7 +52,7 @@ impl Drop for Certificate {
     }
 }
 async fn echo(input: InputBufVO) -> HandlerResult {
-    HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()])
+    HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()]).unwrap()
 }
 fn frame() -> Vec<u8> {
     let mut frame = 9177u16.to_le_bytes().to_vec();

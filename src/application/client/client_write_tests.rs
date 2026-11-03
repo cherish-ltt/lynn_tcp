@@ -59,7 +59,7 @@ async fn flush_error_ends_writer_and_pending_flush_is_cancellable() {
             dropped: dropped.clone(),
         };
         let (tx, mut rx) = mpsc::channel(1);
-        tx.send(HandlerResult::new_with_send_to_server(1, "message".into()))
+        tx.send(HandlerResult::new_with_send_to_server(1, "message".into()).unwrap())
             .await
             .unwrap();
         let pump = tokio::spawn(async move { write_pump(writer, 9177, 7719, &mut rx).await });
@@ -117,7 +117,7 @@ async fn tls_single_frame_flushes_after_backpressure_without_another_write() {
     let (_, writer) = tokio::io::split(client.unwrap());
     let mut peer = peer.unwrap();
     let (tx, mut rx) = mpsc::channel(1);
-    let message = HandlerResult::new_with_send_to_server(1, vec![7; 1024].into());
+    let message = HandlerResult::new_with_send_to_server(1, vec![7; 1024].into()).unwrap();
     let expected = message.get_response_data().unwrap();
     tx.send(message).await.unwrap();
     let pump = tokio::spawn(async move { write_pump(writer, 9177, 7719, &mut rx).await });

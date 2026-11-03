@@ -44,7 +44,7 @@ async fn zero_workers_fail_before_listening() {
 #[tokio::test]
 async fn positive_worker_counts_serve_requests() {
     async fn echo(input: InputBufVO) -> HandlerResult {
-        HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()])
+        HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()]).unwrap()
     }
     for workers in [&1, &4] {
         let reservation = TcpListener::bind("127.0.0.1:0").await.unwrap();

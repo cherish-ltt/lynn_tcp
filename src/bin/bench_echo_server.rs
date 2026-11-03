@@ -34,6 +34,7 @@ async fn echo_handler(input_buf_vo: InputBufVO) -> HandlerResult {
         None => return HandlerResult::new_without_send(),
     };
     HandlerResult::new_with_send(METHOD_ID, input_buf_vo.get_all_bytes().into(), vec![addr])
+        .expect("payload fits the protocol limit")
 }
 
 fn main() {

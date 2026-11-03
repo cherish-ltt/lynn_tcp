@@ -19,6 +19,7 @@ async fn echo(input_buf_vo: InputBufVO, _clients: ClientsContext) -> HandlerResu
     let addr = input_buf_vo.get_input_addr().unwrap();
     eprintln!(">>> replying to {addr}");
     HandlerResult::new_with_send(1, format!("Custom: {payload}").into(), vec![addr])
+        .expect("payload fits the protocol limit")
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -66,10 +67,10 @@ async fn custom_marks_roundtrip() {
     .await;
 
     client
-        .send_data(HandlerResult::new_with_send_to_server(
-            1,
-            Bytes::from("marked".to_owned()),
-        ))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::from("marked".to_owned()))
+                .expect("payload fits the protocol limit"),
+        )
         .await
         .expect("send failed");
 

@@ -44,6 +44,7 @@ async fn receive(socket: &mut TcpStream) -> Vec<u8> {
 
 async fn echo(input: InputBufVO) -> HandlerResult {
     HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()])
+        .expect("payload fits the protocol limit")
 }
 
 async fn online(input: InputBufVO, clients: ClientsContext) -> HandlerResult {
@@ -57,6 +58,7 @@ async fn online(input: InputBufVO, clients: ClientsContext) -> HandlerResult {
             .into(),
         vec![input.get_input_addr().unwrap()],
     )
+    .expect("payload fits the protocol limit")
 }
 
 struct Work {

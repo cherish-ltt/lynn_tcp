@@ -27,6 +27,7 @@ async fn worker_responds_after_long_idle() {
         .build();
     async fn echo(input: InputBufVO) -> HandlerResult {
         HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()])
+            .expect("payload fits the protocol limit")
     }
     let server = tokio::spawn(
         LynnServer::new_with_config(config)

@@ -98,10 +98,10 @@ async fn client_reconnects_and_resumes_data_exchange() {
     // The reconnected session must carry data end to end: raw echo server
     // (heartbeats, if any, are skipped like a real server would).
     client
-        .send_data(HandlerResult::new_with_send_to_server(
-            7,
-            Bytes::from("after reconnect"),
-        ))
+        .send_data(
+            HandlerResult::new_with_send_to_server(7, Bytes::from("after reconnect"))
+                .expect("payload fits the protocol limit"),
+        )
         .await
         .expect("send must work after reconnect");
     let frame = read_user_frame(&mut conn2).await;
@@ -149,7 +149,10 @@ async fn reconnect_gives_up_after_max_attempts() {
         "must stay disconnected after giving up"
     );
     let err = client
-        .send_data(HandlerResult::new_with_send_to_server(1, Bytes::new()))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::new())
+                .expect("payload fits the protocol limit"),
+        )
         .await;
     assert!(
         err.is_err(),
@@ -172,7 +175,10 @@ async fn initial_connect_failure_leaves_client_disconnected() {
         .await;
     assert!(!client.is_connected(), "initial connect must fail");
     let err = client
-        .send_data(HandlerResult::new_with_send_to_server(1, Bytes::new()))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::new())
+                .expect("payload fits the protocol limit"),
+        )
         .await;
     assert!(err.is_err(), "send must fail on a never-connected client");
 

@@ -14,10 +14,13 @@ use tokio::{
 };
 
 async fn echo(input: InputBufVO) -> HandlerResult {
-    HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()])
+    HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()]).unwrap()
 }
 
-async fn start(header: &'static u16, tail: &'static u16) -> (SocketAddr, JoinHandle<lynn_tcp::Result<()>>) {
+async fn start(
+    header: &'static u16,
+    tail: &'static u16,
+) -> (SocketAddr, JoinHandle<lynn_tcp::Result<()>>) {
     let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = probe.local_addr().unwrap();
     drop(probe);

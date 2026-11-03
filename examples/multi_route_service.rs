@@ -55,7 +55,11 @@ pub async fn login_handler(input_buf_vo: InputBufVO) -> HandlerResult {
     let response = format!("login success: welcome {}", username);
     println!("🔐 [login_handler] Responding: {}", response);
 
-    HandlerResult::new_with_send(1, response.into(), vec![client_addr])
+    match HandlerResult::new_with_send(1, response.into(), vec![client_addr]) {
+        Ok(result) => result,
+        Err(error) => HandlerResult::new_with_send(1, error.to_string().into(), vec![client_addr])
+            .expect("short protocol error response"),
+    }
 }
 
 /// User info handler — processes user information requests.
@@ -81,7 +85,11 @@ pub async fn user_info_handler(input_buf_vo: InputBufVO) -> HandlerResult {
     );
     println!("👤 [user_info_handler] Responding: {}", response);
 
-    HandlerResult::new_with_send(2, response.into(), vec![client_addr])
+    match HandlerResult::new_with_send(2, response.into(), vec![client_addr]) {
+        Ok(result) => result,
+        Err(error) => HandlerResult::new_with_send(2, error.to_string().into(), vec![client_addr])
+            .expect("short protocol error response"),
+    }
 }
 
 /// Logout handler — processes logout requests.
@@ -102,6 +110,7 @@ pub async fn logout_handler(input_buf_vo: InputBufVO) -> HandlerResult {
     println!("🚪 [logout_handler] Responding: {}", response);
 
     HandlerResult::new_with_send(3, response.into(), vec![client_addr])
+        .expect("payload fits the protocol limit")
 }
 
 #[tokio::main]
@@ -139,7 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send_data(HandlerResult::new_with_send_to_server(
             1,
             "login:alice".into(),
-        ))
+        )?)
         .await?;
 
     if let Some(response) = client.get_receive_data().await {
@@ -157,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send_data(HandlerResult::new_with_send_to_server(
             2,
             "get_user_info".into(),
-        ))
+        )?)
         .await?;
 
     if let Some(response) = client.get_receive_data().await {
@@ -179,7 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send_data(HandlerResult::new_with_send_to_server(
             99,
             "unknown_route".into(),
-        ))
+        )?)
         .await?;
 
     // Use timeout to detect that no response will come for unknown routes

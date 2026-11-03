@@ -149,7 +149,7 @@ pub async fn echo_handler(input_buf_vo: InputBufVO) -> HandlerResult {
 
 pub async fn broadcast_handler(clients_context: ClientsContext) -> HandlerResult {
     let addrs = clients_context.get_all_clients_addrs().await;
-    HandlerResult::new_with_send(3, "hello everyone!".into(), addrs)
+    HandlerResult::new_with_send(3, "hello everyone!".into(), addrs).expect("payload fits the protocol limit")
 }
 ```
 
@@ -204,7 +204,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send a message
     client.send_data(
-        HandlerResult::new_with_send_to_server(1, "hello".into())
+        HandlerResult::new_with_send_to_server(1, "hello".into())?
     ).await?;
 
     // Receive response
@@ -381,7 +381,7 @@ async fn main() -> lynn_tcp::Result<()> {
 // `repo` derefs to &UserRepo — no global statics, no manual Arc plumbing.
 async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult {
     let name = repo.find_user(42);
-    HandlerResult::new_with_send(1, name.into(), vec![input.get_input_addr().unwrap()])
+    HandlerResult::new_with_send(1, name.into(), vec![input.get_input_addr().unwrap()]).expect("payload fits the protocol limit")
 }
 ```
 
@@ -394,6 +394,8 @@ State is resolved per request, so `with_state` may be called before or after `ad
 Custom header/tail marks belong to each server instance and apply to both requests and responses. Servers with different marks can run simultaneously or sequentially in the same process without sharing protocol configuration.
 
 `InputBufVOTrait::next_str_with_len` accepts empty and short string fields, consumes only the requested bytes on success, and leaves the cursor unchanged for oversized or out-of-bounds lengths. Field lengths do not inherit the frame's metadata minimum.
+
+`HandlerResult::new_with_send` and `new_with_send_to_server` return `lynn_tcp::Result<HandlerResult>`. Payloads above **10 MiB minus 5 bytes** fail with `LynnError::Protocol` before frame allocation or enqueueing, including direct `get_sender()` sends and server broadcasts. Handle this construction error with `?` or `match`; rejecting a local oversized message does not close existing connections. This changes the constructor return types; update callers accordingly. `new_without_send` and heartbeat behavior are unchanged. Queue acceptance still does not guarantee delivery.
 
 Both client and server reject malformed frame headers, lengths, and trailers and close the affected transport, including TLS. Valid fragmented/coalesced frames remain supported. The receive parser retains at most the 10 MiB frame limit plus the 10-byte header and one 1 KiB socket read; a terminal parse error releases its buffer and rejects further input. This is a per-parser bound, not a process-wide memory quota. Clients retain their configured reconnect policy after a protocol error.
 

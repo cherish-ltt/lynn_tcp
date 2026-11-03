@@ -27,7 +27,11 @@ async fn echo_handler(input_buf_vo: InputBufVO) -> HandlerResult {
     let payload = String::from_utf8_lossy(&input_buf_vo.get_all_bytes()).to_string();
     println!("📨 [server] received over TLS: {payload}");
     let addr = input_buf_vo.get_input_addr().unwrap();
-    HandlerResult::new_with_send(1, format!("Echo: {payload}").into(), vec![addr])
+    match HandlerResult::new_with_send(1, format!("Echo: {payload}").into(), vec![addr]) {
+        Ok(result) => result,
+        Err(error) => HandlerResult::new_with_send(1, error.to_string().into(), vec![addr])
+            .expect("short protocol error response"),
+    }
 }
 
 fn write_temp_file(name: &str, contents: &str) -> String {
@@ -104,7 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .send_data(HandlerResult::new_with_send_to_server(
             1,
             "secure hello".into(),
-        ))
+        )?)
         .await?;
 
     if let Some(response) = client.get_receive_data().await {

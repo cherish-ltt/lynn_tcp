@@ -27,7 +27,7 @@ struct Work {
 }
 
 async fn echo(input: InputBufVO) -> HandlerResult {
-    HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()])
+    HandlerResult::new_with_send(1, "ok".into(), vec![input.get_input_addr().unwrap()]).unwrap()
 }
 
 async fn online(input: InputBufVO, clients: ClientsContext) -> HandlerResult {
@@ -41,6 +41,7 @@ async fn online(input: InputBufVO, clients: ClientsContext) -> HandlerResult {
             .into(),
         vec![input.get_input_addr().unwrap()],
     )
+    .unwrap()
 }
 
 async fn blocked(input: InputBufVO, work: AppState<Arc<Work>>) -> HandlerResult {

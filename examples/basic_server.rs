@@ -76,6 +76,7 @@ pub async fn broadcast_handler(clients_context: ClientsContext) -> HandlerResult
     // Broadcast a "hello from server" message to all clients
     if !addrs.is_empty() {
         HandlerResult::new_with_send(3, "Hello from Lynn TCP server!".into(), addrs)
+            .expect("payload fits the protocol limit")
     } else {
         HandlerResult::new_without_send()
     }

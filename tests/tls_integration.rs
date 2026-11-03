@@ -48,6 +48,7 @@ async fn echo_handler(input: InputBufVO) -> HandlerResult {
         format!("Echo: {payload}").into(),
         vec![input.get_input_addr().unwrap()],
     )
+    .expect("payload fits the protocol limit")
 }
 
 fn free_port() -> u16 {
@@ -122,10 +123,10 @@ async fn tls_roundtrip_with_configured_certificates() {
         .await;
 
     client
-        .send_data(HandlerResult::new_with_send_to_server(
-            1,
-            Bytes::from("secure hello"),
-        ))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::from("secure hello"))
+                .expect("payload fits the protocol limit"),
+        )
         .await
         .expect("send over TLS");
 
@@ -183,10 +184,10 @@ async fn failed_tls_handshakes_do_not_exhaust_per_ip_quota() {
         .build();
     let mut client = LynnClient::new_with_config(config).await.start().await;
     client
-        .send_data(HandlerResult::new_with_send_to_server(
-            1,
-            Bytes::from("after failures"),
-        ))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::from("after failures"))
+                .expect("payload fits the protocol limit"),
+        )
         .await
         .unwrap();
     let response = timeout(Duration::from_secs(2), client.get_receive_data())
@@ -225,10 +226,10 @@ async fn ipv6_tls_roundtrip_verifies_ip_san_without_name_override() {
         .build();
     let mut client = LynnClient::new_with_config(config).await.start().await;
     client
-        .send_data(HandlerResult::new_with_send_to_server(
-            1,
-            Bytes::from_static(b"IPv6 verified"),
-        ))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::from_static(b"IPv6 verified"))
+                .expect("payload fits the protocol limit"),
+        )
         .await
         .unwrap();
     let response = timeout(Duration::from_secs(5), client.get_receive_data())
@@ -282,7 +283,10 @@ async fn tls_client_without_trust_anchor_fails_to_start() {
         .await;
 
     let err = client
-        .send_data(HandlerResult::new_with_send_to_server(1, Bytes::new()))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::new())
+                .expect("payload fits the protocol limit"),
+        )
         .await;
     assert!(err.is_err(), "client without trust anchor must not connect");
 }

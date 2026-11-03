@@ -97,10 +97,10 @@ async fn assert_no_response(client: &mut LynnClient<'_>, millis: u64) {
 
 async fn send_payload(client: &mut LynnClient<'_>, method_id: u16, payload: &str) {
     client
-        .send_data(HandlerResult::new_with_send_to_server(
-            method_id,
-            Bytes::from(payload.to_owned()),
-        ))
+        .send_data(
+            HandlerResult::new_with_send_to_server(method_id, Bytes::from(payload.to_owned()))
+                .expect("payload fits the protocol limit"),
+        )
         .await
         .expect("client send failed");
 }
@@ -125,6 +125,7 @@ async fn echo_two_params(input_buf_vo: InputBufVO, clients: ClientsContext) -> H
     let payload = String::from_utf8_lossy(&input_buf_vo.get_all_bytes()).to_string();
     let addrs = clients.get_all_clients_addrs().await;
     HandlerResult::new_with_send(1, format!("Echo: {payload}").into(), addrs)
+        .expect("payload fits the protocol limit")
 }
 
 async fn echo_single_param(input_buf_vo: InputBufVO) -> HandlerResult {
@@ -138,11 +139,13 @@ async fn echo_single_param(input_buf_vo: InputBufVO) -> HandlerResult {
         format!("Echo[{addr}]: {payload}").into(),
         vec![input_buf_vo.get_input_addr().unwrap()],
     )
+    .expect("payload fits the protocol limit")
 }
 
 async fn broadcast(clients: ClientsContext) -> HandlerResult {
     let addrs = clients.get_all_clients_addrs().await;
     HandlerResult::new_with_send(3, "hi all".into(), addrs)
+        .expect("payload fits the protocol limit")
 }
 
 async fn broadcast_reversed(_clients: ClientsContext, _input: InputBufVO) -> HandlerResult {
@@ -160,6 +163,7 @@ async fn echo_with_fake_addr(input_buf_vo: InputBufVO, clients: ClientsContext) 
     // "delayed socket" warning branch of the send path.
     addrs.push("192.0.2.1:65535".parse().unwrap());
     HandlerResult::new_with_send(1, format!("Echo: {payload}").into(), addrs)
+        .expect("payload fits the protocol limit")
 }
 
 // tests
@@ -385,7 +389,10 @@ async fn client_without_start_reports_errors() {
     let mut client = LynnClient::new_with_addr("127.0.0.1:9313").await;
 
     let err = client
-        .send_data(HandlerResult::new_with_send_to_server(1, Bytes::new()))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::new())
+                .expect("payload fits the protocol limit"),
+        )
         .await;
     assert!(err.is_err(), "send_data must fail before start()");
 
@@ -408,7 +415,10 @@ async fn client_connect_refused_leaves_client_unusable() {
 
     let mut client = LynnClient::new_with_addr(addr.clone()).await.start().await;
     let err = client
-        .send_data(HandlerResult::new_with_send_to_server(1, Bytes::new()))
+        .send_data(
+            HandlerResult::new_with_send_to_server(1, Bytes::new())
+                .expect("payload fits the protocol limit"),
+        )
         .await;
     assert!(
         err.is_err(),

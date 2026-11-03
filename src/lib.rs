@@ -97,7 +97,7 @@
 //!     HandlerResult::new_without_send()
 //! }
 //! pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
-//!     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
+//!     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await).expect("payload fits the protocol limit")
 //! }
 //! # }
 //! ```
@@ -139,7 +139,7 @@
 //!     HandlerResult::new_without_send()
 //! }
 //! pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
-//!     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
+//!     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await).expect("payload fits the protocol limit")
 //! }
 //! # }
 //! ```
@@ -165,7 +165,7 @@
 //!             .await
 //!             .start()
 //!             .await;
-//!     let _ = client.send_data(HandlerResult::new_with_send_to_server(1, "hello".into())).await;
+//!     let _ = client.send_data(HandlerResult::new_with_send_to_server(1, "hello".into()).expect("payload fits the protocol limit")).await;
 //!     let input_buf_vo = client.get_receive_data().await.unwrap();
 //!     Ok(())
 //! }

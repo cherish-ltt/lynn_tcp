@@ -42,6 +42,7 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
         .unwrap_or(0);
     let name = repo.find_user(id);
     HandlerResult::new_with_send(1, name.into(), vec![input.get_input_addr().unwrap()])
+        .expect("payload fits the protocol limit")
 }
 
 async fn greeting(config: AppState<AppConfig>, input: InputBufVO) -> HandlerResult {
@@ -50,6 +51,7 @@ async fn greeting(config: AppState<AppConfig>, input: InputBufVO) -> HandlerResu
         config.greeting.clone().into(),
         vec![input.get_input_addr().unwrap()],
     )
+    .expect("payload fits the protocol limit")
 }
 
 async fn both_states(
@@ -62,6 +64,7 @@ async fn both_states(
         format!("{}|{}", config.greeting, repo.find_user(7)).into(),
         vec![input.get_input_addr().unwrap()],
     )
+    .expect("payload fits the protocol limit")
 }
 
 async fn needs_missing_state(_db: AppState<StateRegistryHolder>) -> HandlerResult {
@@ -73,6 +76,7 @@ struct StateRegistryHolder;
 
 async fn still_alive(input: InputBufVO) -> HandlerResult {
     HandlerResult::new_with_send(9, "alive".into(), vec![input.get_input_addr().unwrap()])
+        .expect("payload fits the protocol limit")
 }
 
 // helpers

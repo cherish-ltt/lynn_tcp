@@ -42,7 +42,7 @@ use crate::domain::model::input_buf_vo::InputBufVO;
 ///     if !client.is_connected() {
 ///         eprintln!("server unreachable");
 ///     }
-///     let _ = client.send_data(HandlerResult::new_with_send_to_server(1, "hello".into())).await;
+///     let _ = client.send_data(HandlerResult::new_with_send_to_server(1, "hello".into()).expect("payload fits the protocol limit")).await;
 ///     let input_buf_vo = client.get_receive_data().await.unwrap();
 ///     Ok(())
 /// }
