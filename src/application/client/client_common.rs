@@ -80,8 +80,8 @@ async fn read_pump(
 }
 
 /// Writes queued frames until the channel closes or a transport error occurs.
-async fn write_pump(
-    mut write_half: tokio::io::WriteHalf<LynnStream>,
+async fn write_pump<W: tokio::io::AsyncWrite + Unpin>(
+    mut write_half: W,
     message_header_mark: u16,
     message_tail_mark: u16,
     rx_write: &mut mpsc::Receiver<HandlerResult>,
@@ -100,6 +100,10 @@ async fn write_pump(
                         error!("write to server failed - e: {:?}", e);
                         break;
                     }
+                    if let Err(e) = write_half.flush().await {
+                        error!("flush to server failed - e: {:?}", e);
+                        break;
+                    }
                 } else {
                     warn!("nothing to send");
                 }
@@ -112,6 +116,10 @@ async fn write_pump(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "client_write_tests.rs"]
+mod tests;
 
 #[inline(always)]
 pub(super) fn spawn_check_heart(
