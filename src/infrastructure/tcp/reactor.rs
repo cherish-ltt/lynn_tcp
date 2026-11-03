@@ -581,9 +581,11 @@ impl TcpReactor {
             }
         }
 
+        #[cfg(not(feature = "kcp"))]
+        let crate::infrastructure::tcp::listener::TransportListener::Tcp(tcp_listener) = listener;
+        #[cfg(feature = "kcp")]
         let tcp_listener = match listener {
             crate::infrastructure::tcp::listener::TransportListener::Tcp(listener) => listener,
-            #[cfg(feature = "kcp")]
             crate::infrastructure::tcp::listener::TransportListener::Kcp(listener) => {
                 listener
                     .run(
