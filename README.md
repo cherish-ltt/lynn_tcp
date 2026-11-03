@@ -77,6 +77,8 @@ Lynn_tcp v2.0 is organized into three clean layers following the Onion Architect
 
 Dropping a server or cancelling `LynnServer::start()` cancels its workers, handlers, heartbeat, pending handshakes and active connections. Cancellation is asynchronous and does not drain queued requests/responses or guarantee a graceful TLS shutdown; complete required exchanges before cancelling.
 
+TLS connection setup runs outside business workers, with at most the configured worker count in flight. Excess handshakes are rejected immediately; each retains its global/per-IP connection permits and the existing 10-second handshake timeout. Plain TCP setup is unchanged.
+
 ### Quick Start
 
 #### Dependencies
