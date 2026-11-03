@@ -291,6 +291,9 @@ I/O 超时适用于明文 TCP 和握手后的 TLS。每次收到字节都会重�
 | `with_connect_timeout_secs()` | 单次连接/TLS 握手超时（秒） | `3` |
 | `with_tls()` *（feature `tls`）* | 使用 `TlsClientConfig` 开启 TLS 1.3（CA、SNI、mTLS） | 关闭 |
 
+首次连接立即尝试；连接失败或已建立连接结束后均等待配置的重连间隔，
+包括对端接受后立即关闭的情况。零值显式禁用等待，释放客户端会取消等待。
+
 ---
 
 ### TLS 1.3 传输加密（feature `tls`）

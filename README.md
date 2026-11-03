@@ -294,6 +294,10 @@ Every response is flushed, including small TLS responses; zero disables the dead
 | `with_connect_timeout_secs()` | Per-attempt connect/TLS-handshake timeout (s) | `3` |
 | `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsClientConfig` (CA, SNI, mTLS) | off |
 
+The first connection attempt is immediate. The reconnect interval applies after both
+failed attempts and established connections ending, including peers that accept then
+immediately close. Zero explicitly disables this delay; dropping the client cancels it.
+
 ---
 
 ### TLS 1.3 Encryption (feature `tls`)
