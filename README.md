@@ -247,7 +247,7 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `server` | TCP server with multi-route async handlers, heartbeat, connection management | ✅ |
 | `client` | TCP client for sending/receiving messages, automatic reconnection | ✅ |
 | `metrics` | Prometheus integration (17 production metrics, HTTP /metrics endpoint) | ✅ (via `server`) |
-| `kcp` | Optional plaintext UDP/KCP transport using kcp-ovo 0.5.0 | opt-in |
+| `kcp` | Optional plaintext UDP/KCP transport using kcp-ovo 0.5.2 | opt-in |
 | `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
 | `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
@@ -375,13 +375,14 @@ application-level exchange before dropping its owner.
 
 Rust **1.99.1** is now required. To compose the upstream exact constraints,
 Tokio/bytes are pinned to **1.52.3/1.11.1** (including default TCP builds).
-The currently pinned kcp-ovo **0.5.0** activates a **global mimalloc allocator**
-and Tokio `full`; applications declaring a different global allocator cannot
-link this feature. Upstream [#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)
-is fixed in published 0.5.1, but this project has not upgraded; the loss study
-keeps 0.5.0 for comparability. The RTO issue
-[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38) remains open. KCP is
-optional, not a promise of improved speed. See [KCP transport contract](docs/kcp.md)
+The pinned kcp-ovo **0.5.2** fixes the global allocator conflict
+([#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)) and timeout backoff/deadlines
+([#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)); application-owned allocators
+are supported. Upstream still enables Tokio `full`. The low-level adapter and
+custom fast preset are unchanged. See the [0.5.2 retest](docs/kcp-v0.5.2-validation.md)
+for regression results and same-condition TCP/KCP measurements; historical 0.5.0
+data remains versioned separately. KCP is optional, not a promise of improved speed.
+See [KCP transport contract](docs/kcp.md)
 for lifecycle, bounds, metrics, security, interoperability and test details.
 
 ### TLS 1.3 Encryption (feature `tls`)

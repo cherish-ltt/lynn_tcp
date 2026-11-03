@@ -698,14 +698,13 @@ dependencies = [
 
 [[package]]
 name = "kcp-ovo"
-version = "0.5.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75197a253c354e4b97fdf5eb931f22b500bf36ba4041bfbe23c0f19d2d4f3740"
+checksum = "1937c022fd6dbd720d971706f8098af8f30d4e52f04f98aeeaa72e30459186fe"
 dependencies = [
  "bytes",
  "dashmap",
  "log",
- "mimalloc",
  "tokio",
 ]
 
@@ -720,15 +719,6 @@ name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
-
-[[package]]
-name = "libmimalloc-sys"
-version = "0.1.49"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
-dependencies = [
- "cc",
-]
 
 [[package]]
 name = "litemap"
@@ -781,15 +771,6 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
-
-[[package]]
-name = "mimalloc"
-version = "0.1.51"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebca48a43116bc25f18a61360f1be98412f50cc218f5e52c823086b999a4a21a"
-dependencies = [
- "libmimalloc-sys",
-]
 
 [[package]]
 name = "minimal-lexical"

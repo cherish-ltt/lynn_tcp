@@ -247,7 +247,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `server` | TCP 服务器，支持多路由异步 Handler、心跳、连接管理 | ✅ |
 | `client` | TCP 客户端，支持消息收发与断线自动重连 | ✅ |
 | `metrics` | Prometheus 集成（17 个生产级指标，HTTP /metrics 端点） | ✅（由 `server` 启用） |
-| `kcp` | 基于 kcp-ovo 0.5.0 的可选明文 UDP/KCP 传输 | 默认关闭 |
+| `kcp` | 基于 kcp-ovo 0.5.2 的可选明文 UDP/KCP 传输 | 默认关闭 |
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
@@ -362,11 +362,12 @@ TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
 **不代表业务交付**；释放 owner 前应完成应用层确认交互。
 
 现要求 Rust **1.99.1**。为兼容上游精确约束，Tokio/bytes 锁定为
-**1.52.3/1.11.1**（包括默认 TCP 构建）。当前锁定的 kcp-ovo **0.5.0** 会引入
-**全局 mimalloc 分配器**及 Tokio `full`，下游若声明另一个全局分配器，不能链接此 feature。
-上游 [#36](https://github.com/cherish-ltt/kcp-ovo/issues/36) 已在发布的 0.5.1 修复，
-本项目尚未升级，本轮丢包研究保留 0.5.0 以便对照；RTO 问题
-[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38) 仍开放。KCP 默认关闭，不承诺更快。
+**1.52.3/1.11.1**（包括默认 TCP 构建）。锁定的 kcp-ovo **0.5.2** 已修复全局分配器冲突
+（[#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)）与超时退避/重传期限
+（[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)），支持应用自选全局分配器。
+上游仍启用 Tokio `full`；底层适配与自定义 fast 配置不变。
+回归结果与同条件 TCP/KCP 实测见 [0.5.2 复测](docs/kcp-v0.5.2-validation.md)，
+历史 0.5.0 数据按版本独立保留。KCP 默认关闭，不承诺更快。
 生命周期、内存边界、指标、安全、互操作与测试见 [KCP 传输契约](docs/kcp.md)。
 
 ### TLS 1.3 传输加密（feature `tls`）
