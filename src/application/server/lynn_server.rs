@@ -5,7 +5,7 @@ use std::{
 
 use crossbeam_deque::Injector;
 use dashmap::DashMap;
-use tokio::{net::TcpListener, sync::OwnedSemaphorePermit};
+use tokio::sync::OwnedSemaphorePermit;
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
@@ -321,8 +321,10 @@ impl<'a> LynnServer<'a> {
     ///
     /// Returns `Ok(())` if the server starts successfully, otherwise returns an error.
     async fn run(self: Arc<Self>) -> crate::Result<()> {
-        // Binds a TCP listener to the local address.
-        let listener = TcpListener::bind(self.lynn_config.get_server_addr()).await?;
+        // Binds the selected transport to the local address.
+        let listener =
+            crate::infrastructure::tcp::listener::TransportListener::bind(&self.lynn_config)
+                .await?;
         info!(
             "Server - [Main-LynnServer] start success!!! with [server_addr:{}]{}",
             self.lynn_config.get_server_addr(),

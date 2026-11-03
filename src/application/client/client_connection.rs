@@ -27,6 +27,8 @@ use crate::{
 pub(super) struct ConnectionParams {
     /// The server address ("ip:port").
     addr: String,
+    #[cfg(feature = "kcp")]
+    kcp: Option<crate::infrastructure::kcp::KcpConfig>,
     /// Per-attempt connect (and TLS handshake) timeout in seconds.
     connect_timeout_secs: u64,
     /// Connect attempts per session (initial connect or after a disconnect).
@@ -42,11 +44,21 @@ pub(super) struct ConnectionParams {
 
 impl ConnectionParams {
     /// Builds owned connection parameters from the client configuration.
-    /// A bad TLS configuration fails fast here, before any connect attempt.
+    /// Invalid transport configuration fails before any connect attempt.
     pub(super) fn from_config(config: &LynnClientConfig<'_>) -> Result<Self, LynnError> {
+        #[cfg(feature = "kcp")]
+        if let Some(kcp) = &config.kcp {
+            kcp.validate()?;
+            #[cfg(feature = "tls")]
+            if config.get_tls().is_some() {
+                return Err(LynnError::config("TLS over KCP is not supported"));
+            }
+        }
         let addr = config.get_server_ipv4();
         Ok(Self {
             addr,
+            #[cfg(feature = "kcp")]
+            kcp: config.kcp.clone(),
             connect_timeout_secs: (*config.get_connect_timeout_secs()).max(1),
             reconnect_max_attempts: (*config.get_reconnect_max_attempts()).max(1),
             reconnect_interval_secs: *config.get_reconnect_interval_secs(),
@@ -66,9 +78,25 @@ impl ConnectionParams {
     }
 }
 
-/// Performs one connect attempt (TCP, plus TLS handshake when configured).
+/// Performs one connect attempt with the configured transport and handshake.
 async fn try_connect(params: &ConnectionParams) -> Result<LynnStream, LynnError> {
     let timeout = Duration::from_secs(params.connect_timeout_secs);
+    #[cfg(feature = "kcp")]
+    if let Some(config) = &params.kcp {
+        let stream = time::timeout(
+            timeout,
+            crate::infrastructure::kcp::stream::KcpStream::connect(
+                params
+                    .addr
+                    .parse()
+                    .map_err(|e| LynnError::config(format!("invalid KCP address: {e}")))?,
+                config.clone(),
+            ),
+        )
+        .await
+        .map_err(|_| LynnError::timeout("KCP connect timeout"))??;
+        return Ok(LynnStream::Kcp(stream));
+    }
     let tcp = time::timeout(timeout, TcpStream::connect(&params.addr))
         .await
         .map_err(|_| {

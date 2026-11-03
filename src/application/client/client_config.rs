@@ -34,6 +34,8 @@ pub struct LynnClientConfig<'a> {
     /// Optional TLS 1.3 configuration. `None` keeps TLS disabled (default).
     #[cfg(feature = "tls")]
     tls: Option<crate::infrastructure::tls::tls_config::TlsClientConfig>,
+    #[cfg(feature = "kcp")]
+    pub(crate) kcp: Option<crate::infrastructure::kcp::KcpConfig>,
 }
 
 impl<'a> LynnClientConfig<'a> {
@@ -54,6 +56,8 @@ impl<'a> LynnClientConfig<'a> {
             connect_timeout_secs: &DEFAULT_CONNECT_TIMEOUT_SECS,
             #[cfg(feature = "tls")]
             tls: None,
+            #[cfg(feature = "kcp")]
+            kcp: None,
         }
     }
 
@@ -216,6 +220,13 @@ impl<'a> LynnClientConfigBuilder<'a> {
         server_check_heart_interval: &'a u64,
     ) -> Self {
         self.lynn_config.client_check_heart_interval = server_check_heart_interval;
+        self
+    }
+
+    /// Selects plaintext KCP instead of TCP. TLS and KCP cannot be combined.
+    #[cfg(feature = "kcp")]
+    pub fn with_kcp(mut self, config: crate::infrastructure::kcp::KcpConfig) -> Self {
+        self.lynn_config.kcp = Some(config);
         self
     }
 

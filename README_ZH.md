@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="license: MIT OR Apache-2.0"/>
   </a>
   <a href="https://www.rust-lang.org">
-    <img src="https://img.shields.io/badge/rust-1.98.1+-orange.svg" alt="rust version"/>
+    <img src="https://img.shields.io/badge/rust-1.99.1+-orange.svg" alt="rust version"/>
   </a>
 </p>
 </div>
@@ -247,6 +247,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `server` | TCP 服务器，支持多路由异步 Handler、心跳、连接管理 | ✅ |
 | `client` | TCP 客户端，支持消息收发与断线自动重连 | ✅ |
 | `metrics` | Prometheus 集成（17 个生产级指标，HTTP /metrics 端点） | ✅（由 `server` 启用） |
+| `kcp` | 基于 kcp-ovo 0.5.2 的可选明文 UDP/KCP 传输 | 默认关闭 |
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
@@ -322,6 +323,52 @@ I/O 超时适用于明文 TCP 和握手后的 TLS。每次收到字节都会重�
 包括对端接受后立即关闭的情况。零值显式禁用等待，释放客户端会取消等待。
 
 ---
+
+### TCP 或 KCP
+
+TCP 保持默认。启用 `kcp` 后，分别使用
+`LynnServerConfigBuilder::with_kcp(KcpConfig::default())` 和
+`LynnClientConfigBuilder::with_kcp(KcpConfig::default())`，配置类型从
+`lynn_tcp::lynn_kcp::KcpConfig` 导入。两端复用相同 handler、帧协议、路由和状态；
+单个实例只监听一种传输。
+
+适配始终使用**底层 Kcp 控制块**，不使用上游高阶 Stream/Listener API。
+`KcpConfig::default()` 为自定义 **fast**：
+`nodelay=true, interval=10, fastresend=2, nocwnd=true`；新数据和 ACK 立即输出，
+不等待定时 tick。`KcpConfig::normal_mode()` 使用上游 normal 预设
+（false/100/0/false）。通过 `KcpConfig::protocol` 和重导出的 `KcpOptions`
+自定义底层参数。
+
+消息/流模式与 fast/normal 独立。本适配的 HELLO/DATA/EOF 封装要求**消息模式**，
+显式拒绝 `stream_mode=true`，但框架仍使用字节流。fast 关闭拥塞窗口控制，
+不关闭对端窗口或队列上限，可能降低网络公平性。详见 [配置说明](docs/kcp.md)
+和 [性能实测](docs/kcp-performance.md)（含 10%/20%/30% 丢包研究及验收总结），
+不承诺等同 TCP。
+
+```sh
+cargo run --example kcp_echo --features kcp
+# 独立客户端：default-features = false, features = ["client", "kcp"]
+# 独立服务端：default-features = false, features = ["server", "kcp"]
+LYNN_BENCH_TRANSPORT=kcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
+```
+
+KCP **不加密、不认证**，不等价于 TLS，也不兼容标准 KCP 线路协议。本适配使用
+kcp-ovo 的 28 字节大端头及 Lynn 会话握手/封装，两端均须使用本适配。
+TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
+
+`KcpConfig::idle_timeout_secs` 默认 60，必须非零。Drop/abort 异步取消并丢弃排队
+数据；UDP 对端消失后通过空闲超时回收，不保证立即发现。帧保留现有 10 MiB body
+上限，拆分为有界 KCP 消息。`send_data` 表示本地入队，KCP flush 等待传输 ACK，
+**不代表业务交付**；释放 owner 前应完成应用层确认交互。
+
+现要求 Rust **1.99.1**。为兼容上游精确约束，Tokio/bytes 锁定为
+**1.52.3/1.11.1**（包括默认 TCP 构建）。锁定的 kcp-ovo **0.5.2** 已修复全局分配器冲突
+（[#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)）与超时退避/重传期限
+（[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)），支持应用自选全局分配器。
+上游仍启用 Tokio `full`；底层适配与自定义 fast 配置不变。
+回归结果与同条件 TCP/KCP 实测见 [0.5.2 复测](docs/kcp-v0.5.2-validation.md)，
+历史 0.5.0 数据按版本独立保留。KCP 默认关闭，不承诺更快。
+生命周期、内存边界、指标、安全、互操作与测试见 [KCP 传输契约](docs/kcp.md)。
 
 ### TLS 1.3 传输加密（feature `tls`）
 

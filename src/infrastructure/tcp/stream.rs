@@ -34,6 +34,8 @@ pub(crate) type BoxedReadHalf = Box<dyn AsyncRead + Send + Unpin>;
 pub(crate) enum LynnStream {
     /// Plain TCP stream (default, TLS feature disabled or not configured).
     Plain(TcpStream),
+    #[cfg(feature = "kcp")]
+    Kcp(crate::infrastructure::kcp::stream::KcpStream),
     /// TLS 1.3 wrapped stream (requires the `tls` feature). Boxed because
     /// the TLS session state is large compared to a plain socket.
     #[cfg(feature = "tls")]
@@ -48,6 +50,8 @@ impl AsyncRead for LynnStream {
     ) -> Poll<io::Result<()>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_read(cx, buf),
+            #[cfg(feature = "kcp")]
+            Self::Kcp(stream) => Pin::new(stream).poll_read(cx, buf),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_read(cx, buf),
         }
@@ -62,6 +66,8 @@ impl AsyncWrite for LynnStream {
     ) -> Poll<io::Result<usize>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_write(cx, buf),
+            #[cfg(feature = "kcp")]
+            Self::Kcp(stream) => Pin::new(stream).poll_write(cx, buf),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_write(cx, buf),
         }
@@ -70,6 +76,8 @@ impl AsyncWrite for LynnStream {
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_flush(cx),
+            #[cfg(feature = "kcp")]
+            Self::Kcp(stream) => Pin::new(stream).poll_flush(cx),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_flush(cx),
         }
@@ -78,6 +86,8 @@ impl AsyncWrite for LynnStream {
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.get_mut() {
             Self::Plain(stream) => Pin::new(stream).poll_shutdown(cx),
+            #[cfg(feature = "kcp")]
+            Self::Kcp(stream) => Pin::new(stream).poll_shutdown(cx),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_shutdown(cx),
         }
@@ -108,11 +118,15 @@ impl StreamAcceptor {
     ///
     /// Returns `None` when the TLS handshake failed or timed out; the caller
     /// must drop the connection in that case.
-    pub(crate) async fn accept(&self, stream: TcpStream, addr: SocketAddr) -> Option<LynnStream> {
+    pub(crate) async fn accept(&self, stream: LynnStream, addr: SocketAddr) -> Option<LynnStream> {
         match self {
-            Self::Plain => Some(LynnStream::Plain(stream)),
+            Self::Plain => Some(stream),
             #[cfg(feature = "tls")]
             Self::Tls(acceptor) => {
+                let LynnStream::Plain(stream) = stream else {
+                    warn!("TLS requires TCP");
+                    return None;
+                };
                 let handshake = time::timeout(
                     Duration::from_secs(TLS_HANDSHAKE_TIMEOUT_SECS),
                     acceptor.accept(stream),

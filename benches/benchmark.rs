@@ -12,7 +12,7 @@
 //!   tasks, one sending requests as fast as the bounded write channel allows,
 //!   one receiving responses. Measures sustained throughput only.
 //!
-//! The server and all clients run in one process over `127.0.0.1`; every
+//! The server runs in a separate process over `127.0.0.1`; every
 //! cell first warms up (not counted), then measures for a fixed window.
 //!
 //! # Run
@@ -41,12 +41,13 @@ use lynn_tcp::{
     tokio::time::timeout,
 };
 
+#[path = "support/model1.rs"]
+mod model1;
+use model1::{DRAIN, model1_client};
+
 const METHOD_ID: u16 = 1;
 /// Per-connection write channel capacity (bounds in-flight pipelined requests).
 const CLIENT_CHANNEL_SIZE: usize = 8;
-/// Grace period after the measurement window during which late responses are
-/// still accepted (they were requested inside the window).
-const DRAIN: Duration = Duration::from_millis(500);
 /// Connection attempts per client (benchmarks must fail fast, not reconnect).
 const CONNECT_ATTEMPTS: usize = 1;
 
@@ -220,6 +221,11 @@ impl Drop for BenchServer {
 
 /// Polls until the server accepts TCP connections.
 async fn wait_server(addr: SocketAddr) {
+    #[cfg(feature = "kcp")]
+    if std::env::var("LYNN_BENCH_TRANSPORT").as_deref() == Ok("kcp") {
+        drop(connect_client(addr).await);
+        return;
+    }
     for _ in 0..400 {
         if tokio::net::TcpStream::connect(addr).await.is_ok() {
             return;
@@ -268,8 +274,18 @@ async fn connect_client(addr: SocketAddr) -> LynnClient<'static> {
             .with_server_addr(addr)
             .expect("valid addr")
             .with_server_single_channel_size(&CLIENT_CHANNEL_SIZE)
-            .with_reconnect_max_attempts(&CONNECT_ATTEMPTS)
-            .build();
+            .with_reconnect_max_attempts(&CONNECT_ATTEMPTS);
+        #[cfg(feature = "kcp")]
+        let config = if std::env::var("LYNN_BENCH_TRANSPORT").as_deref() == Ok("kcp") {
+            config.with_kcp(match std::env::var("LYNN_BENCH_KCP_MODE").as_deref() {
+                Ok("normal") => lynn_tcp::lynn_kcp::KcpConfig::normal_mode(),
+                Ok("fast") | Err(_) => lynn_tcp::lynn_kcp::KcpConfig::default(),
+                _ => panic!("LYNN_BENCH_KCP_MODE must be fast or normal"),
+            })
+        } else {
+            config
+        };
+        let config = config.build();
         let client = LynnClient::new_with_config(config).await.start().await;
         if client.is_connected() {
             return client;
@@ -305,38 +321,6 @@ fn build_request(payload: usize) -> HandlerResult {
 
 // model 1: ping-pong
 
-/// Runs one model-1 client: one request in flight, measure every RTT.
-async fn model1_client(
-    mut client: LynnClient<'static>,
-    request: HandlerResult,
-    measure_start: Instant,
-    deadline: Instant,
-) -> (u64, Vec<u64>) {
-    let mut responses = 0u64;
-    let mut rtts = Vec::new();
-    loop {
-        let sent_at = Instant::now();
-        if sent_at >= deadline {
-            break;
-        }
-        if client.send_data(request.clone()).await.is_err() {
-            break;
-        }
-        let wait = (deadline + DRAIN).saturating_duration_since(sent_at);
-        match timeout(wait, client.get_receive_data()).await {
-            Ok(Some(_)) => {
-                if sent_at >= measure_start {
-                    responses += 1;
-                    rtts.push(sent_at.elapsed().as_nanos() as u64);
-                }
-            },
-            // Timed out past the drain window or the connection died.
-            _ => break,
-        }
-    }
-    (responses, rtts)
-}
-
 async fn run_model1_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellResult {
     let mut connected = connect_clients(addr, clients).await;
     let request = build_request(args.payload);
@@ -350,6 +334,7 @@ async fn run_model1_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
             tokio::spawn(model1_client(
                 client,
                 request.clone(),
+                args.payload,
                 measure_start,
                 deadline,
             ))
@@ -365,9 +350,9 @@ async fn run_model1_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
         rtts_ns: Vec::new(),
     };
     for handle in handles {
-        let (responses, rtts) = handle.await.expect("model1 client panicked");
+        let (requests, responses, rtts) = handle.await.expect("model1 client panicked");
         result.responses += responses;
-        result.requests += responses;
+        result.requests += requests;
         result.rtts_ns.extend(rtts);
     }
     result
@@ -505,11 +490,13 @@ fn print_markdown(results: &[CellResult], args: &Args) {
 }
 
 fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Result<()> {
+    let transport = std::env::var("LYNN_BENCH_TRANSPORT").unwrap_or_else(|_| "tcp".into());
+    let kcp_mode = std::env::var("LYNN_BENCH_KCP_MODE").unwrap_or_else(|_| "fast".into());
     let cores = std::thread::available_parallelism().map_or(0, |n| n.get());
     let mut out = String::with_capacity(1024 + results.len() * 256);
     let _ = writeln!(
         out,
-        "{{\n  \"meta\": {{\n    \"crate_version\": \"{}\",\n    \"os\": \"{}\",\n    \"arch\": \"{}\",\n    \"logical_cores\": {cores},\n    \"topology\": \"loopback, echo server in an independent process (bench_echo_server binary)\",\n    \"payload_bytes\": {},\n    \"warmup_secs\": {},\n    \"duration_secs\": {},\n    \"client_channel_size\": {CLIENT_CHANNEL_SIZE},\n    \"unix_timestamp\": {}\n  }},\n  \"results\": [",
+        "{{\n  \"meta\": {{\n    \"crate_version\": \"{}\",\n    \"os\": \"{}\",\n    \"arch\": \"{}\",\n    \"transport\": \"{transport}\",\n    \"kcp_mode\": \"{kcp_mode}\",\n    \"request_counter\": \"successful local enqueue counted by send start time; model-1 replies payload-checked\",\n    \"logical_cores\": {cores},\n    \"topology\": \"loopback, echo server in an independent process (bench_echo_server binary)\",\n    \"payload_bytes\": {},\n    \"warmup_secs\": {},\n    \"duration_secs\": {},\n    \"client_channel_size\": {CLIENT_CHANNEL_SIZE},\n    \"unix_timestamp\": {}\n  }},\n  \"results\": [",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH,
@@ -554,6 +541,14 @@ fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Resul
 
 #[tokio::main]
 async fn main() {
+    let transport = std::env::var("LYNN_BENCH_TRANSPORT").unwrap_or_else(|_| "tcp".into());
+    assert!(
+        transport == "tcp" || transport == "kcp",
+        "LYNN_BENCH_TRANSPORT must be tcp or kcp"
+    );
+    #[cfg(not(feature = "kcp"))]
+    assert!(transport != "kcp", "rebuild with --features kcp");
+    println!("transport: {transport}");
     let args = match parse_args() {
         Ok(args) => args,
         Err(err) => {

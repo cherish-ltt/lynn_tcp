@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="license: MIT OR Apache-2.0"/>
   </a>
   <a href="https://www.rust-lang.org">
-    <img src="https://img.shields.io/badge/rust-1.98.1+-orange.svg" alt="rust version"/>
+    <img src="https://img.shields.io/badge/rust-1.99.1+-orange.svg" alt="rust version"/>
   </a>
 </p>
 </div>
@@ -247,6 +247,7 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `server` | TCP server with multi-route async handlers, heartbeat, connection management | ✅ |
 | `client` | TCP client for sending/receiving messages, automatic reconnection | ✅ |
 | `metrics` | Prometheus integration (17 production metrics, HTTP /metrics endpoint) | ✅ (via `server`) |
+| `kcp` | Optional plaintext UDP/KCP transport using kcp-ovo 0.5.2 | opt-in |
 | `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
 | `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
@@ -329,6 +330,60 @@ failed attempts and established connections ending, including peers that accept 
 immediately close. Zero explicitly disables this delay; dropping the client cancels it.
 
 ---
+
+### TCP Or KCP
+
+TCP remains the default. Enable `kcp`, then use
+`LynnServerConfigBuilder::with_kcp(KcpConfig::default())` and
+`LynnClientConfigBuilder::with_kcp(KcpConfig::default())`, importing
+`lynn_tcp::lynn_kcp::KcpConfig`. Both endpoints reuse the same handlers,
+framing, routes and state. A single instance listens on one transport only.
+
+The adapter uses the **low-level Kcp control block**, never the upstream
+high-level Stream/Listener API. `KcpConfig::default()` is custom **fast**:
+`nodelay=true, interval=10, fastresend=2, nocwnd=true`; new data and ACKs are
+flushed immediately, not delayed until the timer. `KcpConfig::normal_mode()`
+uses the upstream normal preset (false/100/0/false). Customize low-level
+options via `KcpConfig::protocol` and the re-exported `KcpOptions`.
+
+Stream/message mode is independent of fast/normal. This adapter requires
+**message mode** for its HELLO/DATA/EOF envelope and explicitly rejects
+`stream_mode=true`; it still exposes a byte stream to the framework. Fast
+disables congestion-window control, not peer-window or queue bounds, and can
+reduce network fairness. See [configuration](docs/kcp.md) and
+[measured performance](docs/kcp-performance.md), including the 10%/20%/30%
+packet-loss study and acceptance assessment, not a promise of TCP parity.
+
+```sh
+cargo run --example kcp_echo --features kcp
+# Isolated client: default-features = false, features = ["client", "kcp"]
+# Isolated server: default-features = false, features = ["server", "kcp"]
+LYNN_BENCH_TRANSPORT=kcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
+```
+
+KCP is **unencrypted and unauthenticated**; it is not TLS or standard KCP wire
+compatibility. This adapter uses kcp-ovo's 28-byte big-endian header plus a Lynn
+session handshake/envelope; both peers must use this adapter. TCP+TLS remains
+available, but configuring TLS with KCP is rejected, never downgraded.
+
+`KcpConfig::idle_timeout_secs` defaults to 60 and must be nonzero. Drop/abort is
+asynchronous and discards queued data; a vanished UDP peer is reclaimed on idle
+timeout, not immediately. Frames retain the existing 10 MiB body limit and are
+split into bounded KCP messages. `send_data` means local queue acceptance;
+KCP flush waits for transport ACKs, **not application delivery**. Complete an
+application-level exchange before dropping its owner.
+
+Rust **1.99.1** is now required. To compose the upstream exact constraints,
+Tokio/bytes are pinned to **1.52.3/1.11.1** (including default TCP builds).
+The pinned kcp-ovo **0.5.2** fixes the global allocator conflict
+([#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)) and timeout backoff/deadlines
+([#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)); application-owned allocators
+are supported. Upstream still enables Tokio `full`. The low-level adapter and
+custom fast preset are unchanged. See the [0.5.2 retest](docs/kcp-v0.5.2-validation.md)
+for regression results and same-condition TCP/KCP measurements; historical 0.5.0
+data remains versioned separately. KCP is optional, not a promise of improved speed.
+See [KCP transport contract](docs/kcp.md)
+for lifecycle, bounds, metrics, security, interoperability and test details.
 
 ### TLS 1.3 Encryption (feature `tls`)
 

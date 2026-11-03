@@ -74,7 +74,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.98.1"
+          toolchain: "1.99.1"
           components: rustfmt, clippy
 
       - name: Show rustup info
@@ -176,7 +176,7 @@ cognitive-complexity-threshold = 15
 too-many-arguments-threshold = 5
 too-many-lines-threshold = 30
 allow-unwrap-in-tests = true
-msrv = "1.98.1"
+msrv = "1.99.1"
 ```
 
 所有代码必须通过 `cargo clippy --all-targets -- -D warnings` 检查，无警告。
@@ -226,7 +226,7 @@ msrv = "1.98.1"
 
 - **保持本文件（AGENTS.md）更新**：每次修正代码或引入新规范后，请同步更新此文档。
 - **所有变更**必须通过 CI 检查（格式、lint、构建、测试）。
-- **版本锁定**：工具链版本统一使用环境中的版本，但需>=1.98.1（如 CI 和 clippy 配置所示）。
+- **版本锁定**：工具链版本统一使用环境中的版本，但需>=1.99.1（如 CI 和 clippy 配置所示）。
 - **遵循设计**：改动必须遵循原有结构设计，不得私自添加和修改，除非用户发出明确重构指令。
 - **后续开发追加 AGENTS.md 内容**：写入第 10 章节。
 - **测试**：编写单元测试，如果已经安装`cargo-llvm-cov`则检测测试覆盖率>=80%。
@@ -286,6 +286,8 @@ msrv = "1.98.1"
 docs/
 ├── update_logs/        # 每个版本的中文更新日志（vX.Y.Z.md）
 ├── version.md          # 全版本英文历史记录
+├── kcp.md              # KCP 传输、边界与验证契约
+├── kcp-performance.md  # KCP 参数及同条件性能研究
 ├── benchmark/          # 基准测试结果存档（JSON，按版本与机型命名）
 ├── FlowChart.png       # v1.x 架构流程图
 ├── FlowChart-v2.png    # v2.x（DDD + 洋葱架构）流程图
@@ -353,6 +355,7 @@ docs/
 - `LynnClient` 是连接和心跳任务的所有者；释放 owner 或取消 `start()` 必须结束其任务，克隆 sender 不得延长连接生命周期。
 - 读写操作属于监督任务的子 future，不得 detach；任一传输方向结束时释放另一方向，阻塞 I/O 与重连等待必须可取消。
 - Drop 是异步取消，不保证排空发送队列或 TLS 优雅关闭；需要确认交付的业务必须在释放前完成协议交互。
+- TLS Drop 回归保留关闭总期限及 sender 释放断言；未发送 close_notify 的传输可表现为 EOF 或 ConnectionReset，不限定单一系统错误。
 - 客户端逐帧执行写入与刷新；刷新失败终止当前连接，阻塞刷新必须可取消，不重试可能已部分发送的帧。
 
 - 重连间隔须覆盖连接失败及已建立连接结束两条路径，首次连接立即尝试；零值禁用等待，等待仍随 owner 取消。
@@ -413,3 +416,17 @@ docs/
 - 网络字节按成功读写的实际长度统计，消息发送计数须在完整写入及刷新后增加；TLS 统计框架字节，不冒充线路流量或确认交付。
 - 内置自动采集和手工业务指标必须区分；禁止在示例中伪造内存/连接数据，取消时未排空队列的丢弃统计限制须明确。
 - 指标回归须隔离全局指标污染，覆盖真实 TCP/TLS、异常关闭、并发连接和精确字节差值。
+
+### 10.21 可选 KCP 传输
+
+- `kcp` 默认关闭，双端使用 `with_kcp` 显式选择；单实例不自动回退或同时监听。TLS+KCP 必须显式拒绝。
+- 使用 kcp-ovo 0.5.2 底层控制块及有界适配，保持现有帧/业务层不变；KCP 会话没有加密认证，不兼容标准 KCP 或上游高层 API。
+- 会话先取得总数/每 IP 配额再分派，地址与 conv 同时区分报文；活跃旧会话不被不同 conv 抢占，失效后清理；owner 持有 driver，Drop 必须取消。
+- KCP flush 等待已写字节的传输 ACK，shutdown 等待有序 EOF 确认；均不代表业务交付，强制释放不承诺排空。
+- KCP 保持 10 MiB 帧 body 上限；适配发送分片、接收队列及逐会话报文队列均有界。
+- CI 包含 `kcp`、`client,kcp`、`server,kcp`、`client,server,kcp`；回归覆盖 UDP 仿真、背压、重连、取消及独立进程双传输。
+- 依赖升级须保留应用自选全局分配器、fast/normal 连续超时退避及新 RTO 重传期限回归；当前 0.5.2 已解除上游 #36/#38，不能仅凭发布状态认定本项目组合通过。
+- KCP 默认采用自定义 fast（nodelay/10ms/fastresend=2/nocwnd），新数据及 ACK 立即驱动；normal 保留周期输出。底层参数必须验证，不得启用破坏 HELLO/DATA/EOF 边界的原生 stream_mode。
+- 性能测试须独立统计请求和响应、校验内容；不得用响应数反填请求数证明无丢失。TCP/KCP 丢包比较须使用同条件包级网络仿真，不能以 TCP 应用代理替代。
+- 高丢包研究保留每轮退出码、请求/响应差值及 qdisc 统计，不删除失败轮次；有限接收期限内的缺失回复不能直接认定为协议永久丢失。
+- 依赖复测说明存放于 `docs/kcp-v0.5.2-validation.md`，原始数据存放于 `docs/benchmark/`；新旧依赖版本结果分开存档，不覆盖历史数据。
