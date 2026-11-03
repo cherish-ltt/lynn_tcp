@@ -108,6 +108,8 @@ tracing-subscriber = "0.3"
 
 `LynnServer::start().await` returns `lynn_tcp::Result<()>`; propagate or handle startup errors (including bind and TLS initialization failures). Code that expects unit output, such as `JoinHandle<()>`, must adapt to the new result type.
 
+The server taskpool must contain at least one worker; a zero value returns a configuration error before listening. This also applies to the deprecated threadpool setter, without changing other settings where zero disables a limit.
+
 #### Minimal Server
 
 ```rust

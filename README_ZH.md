@@ -107,6 +107,8 @@ tracing-subscriber = "0.3"
 
 `LynnServer::start().await` 返回 `lynn_tcp::Result<()>`；必须传播或处理启动错误（包括监听绑定和 TLS 初始化失败）。依赖 unit 输出的代码（如 `JoinHandle<()>`）需要适配新的返回类型。
 
+服务端任务池至少需要一个 worker；零值在监听前返回配置错误。旧版 threadpool setter 同样受此约束，不改变其他配置中零值禁用限制的语义。
+
 #### 最小服务器示例
 
 ```rust

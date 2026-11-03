@@ -301,6 +301,11 @@ impl<'a> LynnServer<'a> {
 
     /// Runs the server until cancelled, returning initialization or transport errors.
     pub async fn start(self) -> crate::Result<()> {
+        if *self.lynn_config.get_server_max_reactor_taskpool_size() == 0 {
+            return Err(crate::LynnError::config(
+                "server taskpool size must be greater than zero",
+            ));
+        }
         self.init_marks().await;
         let server_arc = Arc::new(self);
         server_arc.run().await
