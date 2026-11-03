@@ -392,6 +392,7 @@ impl<'a> LynnServerConfigBuilder<'a> {
 
     /// Sets the maximum number of taskpool for the server.
     /// This value determines the throughput of the entire service.
+    /// Zero is rejected by `LynnServer::start()` before binding the listener.
     ///
     /// # Parameters
     ///
