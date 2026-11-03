@@ -2,7 +2,9 @@ use std::net::SocketAddr;
 
 use bytes::{Bytes, BytesMut};
 
+use crate::Result;
 use crate::const_config::{DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK};
+use crate::domain::model::message_validation::validate_message_length;
 
 /// A struct representing the result of a handler.
 ///
@@ -37,32 +39,43 @@ impl HandlerResult {
     /// # Returns
     ///
     /// A new HandlerResult instance.
+    ///
+    /// # Errors
+    ///
+    /// Returns a protocol error if the payload plus 5 bytes of metadata/trailer exceeds 10 MiB.
     #[cfg(feature = "server")]
     pub fn new_with_send(
         method_id: u16,
         response_data: Bytes,
         target_addrs: Vec<SocketAddr>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        validate_message_length(response_data.len() as u64 + 5)?;
+        Ok(Self {
             is_send: true,
             is_heart: false,
             result_data: Some((method_id, response_data)),
             addrs: Some(target_addrs),
             message_header_mark: None,
             message_tail_mark: None,
-        }
+        })
     }
 
+    /// Creates a client request, rejecting payloads larger than 10 MiB minus 5 bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns a protocol error before the message can be queued or encoded.
     #[cfg(feature = "client")]
-    pub fn new_with_send_to_server(method_id: u16, response_data: Bytes) -> Self {
-        Self {
+    pub fn new_with_send_to_server(method_id: u16, response_data: Bytes) -> Result<Self> {
+        validate_message_length(response_data.len() as u64 + 5)?;
+        Ok(Self {
             is_send: true,
             is_heart: false,
             result_data: Some((method_id, response_data)),
             addrs: None,
             message_header_mark: None,
             message_tail_mark: None,
-        }
+        })
     }
 
     #[cfg(feature = "client")]
@@ -124,7 +137,7 @@ impl HandlerResult {
     pub(crate) fn get_response_data(&self) -> Option<BytesMut> {
         match &self.result_data {
             Some((method_id, bytes)) => {
-                let mut bytes_mut = BytesMut::with_capacity(bytes.len() + 14);
+                let mut bytes_mut = BytesMut::with_capacity(bytes.len() + 15);
 
                 if let Some(mark) = self.message_header_mark {
                     bytes_mut.extend_from_slice(&mark.to_le_bytes());
@@ -173,6 +186,32 @@ mod tests {
     }
 
     #[test]
+    fn constructors_enforce_the_receive_limit_before_encoding() {
+        use crate::domain::model::message_validation::MAX_MESSAGE_SIZE;
+        use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
+
+        for len in [0, MAX_MESSAGE_SIZE - 5, MAX_MESSAGE_SIZE - 4] {
+            let payload = Bytes::from(vec![0; len]);
+            let results = [
+                #[cfg(feature = "client")]
+                HandlerResult::new_with_send_to_server(1, payload.clone()),
+                #[cfg(feature = "server")]
+                HandlerResult::new_with_send(1, payload.clone(), vec![]),
+            ];
+            for result in results {
+                if len > MAX_MESSAGE_SIZE - 5 {
+                    assert!(matches!(result, Err(crate::LynnError::Protocol(_))));
+                    continue;
+                }
+                let frame = result.unwrap().get_response_data().unwrap();
+                let mut reader = BigBufReader::new(9177, 7719);
+                reader.extend_from_slice(&frame).unwrap();
+                assert_eq!(reader.next_frame().unwrap().unwrap().len(), len + 3);
+            }
+        }
+    }
+
+    #[test]
     fn without_send_has_no_payload() {
         let r = HandlerResult::new_without_send();
         assert!(!r.get_is_send());
@@ -188,7 +227,8 @@ mod tests {
             7,
             Bytes::from_static(b"abc"),
             vec!["127.0.0.1:9177".parse().unwrap()],
-        );
+        )
+        .expect("payload fits the protocol limit");
         assert!(r.get_is_send());
         assert_eq!(r.get_addrs(), Some(vec!["127.0.0.1:9177".parse().unwrap()]));
         assert!(!r.is_with_mark());
@@ -209,7 +249,8 @@ mod tests {
     #[cfg(feature = "server")]
     #[test]
     fn frame_falls_back_to_default_marks() {
-        let r = HandlerResult::new_with_send(1, Bytes::from_static(b""), vec![]);
+        let r = HandlerResult::new_with_send(1, Bytes::from_static(b""), vec![])
+            .expect("payload fits the protocol limit");
         let frame = r.get_response_data().unwrap();
         assert_eq!(
             frame[0..2].to_vec(),
@@ -233,7 +274,8 @@ mod tests {
     #[cfg(feature = "client")]
     #[test]
     fn send_to_server_has_no_target_addrs() {
-        let r = HandlerResult::new_with_send_to_server(3, Bytes::from_static(b"xy"));
+        let r = HandlerResult::new_with_send_to_server(3, Bytes::from_static(b"xy"))
+            .expect("payload fits the protocol limit");
         assert!(r.get_is_send());
         assert!(r.get_addrs().is_none());
         let frame = r.get_response_data().unwrap();

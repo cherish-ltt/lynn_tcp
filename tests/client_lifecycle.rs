@@ -41,7 +41,8 @@ async fn drop_cancels_backpressured_write() {
     let payload = lynn_tcp::bytes::Bytes::from(vec![0; 4 * 1024 * 1024]);
     timeout(Duration::from_secs(3), async {
         loop {
-            let message = HandlerResult::new_with_send_to_server(1, payload.clone());
+            let message = HandlerResult::new_with_send_to_server(1, payload.clone())
+                .expect("payload fits the protocol limit");
             if timeout(Duration::from_millis(100), sender.send(message))
                 .await
                 .is_err()
@@ -202,7 +203,10 @@ async fn drop_closes_idle_connection_even_with_cloned_sender() {
         assert_closed(&mut peer).await;
         assert!(
             sender
-                .send(HandlerResult::new_with_send_to_server(1, "late".into()))
+                .send(
+                    HandlerResult::new_with_send_to_server(1, "late".into())
+                        .expect("payload fits the protocol limit")
+                )
                 .await
                 .is_err()
         );

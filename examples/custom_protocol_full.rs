@@ -76,6 +76,7 @@ pub async fn custom_protocol_handler(mut input_buf_vo: InputBufVO) -> HandlerRes
     println!("📤 [custom_protocol_handler] Responding: {}", response);
 
     HandlerResult::new_with_send(1, response.into(), vec![client_addr])
+        .expect("ack contains only fixed text and a byte count")
 }
 
 #[tokio::main]
@@ -131,7 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         payload
     );
     client
-        .send_data(HandlerResult::new_with_send_to_server(1, payload.into()))
+        .send_data(HandlerResult::new_with_send_to_server(1, payload.into())?)
         .await?;
 
     // Step 4: Receive and parse the server's response

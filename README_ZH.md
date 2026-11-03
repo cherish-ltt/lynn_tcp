@@ -138,7 +138,7 @@ pub async fn echo_handler(input_buf_vo: InputBufVO) -> HandlerResult {
 
 pub async fn broadcast_handler(clients_context: ClientsContext) -> HandlerResult {
     let addrs = clients_context.get_all_clients_addrs().await;
-    HandlerResult::new_with_send(3, "大家好！".into(), addrs)
+    HandlerResult::new_with_send(3, "大家好！".into(), addrs).expect("payload fits the protocol limit")
 }
 ```
 
@@ -193,7 +193,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 发送消息
     client.send_data(
-        HandlerResult::new_with_send_to_server(1, "你好".into())
+        HandlerResult::new_with_send_to_server(1, "你好".into())?
     ).await?;
 
     // 接收响应
@@ -355,7 +355,7 @@ async fn main() {
 // `repo` 直接解引用为 &UserRepo —— 无全局静态、无需手动传递 Arc。
 async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult {
     let name = repo.find_user(42);
-    HandlerResult::new_with_send(1, name.into(), vec![input.get_input_addr().unwrap()])
+    HandlerResult::new_with_send(1, name.into(), vec![input.get_input_addr().unwrap()]).expect("payload fits the protocol limit")
 }
 ```
 
@@ -364,6 +364,8 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 ---
 
 #### 接收协议错误
+
+`HandlerResult::new_with_send` 和 `new_with_send_to_server` 现在返回 `lynn_tcp::Result<HandlerResult>`；payload 超过 **10 MiB 减 5 字节**时，在分配完整帧或入队前返回 `LynnError::Protocol`，同样覆盖直接使用 `get_sender()` 和服务端广播的路径。请用 `?` 或 `match` 处理构造错误；拒绝本地超限消息不会关闭已有连接。这是构造器返回类型变更，调用方需要适配；`new_without_send` 与心跳行为不变，入队成功仍不代表交付成功。
 
 客户端与服务端会拒绝错误的帧头、长度和帧尾，并关闭对应传输连接（包括 TLS）；正常分片与粘包仍受支持。接收解析器最多保留 10 MiB 帧上限、10 字节帧头及一次 1 KiB socket 读取的数据；终止性解析错误会释放缓存并拒绝后续输入。这是单解析器的数据保留上限，不是进程级内存配额。客户端在协议错误后仍遵循已配置的重连策略。
 

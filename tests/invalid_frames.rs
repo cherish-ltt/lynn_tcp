@@ -104,7 +104,8 @@ async fn client_invalid_frame_cancels_backpressured_write() {
                 lynn_tcp::lynn_tcp_dependents::HandlerResult::new_with_send_to_server(
                     1,
                     data.clone(),
-                ),
+                )
+                .expect("payload fits the protocol limit"),
             );
             if timeout(Duration::from_millis(100), send).await.is_err() {
                 break;

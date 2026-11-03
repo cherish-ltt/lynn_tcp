@@ -56,7 +56,11 @@ pub async fn echo_handler(
     );
 
     // Send the response back to all connected clients
-    HandlerResult::new_with_send(1, response.into(), addrs)
+    match HandlerResult::new_with_send(1, response.into(), addrs.clone()) {
+        Ok(result) => result,
+        Err(error) => HandlerResult::new_with_send(1, error.to_string().into(), addrs)
+            .expect("short protocol error response"),
+    }
 }
 
 #[tokio::main]
@@ -92,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         message
     );
     client
-        .send_data(HandlerResult::new_with_send_to_server(1, message.into()))
+        .send_data(HandlerResult::new_with_send_to_server(1, message.into())?)
         .await?;
 
     // Step 4: Wait for and receive the server's response

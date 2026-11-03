@@ -31,7 +31,7 @@ use std::{ops::Deref, sync::Arc};
 ///     // `repo` dereferences to `&UserRepo`.
 ///     let name = repo.find_user(1);
 ///     let addr = input.get_input_addr().unwrap();
-///     HandlerResult::new_with_send(1, name.into(), vec![addr])
+///     HandlerResult::new_with_send(1, name.into(), vec![addr]).expect("payload fits the protocol limit")
 /// }
 /// # }
 /// ```

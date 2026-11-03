@@ -67,7 +67,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 ///     HandlerResult::new_without_send()
 /// }
 /// pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
-///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
+///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await).expect("payload fits the protocol limit")
 /// }
 /// ```
 /// # Example
@@ -108,7 +108,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 ///     HandlerResult::new_without_send()
 /// }
 /// pub async fn my_service_with_clients(clients_context: ClientsContext) -> HandlerResult {
-///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await)
+///     HandlerResult::new_with_send(1, "hello lynn".into(), clients_context.get_all_clients_addrs().await).expect("payload fits the protocol limit")
 /// }
 /// ```
 #[cfg(feature = "server")]

@@ -300,6 +300,7 @@ async fn connect_clients(addr: SocketAddr, clients: usize) -> Vec<LynnClient<'st
 
 fn build_request(payload: usize) -> HandlerResult {
     HandlerResult::new_with_send_to_server(METHOD_ID, Bytes::from(vec![b'a'; payload]))
+        .expect("payload fits the protocol limit")
 }
 
 // model 1: ping-pong

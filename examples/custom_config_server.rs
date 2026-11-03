@@ -105,6 +105,7 @@ pub async fn custom_broadcast_handler(clients_context: ClientsContext) -> Handle
 
     if !addrs.is_empty() {
         HandlerResult::new_with_send(3, "Hello from custom Lynn TCP server!".into(), addrs)
+            .expect("payload fits the protocol limit")
     } else {
         HandlerResult::new_without_send()
     }

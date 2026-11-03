@@ -61,12 +61,14 @@ async fn find_user(repo: AppState<UserRepo>, input_buf_vo: InputBufVO) -> Handle
     let name = repo.find_user(id);
     let addr = input_buf_vo.get_input_addr().unwrap();
     HandlerResult::new_with_send(1, name.into(), vec![addr])
+        .expect("payload fits the protocol limit")
 }
 
 /// Route 2: `AppState<T>` dereferences to `T`.
 async fn service_info(config: AppState<AppConfig>, input_buf_vo: InputBufVO) -> HandlerResult {
     let addr = input_buf_vo.get_input_addr().unwrap();
     HandlerResult::new_with_send(2, config.service_name.clone().into(), vec![addr])
+        .expect("payload fits the protocol limit")
 }
 
 #[tokio::main]
@@ -101,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 3: query the "database" through the injected state
     client
-        .send_data(HandlerResult::new_with_send_to_server(1, "1".into()))
+        .send_data(HandlerResult::new_with_send_to_server(1, "1".into())?)
         .await?;
     if let Some(response) = client.get_receive_data().await {
         println!(
@@ -112,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 4: query the second state type
     client
-        .send_data(HandlerResult::new_with_send_to_server(2, "info".into()))
+        .send_data(HandlerResult::new_with_send_to_server(2, "info".into())?)
         .await?;
     if let Some(response) = client.get_receive_data().await {
         println!(
