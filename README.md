@@ -73,6 +73,12 @@ Lynn_tcp v2.0 is organized into three clean layers following the Onion Architect
 
 ---
 
+### Server Lifecycle
+
+Dropping a server or cancelling `LynnServer::start()` cancels its workers, handlers, heartbeat, pending handshakes and active connections. Cancellation is asynchronous and does not drain queued requests/responses or guarantee a graceful TLS shutdown; complete required exchanges before cancelling.
+
+TLS connection setup runs outside business workers, with at most the configured worker count in flight. Excess handshakes are rejected immediately; each retains its global/per-IP connection permits and the existing 10-second handshake timeout. Plain TCP setup is unchanged.
+
 ### Quick Start
 
 #### Dependencies
@@ -257,7 +263,7 @@ requests close the connection. Unknown paths still return HTTP 404.
 | Method | Description | Default |
 |--------|-------------|---------|
 | `with_addr()` | Server listen address | `0.0.0.0:9177` |
-| `with_server_max_connections()` | Max concurrent connections | `100_000` |
+| `with_server_max_connections()` | Max accepted connections, including queued/TLS handshakes and active sessions (`None` = unlimited) | `100_000` |
 | `with_server_max_taskpool_size()` | Async task pool size (throughput) | `512` |
 | `with_server_single_process_permit()` | Max queued/running requests per connection (0 = reject requests) | `14` |
 | `with_server_check_heart_interval()` | Heartbeat check interval (s) | `60` |
