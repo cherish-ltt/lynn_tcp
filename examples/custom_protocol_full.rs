@@ -102,11 +102,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build();
 
     let _server_handle = tokio::spawn(async {
-        let _server = LynnServer::new_with_config(server_config)
+        LynnServer::new_with_config(server_config)
             .await
             .add_router(1, custom_protocol_handler)
             .start()
-            .await;
+            .await
+            .expect("server failed");
     });
 
     // Give the server time to start listening

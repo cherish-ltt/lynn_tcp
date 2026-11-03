@@ -112,6 +112,8 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
 
+`LynnServer::start().await` returns `lynn_tcp::Result<()>`; propagate or handle startup errors (including bind and TLS initialization failures). Code that expects unit output, such as `JoinHandle<()>`, must adapt to the new result type.
+
 #### Minimal Server
 
 ```rust
@@ -121,13 +123,13 @@ use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let _ = LynnServer::new()
+    LynnServer::new()
         .await
         .add_router(1, ping_handler)
         .add_router(2, echo_handler)
         .add_router(3, broadcast_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -167,11 +169,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_tcp_keepalive_time_secs(&120)
         .build();
 
-    let _ = LynnServer::new_with_config(config)
+    LynnServer::new_with_config(config)
         .await
         .add_router(1, my_handler)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
@@ -353,13 +355,13 @@ Register any `Send + Sync + 'static` value once and extract it in handler parame
 use lynn_tcp::{lynn_server::*, lynn_tcp_dependents::*, lynn_state::AppState};
 
 #[tokio::main]
-async fn main() {
-    let _ = LynnServer::new()
+async fn main() -> lynn_tcp::Result<()> {
+    LynnServer::new()
         .await
         .with_state(UserRepo::new()) // or .with_db(db) with feature "seaorm"
         .add_router(1, find_user)
         .start()
-        .await;
+        .await
 }
 
 // `repo` derefs to &UserRepo — no global statics, no manual Arc plumbing.

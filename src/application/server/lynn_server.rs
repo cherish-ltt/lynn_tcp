@@ -47,13 +47,13 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     // Initialize tracing or use app.logserver()
 ///     tracing_subscriber::fmt::init();
-///     let _ = LynnServer::new()
+///     LynnServer::new()
 ///         .await
 ///         .add_router(1, my_service)
 ///         .add_router(2, my_service_with_buf)
 ///         .add_router(3, my_service_with_clients)
 ///         .start()
-///         .await;
+///         .await?;
 ///     Ok(())
 /// }
 ///
@@ -80,7 +80,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     // Initialize tracing or use app.logserver()
 ///     tracing_subscriber::fmt::init();
-///     let _ = LynnServer::new_with_config(
+///     LynnServer::new_with_config(
 ///         LynnServerConfigBuilder::new()
 ///             .with_addr("0.0.0.0:9177").unwrap()
 ///             .with_server_max_connections(Some(&200))
@@ -94,7 +94,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 ///         .add_router(2, my_service_with_buf)
 ///         .add_router(3, my_service_with_clients)
 ///         .start()
-///         .await;
+///         .await?;
 ///     Ok(())
 /// }
 ///
@@ -305,12 +305,11 @@ impl<'a> LynnServer<'a> {
         ));
     }
 
-    pub async fn start(mut self) {
+    /// Runs the server until cancelled, returning initialization or transport errors.
+    pub async fn start(self) -> crate::Result<()> {
         self.init_marks().await;
         let server_arc = Arc::new(self);
-        if let Err(e) = server_arc.run().await {
-            error!("{}", e);
-        }
+        server_arc.run().await
     }
 
     /// Starts the server and begins listening for client connections.
@@ -318,7 +317,7 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// Returns `Ok(())` if the server starts successfully, otherwise returns an error.
-    async fn run(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run(self: Arc<Self>) -> crate::Result<()> {
         // Binds a TCP listener to the local address.
         let listener = TcpListener::bind(self.lynn_config.get_server_addr()).await?;
         info!(

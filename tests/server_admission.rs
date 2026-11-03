@@ -74,7 +74,7 @@ async fn receive(socket: &mut TcpStream) -> (u16, u16, Vec<u8>) {
     .expect("response timeout")
 }
 
-async fn start(cap: &'static usize) -> (SocketAddr, Arc<Work>, JoinHandle<()>) {
+async fn start(cap: &'static usize) -> (SocketAddr, Arc<Work>, JoinHandle<lynn_tcp::Result<()>>) {
     let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = probe.local_addr().unwrap();
     drop(probe);

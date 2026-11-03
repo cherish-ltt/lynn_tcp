@@ -45,7 +45,7 @@ fn frame(method: u16) -> Vec<u8> {
     frame
 }
 
-async fn start(work: Arc<Work>) -> (SocketAddr, JoinHandle<()>) {
+async fn start(work: Arc<Work>) -> (SocketAddr, JoinHandle<lynn_tcp::Result<()>>) {
     let probe = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = probe.local_addr().unwrap();
     drop(probe);
