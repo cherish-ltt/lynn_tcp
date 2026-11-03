@@ -1,5 +1,42 @@
 # Version Note
 
+### v2.3.0
+
+#### v2.3.0
+
+Released on 2026-11-03. Twelve PRs (#77-#88) address 11 bug issues (#64-#73, #75) and a TLS handshake security report. This release contains source-breaking return-type changes despite the minor version increment; valid wire formats and default features are unchanged.
+
+1.sec / fix — bounded admission and server ownership
+
+- Isolate TLS setup from business workers, acquire handshake permits before spawning, and reject excess handshakes immediately. The configured worker count bounds handshake concurrency; global/per-IP quotas, the existing 10-second timeout and owner cancellation remain effective (#81).
+- Reserve global connection capacity immediately after accept and retain it through queueing, handshakes and sessions; `None` stays unlimited (#79).
+- Cancelling server startup or dropping an unstarted server releases background tasks, connections and state. Cancellation does not drain queues, guarantee graceful TLS shutdown or preempt synchronous user code that never yields (#80).
+- Return bind/TLS initialization errors from `LynnServer::start()` and reject zero workers before listening, including the legacy setter (#77, #78).
+- The older receive-buffer security report was already fixed by #57 in v2.2.0 and was rechecked and closed. Both security reports remain closed and unpublished, without CVEs; the new fix is delivered through a public PR.
+
+2.fix — client transport and protocol boundaries
+
+- Flush every client frame, terminate on write/flush errors without replaying partial frames, and keep blocked flushing cancellable (#82).
+- Apply reconnect delay after both failed attempts and established sessions ending; keep the first attempt immediate and zero-delay behavior explicit (#83).
+- Keep custom protocol marks local to each server instance (#84); accept empty and short string fields without consuming bytes on invalid lengths (#85).
+- Retain mTLS client identity when explicitly disabling server certificate verification, reject incomplete/invalid identities, and correct both README TLS configuration examples (#86, #87).
+- Reject payloads larger than 10 MiB minus 5 bytes at the send-constructor boundary, before full-frame allocation or enqueueing, including raw senders and broadcasts; local rejection does not close healthy connections (#88).
+
+3.compatibility and upgrade
+
+- `LynnServer::start()` now returns `lynn_tcp::Result<()>`; propagate or handle the result and adapt supervisor task output types.
+- `HandlerResult::new_with_send` and `new_with_send_to_server` now return `lynn_tcp::Result<HandlerResult>`. Use `?` where supported or explicitly handle errors in handlers; do not silently report an oversized send as successful. `new_without_send` and heartbeat behavior are unchanged.
+- Update to `lynn_tcp = "2.3.0"`, configure at least one server worker, review stricter connection/handshake admission, and complete required exchanges before cancellation. Queuing does not guarantee delivery.
+- Metrics integration (#74) and TCP/KCP dual transport (#76) remain out of scope. See [the full changelog](update_logs/v2.3.0.md) for migration and limitations.
+
+4.verification evidence
+
+- Merged main `a74be6c` has exactly the same Git tree as validated integration commit `67ae600`. Release-only changes update package metadata and documentation, not Rust source, tests, dependency versions or workflows.
+- Prior macOS arm64 / Rust 1.99.1 validation passed 164 default and 192 all-feature tests including doctests, six isolated-feature check/test combinations, build/Clippy/format checks and all prek hooks. Nine main-based PRs passed all seven Linux CI jobs at delivery; three stacked PRs did not trigger standalone CI at that point.
+- GitHub automatically ran [Rust CI for final merged main `a74be6c`](https://github.com/cherish-ltt/lynn_tcp/actions/runs/41604514252); all seven jobs passed. This is separate from the waived local reruns.
+- A fresh all-feature coverage run passed 185 tests excluding doctests and reported 93.16% line coverage, but warned that eight functions have mismatched data; this does not reliably establish the 80% coverage gate. Host Node-cache version warnings from prek were also retained.
+- Per maintainer request, merge and release preparation do not repeat local validation. Production load, public-network conditions, Windows and TLS-flush performance remain unverified; historical benchmarks are not v2.3.0 measurements.
+
 ### v2.2.0
 
 #### v2.2.0

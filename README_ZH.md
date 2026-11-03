@@ -26,13 +26,16 @@
 
 采用 **DDD（领域驱动设计）+ 洋葱架构**，将核心领域逻辑与基础设施实现分离，提升可维护性和可扩展性。
 
-### v2.2.0 - 安全与生命周期修复
+### v2.3.0 - 有界准入与显式错误
 
-通过 8 个 PR 修复 10 个 Issue 和 1 项安全反馈：有界接收解析、可靠连接回收、实际生效的 I/O 超时，
-以及独立 feature、监控、IPv6 和长空闲问题。默认 API 用法与合法报文兼容；错误帧会关闭连接，
-客户端 Drop 会取消任务，非零超时配置开始生效。
-升级注意事项、合入前验证证据、覆盖率限制及 TLS 刷新性能未测等说明，
-见 [v2.2.0 变更日志](docs/update_logs/v2.2.0.md)。
+通过 12 个 PR（#77-#88）修复 11 个 bug Issue 和 1 项 TLS 握手安全反馈：
+有界连接准入、服务端任务取消、TLS 握手隔离、客户端刷新与重连间隔，
+以及实例协议标记、短字段、mTLS 身份和发送长度限制。
+**源码不兼容的 API 变更：**`LynnServer::start()` 现在返回 `Result<()>`，
+`HandlerResult::new_with_send` / `new_with_send_to_server` 返回 `Result<HandlerResult>`。
+升级时必须处理这些错误；合法报文格式与默认 feature 不变。
+升级指南、合入前验证证据及覆盖率/性能限制见 [v2.3.0 变更日志](docs/update_logs/v2.3.0.md)。
+此前反馈的接收缓冲区问题已在 v2.2.0 修复。
 
 ---
 
@@ -56,7 +59,7 @@ Lynn_tcp v2.0 遵循洋葱架构，分为三个清晰层次：
 
 ```
 ┌─────────────────────────────────────┐
-│          接口层 (Interface)          │  ← 公开 API（向后兼容，无破坏性变更）
+│          接口层 (Interface)          │  ← 公开 API
 │   (lynn_server / lynn_client / ...) │
 ├─────────────────────────────────────┤
 │          应用层 (Application)        │  ← 编排层：服务器/客户端启动流程
@@ -88,7 +91,7 @@ TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配
 
 ```toml
 [dependencies]
-lynn_tcp = "2"
+lynn_tcp = "2.3.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -97,7 +100,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", default-features = false, features = ["server"] }
+lynn_tcp = { version = "2.3.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -106,7 +109,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", default-features = false, features = ["client"] }
+lynn_tcp = { version = "2.3.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -315,7 +318,7 @@ TLS **默认关闭**。启用 `tls` feature 并配置证书即手动开启 —�
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["tls"] }
+lynn_tcp = { version = "2.3.0", features = ["tls"] }
 ```
 
 ```rust

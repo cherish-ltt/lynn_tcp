@@ -26,14 +26,16 @@ English | [简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/READM
 
 It adopts a **DDD (Domain-Driven Design) + Onion Architecture**, separating core domain logic from infrastructure concerns for better maintainability and extensibility.
 
-### v2.2.0 - Security And Lifecycle Fixes
+### v2.3.0 - Bounded Admission And Explicit Errors
 
-Addresses 10 issues and one security advisory through eight PRs: bounded receive parsing,
-reliable connection cleanup, effective I/O timeouts, independent feature builds, and metrics/IPv6/idle fixes.
-Default API usage and valid frames remain compatible; invalid frames now close connections,
-client Drop cancels its tasks, and configured nonzero timeouts take effect.
-See the [v2.2.0 changelog](docs/update_logs/v2.2.0.md) for migration notes, prior validation evidence,
-coverage limitations and unmeasured TLS-flush performance effects.
+Addresses 11 bug issues and one TLS handshake security report through 12 PRs (#77-#88):
+bounded connection admission, server task cancellation, isolated TLS handshakes, client flushing
+and reconnect delays, per-instance protocol marks, short fields, mTLS identity and outbound limits.
+**Source-breaking API changes:** `LynnServer::start()` now returns `Result<()>`, and
+`HandlerResult::new_with_send` / `new_with_send_to_server` return `Result<HandlerResult>`.
+Handle these errors when upgrading; valid wire formats and default features are unchanged.
+See the [v2.3.0 changelog](docs/update_logs/v2.3.0.md) for migration notes, prior validation evidence
+and coverage/performance limitations. The previously reported receive-buffer issue was already fixed in v2.2.0.
 
 ---
 
@@ -57,7 +59,7 @@ Lynn_tcp v2.0 is organized into three clean layers following the Onion Architect
 
 ```
 ┌─────────────────────────────────────┐
-│         Interface Layer             │  ← Public API (no breaking changes)
+│         Interface Layer             │  ← Public API
 │   (lynn_server / lynn_client / ...) │
 ├─────────────────────────────────────┤
 │         Application Layer           │  ← Orchestration: server/client startup
@@ -89,7 +91,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lynn_tcp = "2"
+lynn_tcp = "2.3.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -98,7 +100,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", default-features = false, features = ["server"] }
+lynn_tcp = { version = "2.3.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -107,7 +109,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", default-features = false, features = ["client"] }
+lynn_tcp = { version = "2.3.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -320,7 +322,7 @@ TLS is **disabled by default**. Enable the `tls` feature and attach certificates
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2", features = ["tls"] }
+lynn_tcp = { version = "2.3.0", features = ["tls"] }
 ```
 
 ```rust
