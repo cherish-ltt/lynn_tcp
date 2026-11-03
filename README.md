@@ -294,6 +294,10 @@ Every response is flushed, including small TLS responses; zero disables the dead
 | `with_connect_timeout_secs()` | Per-attempt connect/TLS-handshake timeout (s) | `3` |
 | `with_tls()` *(feature `tls`)* | Enable TLS 1.3 with a `TlsClientConfig` (CA, SNI, mTLS) | off |
 
+The client flushes each frame, so TLS backpressure does not leave the last request waiting
+for another message or heartbeat. Write or flush failure ends the connection; partially
+sent frames are not retried. Dropping the client can still cancel blocked flushing.
+
 ---
 
 ### TLS 1.3 Encryption (feature `tls`)
