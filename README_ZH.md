@@ -340,7 +340,7 @@ let config = LynnClientConfigBuilder::new()
             .with_ca_cert_path("ca.pem")
             .with_server_name("localhost") // 可选的 SNI 覆盖
             .build(),
-    )?
+    )
     .build();
 ```
 
