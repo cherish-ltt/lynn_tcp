@@ -38,7 +38,8 @@ async fn custom_marks_roundtrip() {
             .await
             .add_router(1, echo)
             .start()
-            .await;
+            .await
+            .unwrap();
     });
 
     // Wait for the listener with raw probes (they carry no protocol data).

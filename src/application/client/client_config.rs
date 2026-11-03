@@ -293,6 +293,8 @@ impl<'a> LynnClientConfigBuilder<'a> {
     }
 
     /// Sets the delay in seconds between two connect attempts.
+    /// Also applies after an established connection ends; the initial attempt is immediate.
+    /// A zero value explicitly disables the delay.
     ///
     /// # Parameters
     ///

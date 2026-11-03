@@ -23,7 +23,7 @@ use crate::domain::model::lynn_user::LynnUser;
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
-use crate::infrastructure::connection::connection_limiter::ConnectionPermit;
+use crate::infrastructure::connection::connection_limiter::ConnectionPermits;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::io_timeout::with_io_timeout;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
@@ -32,61 +32,59 @@ use crate::infrastructure::tcp::stream::{
 };
 
 #[inline(always)]
-pub(super) fn spawn_check_heart(
+pub(super) async fn spawn_check_heart(
     server_check_heart_interval: u64,
     server_check_heart_timeout_time: u64,
     clients: ClientsStructType,
 ) {
-    tokio::spawn(async move {
-        let mut interval = interval(Duration::from_secs(server_check_heart_interval));
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut interval = interval(Duration::from_secs(server_check_heart_interval));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
-        info!(
-            "Server - [check heart] start success!!! with [server_check_heart_interval:{}s] [server_check_heart_timeout_time:{}s]",
-            server_check_heart_interval, server_check_heart_timeout_time
-        );
+    info!(
+        "Server - [check heart] start success!!! with [server_check_heart_interval:{}s] [server_check_heart_timeout_time:{}s]",
+        server_check_heart_interval, server_check_heart_timeout_time
+    );
 
-        let timeout_duration = Duration::from_secs(server_check_heart_timeout_time);
+    let timeout_duration = Duration::from_secs(server_check_heart_timeout_time);
 
-        loop {
-            interval.tick().await;
+    loop {
+        interval.tick().await;
 
-            let mut remove_list = Vec::with_capacity(clients.len() / 10); // Assuming that up to 10% of clients may timeout
-            let current_time = SystemTime::now();
+        let mut remove_list = Vec::with_capacity(clients.len() / 10); // Assuming that up to 10% of clients may timeout
+        let current_time = SystemTime::now();
 
-            for entry in clients.iter() {
-                let addr = *entry.key();
-                let last_communicate_time = entry.value().get_last_communicate_time();
+        for entry in clients.iter() {
+            let addr = *entry.key();
+            let last_communicate_time = entry.value().get_last_communicate_time();
 
-                if let Ok(last_time_guard) = last_communicate_time.try_read() {
-                    let time_old = *last_time_guard;
+            if let Ok(last_time_guard) = last_communicate_time.try_read() {
+                let time_old = *last_time_guard;
 
-                    if let Ok(duration) = current_time.duration_since(time_old)
-                        && duration > timeout_duration
-                    {
-                        remove_list.push((addr, last_communicate_time.clone()));
-                    }
-                }
-                // If unable to obtain a read lock, skip the client to avoid blocking
-            }
-
-            for (addr, identity) in remove_list {
-                if clients
-                    .remove_if(&addr, |_, user| {
-                        Arc::ptr_eq(&user.get_last_communicate_time(), &identity)
-                    })
-                    .is_some()
+                if let Ok(duration) = current_time.duration_since(time_old)
+                    && duration > timeout_duration
                 {
-                    info!(
-                        "Clean up addr:{}, that have not sent messages for a long time",
-                        addr
-                    );
+                    remove_list.push((addr, last_communicate_time.clone()));
                 }
             }
-
-            info!("Server check online socket count:{}", clients.len());
+            // If unable to obtain a read lock, skip the client to avoid blocking
         }
-    });
+
+        for (addr, identity) in remove_list {
+            if clients
+                .remove_if(&addr, |_, user| {
+                    Arc::ptr_eq(&user.get_last_communicate_time(), &identity)
+                })
+                .is_some()
+            {
+                info!(
+                    "Clean up addr:{}, that have not sent messages for a long time",
+                    addr
+                );
+            }
+        }
+
+        info!("Server check online socket count:{}", clients.len());
+    }
 }
 
 /// A function for checking and sending a HandlerResult instance.
@@ -189,7 +187,7 @@ pub(crate) async fn add_client(
     stream: LynnStream,
     addr: SocketAddr,
     last_communicate_time: Arc<RwLock<SystemTime>>,
-    permit: Option<ConnectionPermit>,
+    permit: ConnectionPermits,
     write_timeout_secs: u64,
 ) -> (BoxedReadHalf, ConnectionSession) {
     let (read_half, write_half): (BoxedReadHalf, BoxedWriteHalf) = split_transport(stream);
@@ -213,7 +211,7 @@ pub(crate) async fn add_client(
 }
 
 #[inline(always)]
-pub(crate) async fn push_read_half(
+pub(crate) async fn read_connection(
     mut read_half: BoxedReadHalf,
     process_permit: Arc<Semaphore>,
     addr: SocketAddr,
@@ -228,117 +226,110 @@ pub(crate) async fn push_read_half(
     process_limit: usize,
     read_timeout_secs: u64,
 ) {
-    tokio::spawn(async move {
-        let read = async {
-            let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
-            let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
+    let read = async {
+        let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
+        let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
 
-            'read_loop: loop {
-                let result = with_io_timeout(read_timeout_secs, read_half.read(&mut buf)).await;
-                match result {
-                    Ok(0) => break true,
-                    Ok(n) => {
-                        if let Err(error) = big_buf.extend_from_slice(&buf[..n]) {
-                            warn!("Invalid frame from {addr}: {error}");
-                            break false;
-                        }
-                        loop {
-                            let payload = match big_buf.next_frame() {
-                                Ok(Some(payload)) => payload,
-                                Ok(None) => break,
-                                Err(error) => {
-                                    warn!("Invalid frame from {addr}: {error}");
-                                    break 'read_loop false;
+        'read_loop: loop {
+            let result = with_io_timeout(read_timeout_secs, read_half.read(&mut buf)).await;
+            match result {
+                Ok(0) => break true,
+                Ok(n) => {
+                    if let Err(error) = big_buf.extend_from_slice(&buf[..n]) {
+                        warn!("Invalid frame from {addr}: {error}");
+                        break false;
+                    }
+                    loop {
+                        let payload = match big_buf.next_frame() {
+                            Ok(Some(payload)) => payload,
+                            Ok(None) => break,
+                            Err(error) => {
+                                warn!("Invalid frame from {addr}: {error}");
+                                break 'read_loop false;
+                            },
+                        };
+                        let mut input_buf_vo = InputBufVO::new(payload, addr);
+                        if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
+                            match constructor_id {
+                                2 => {
+                                    if let Ok(mut time_guard) = last_communicate_time.try_write() {
+                                        *time_guard = SystemTime::now();
+                                    }
+                                    continue;
                                 },
-                            };
-                            let mut input_buf_vo = InputBufVO::new(payload, addr);
-                            if let Some(constructor_id) = input_buf_vo.get_constructor_id() {
-                                match constructor_id {
-                                    2 => {
-                                        if let Ok(mut time_guard) =
-                                            last_communicate_time.try_write()
+                                1 => {
+                                    if let Some(method_id) = input_buf_vo.get_method_id() {
+                                        if let Some(handler_method) =
+                                            lynn_router.get_handler_by_method_id(&method_id)
                                         {
-                                            *time_guard = SystemTime::now();
-                                        }
-                                        continue;
-                                    },
-                                    1 => {
-                                        if let Some(method_id) = input_buf_vo.get_method_id() {
-                                            if let Some(handler_method) =
-                                                lynn_router.get_handler_by_method_id(&method_id)
-                                            {
-                                                input_dto_build(
-                                                    addr,
-                                                    input_buf_vo,
-                                                    process_permit.clone(),
-                                                    clients.clone(),
-                                                    handler_method.clone(),
-                                                    reactor_event_sender.clone(),
-                                                    states.clone(),
-                                                )
-                                                .await;
-                                            } else {
-                                                warn!(
-                                                    "router_map_async no method match,{}",
-                                                    method_id
-                                                );
-                                            }
+                                            input_dto_build(
+                                                addr,
+                                                input_buf_vo,
+                                                process_permit.clone(),
+                                                clients.clone(),
+                                                handler_method.clone(),
+                                                reactor_event_sender.clone(),
+                                                states.clone(),
+                                            )
+                                            .await;
                                         } else {
-                                            warn!("router_map_async input_buf_vo no method_id");
+                                            warn!("router_map_async no method match,{}", method_id);
                                         }
-                                    },
-                                    _ => {
-                                        warn!("Unknown constructor_id: {}", constructor_id);
-                                    },
-                                }
+                                    } else {
+                                        warn!("router_map_async input_buf_vo no method_id");
+                                    }
+                                },
+                                _ => {
+                                    warn!("Unknown constructor_id: {}", constructor_id);
+                                },
                             }
                         }
-                    },
-                    Err(e) => {
-                        error!("Failed to read from socket: {}", e.to_string());
-                        break false;
-                    },
-                }
-            }
-        };
-        let graceful = tokio::select! {
-            graceful = read => graceful,
-            _ = &mut session.writer => false,
-            _ = session.closed.changed() => false,
-        };
-        if !graceful {
-            return;
-        }
-        let drain = async {
-            // Keep accepted handlers and their queued replies alive after a peer's write EOF.
-            let mut remaining = process_limit;
-            while remaining > 0 {
-                let batch = remaining.min(u32::MAX as usize) as u32;
-                let Ok(permit) = process_permit.acquire_many(batch).await else {
-                    return;
-                };
-                permit.forget();
-                remaining -= batch as usize;
-            }
-        };
-        let drained = tokio::select! {
-            _ = drain => true,
-            _ = &mut session.writer => false,
-            _ = session.closed.changed() => false,
-        };
-        if drained {
-            tokio::select! {
-                _ = async {
-                    let shutdown = clients.get(&addr).filter(|user| {
-                        Arc::ptr_eq(&user.get_last_communicate_time(), &last_communicate_time)
-                    }).map(|user| user.shutdown());
-                    if let Some(shutdown) = shutdown {
-                        shutdown.await;
                     }
-                    let _ = (&mut session.writer).await;
-                } => {},
-                _ = session.closed.changed() => {},
+                },
+                Err(e) => {
+                    error!("Failed to read from socket: {}", e.to_string());
+                    break false;
+                },
             }
         }
-    });
+    };
+    let graceful = tokio::select! {
+        graceful = read => graceful,
+        _ = &mut session.writer => false,
+        _ = session.closed.changed() => false,
+    };
+    if !graceful {
+        return;
+    }
+    let drain = async {
+        // Keep accepted handlers and their queued replies alive after a peer's write EOF.
+        let mut remaining = process_limit;
+        while remaining > 0 {
+            let batch = remaining.min(u32::MAX as usize) as u32;
+            let Ok(permit) = process_permit.acquire_many(batch).await else {
+                return;
+            };
+            permit.forget();
+            remaining -= batch as usize;
+        }
+    };
+    let drained = tokio::select! {
+        _ = drain => true,
+        _ = &mut session.writer => false,
+        _ = session.closed.changed() => false,
+    };
+    if drained {
+        tokio::select! {
+            _ = async {
+                let shutdown = clients.get(&addr).filter(|user| {
+                    Arc::ptr_eq(&user.get_last_communicate_time(), &last_communicate_time)
+                }).map(|user| user.shutdown());
+                if let Some(shutdown) = shutdown {
+                    shutdown.await;
+                }
+                let _ = (&mut session.writer).await;
+            } => {},
+            _ = session.closed.changed() => {},
+        }
+    }
 }

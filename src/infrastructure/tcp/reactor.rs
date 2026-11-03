@@ -1,6 +1,9 @@
 use std::{
     net::SocketAddr,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, SystemTime},
 };
 
@@ -18,17 +21,20 @@ use tracing::{error, info, warn};
 
 use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::{ReactorEventSender, TaskBodyOutChannel};
-use crate::application::server::server_common::{add_client, check_handler_result, push_read_half};
+use crate::application::server::server_common::{
+    add_client, check_handler_result, read_connection,
+};
+use crate::application::server::server_tasks::ServerTasks;
 use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
-use crate::infrastructure::connection::connection_limiter::{ConnectionLimiter, ConnectionPermit};
+use crate::infrastructure::connection::connection_limiter::{ConnectionLimiter, ConnectionPermits};
 use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, StreamAcceptor};
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
 /// Reactor event type
 enum EventType {
-    NewSocket((TcpStream, core::net::SocketAddr, Option<ConnectionPermit>)),
+    NewSocket((TcpStream, core::net::SocketAddr, ConnectionPermits)),
     ExecuteTask(TaskBodyOutChannel),
 }
 
@@ -47,7 +53,7 @@ impl ReactorEvent {
     pub(crate) fn crate_new_socket_event(
         socket: TcpStream,
         addr: core::net::SocketAddr,
-        permit: Option<ConnectionPermit>,
+        permit: ConnectionPermits,
     ) -> Self {
         ReactorEvent::new_with_event_type(EventType::NewSocket((socket, addr, permit)))
     }
@@ -82,12 +88,16 @@ type NewSocketEventSender = Sender<NewSocketTask>;
 /// Event manager - manages the work-stealing event queue
 pub(crate) struct EventManager {
     global_queue: ReactorEventSender,
+    tasks: ServerTasks,
 }
 
 impl EventManager {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(tasks: ServerTasks) -> Self {
         let global_queue = Arc::new(Injector::<ReactorEvent>::new());
-        EventManager { global_queue }
+        EventManager {
+            global_queue,
+            tasks,
+        }
     }
 
     #[allow(
@@ -117,6 +127,7 @@ impl EventManager {
             stealers.push(worker.stealer());
             local_queues.push(worker);
         }
+        let setup_slots = Arc::new(Semaphore::new(*server_max_reactor_taskpool_size));
         let global_queue = self.global_queue.clone();
         let stealers_arc = Arc::new(stealers);
         for (index, local_queue) in local_queues.into_iter().enumerate() {
@@ -128,9 +139,11 @@ impl EventManager {
             let tx = tx.clone();
             let lynn_router = lynn_router.clone();
             let stream_acceptor = stream_acceptor.clone();
+            let setup_slots = setup_slots.clone();
             let mut idle_count: u16 = 0;
 
-            tokio::spawn(async move {
+            let tasks = self.tasks.clone();
+            self.tasks.spawn(async move {
                 let local_queue = local_queue;
                 let global_queue = global_queue_clone;
                 let stealers_arc = stealers_arc_clone;
@@ -142,59 +155,83 @@ impl EventManager {
                         idle_count = 0;
                         match event.event_type {
                             EventType::NewSocket((socket, addr, permit)) => {
-                                // Perform the (optional) TLS handshake here, off the
-                                // accept loop, so handshakes never serialize accepts.
-                                let Some(stream) = stream_acceptor.accept(socket, addr).await
-                                else {
-                                    continue;
+                                #[cfg(feature = "tls")]
+                                let isolate_handshake =
+                                    matches!(stream_acceptor.as_ref(), StreamAcceptor::Tls(_));
+                                #[cfg(not(feature = "tls"))]
+                                let isolate_handshake = false;
+                                let setup_permit = if isolate_handshake {
+                                    match setup_slots.clone().try_acquire_owned() {
+                                        Ok(permit) => Some(permit),
+                                        Err(_) => {
+                                            warn!(
+                                                "TLS handshake capacity reached, rejecting {addr}"
+                                            );
+                                            continue;
+                                        },
+                                    }
+                                } else {
+                                    None
                                 };
-                                let last_communicate_time =
-                                    Arc::new(RwLock::new(SystemTime::now()));
-                                let (read_half, session) = add_client(
-                                    clients.clone(),
-                                    stream,
-                                    addr,
-                                    last_communicate_time.clone(),
-                                    permit,
-                                    write_timeout_secs,
-                                )
-                                .await;
-                                let process_permit =
-                                    Arc::new(Semaphore::new(server_single_process_permit));
-                                let _ = tx
-                                    .send(NewSocketTask {
-                                        read_half,
-                                        process_permit,
+                                let stream_acceptor = stream_acceptor.clone();
+                                let clients = clients.clone();
+                                let tx = tx.clone();
+                                let lynn_router = lynn_router.clone();
+                                let reactor_event_sender = reactor_event_sender.clone();
+                                let setup = async move {
+                                    let _setup_permit = setup_permit;
+                                    let Some(stream) = stream_acceptor.accept(socket, addr).await
+                                    else {
+                                        return;
+                                    };
+                                    let last_communicate_time =
+                                        Arc::new(RwLock::new(SystemTime::now()));
+                                    let (read_half, session) = add_client(
+                                        clients.clone(),
+                                        stream,
                                         addr,
-                                        clients: clients.clone(),
-                                        message_header_mark,
-                                        message_tail_mark,
-                                        lynn_router: lynn_router.clone(),
-                                        reactor_event_sender: reactor_event_sender.clone(),
-                                        last_communicate_time,
-                                        session,
-                                        process_limit: server_single_process_permit,
-                                        read_timeout_secs,
-                                    })
+                                        last_communicate_time.clone(),
+                                        permit,
+                                        write_timeout_secs,
+                                    )
                                     .await;
+                                    let process_permit =
+                                        Arc::new(Semaphore::new(server_single_process_permit));
+                                    let _ = tx
+                                        .send(NewSocketTask {
+                                            read_half,
+                                            process_permit,
+                                            addr,
+                                            clients: clients.clone(),
+                                            message_header_mark,
+                                            message_tail_mark,
+                                            lynn_router: lynn_router.clone(),
+                                            reactor_event_sender: reactor_event_sender.clone(),
+                                            last_communicate_time,
+                                            session,
+                                            process_limit: server_single_process_permit,
+                                            read_timeout_secs,
+                                        })
+                                        .await;
+                                };
+                                if isolate_handshake {
+                                    tasks.spawn(setup);
+                                } else {
+                                    setup.await;
+                                }
                             },
                             EventType::ExecuteTask(task_body) => {
                                 let (task, context, clients, permit) = task_body;
                                 // Run the handler in a nested task so a panicking
                                 // handler (e.g. a missing AppState) cannot take
                                 // down this worker.
-                                match tokio::spawn(async move {
-                                    let result = task.handler(context).await;
-                                    check_handler_result(
-                                        result,
-                                        clients,
-                                        message_header_mark,
-                                        message_tail_mark,
-                                    )
-                                    .await;
-                                    drop(permit);
-                                })
-                                .await
+                                match tasks
+                                    .spawn(async move {
+                                        let result = task.handler(context).await;
+                                        check_handler_result(result, clients, message_header_mark, message_tail_mark).await;
+                                        drop(permit);
+                                    })
+                                    .await
                                 {
                                     Ok(()) => {},
                                     Err(join_error) => {
@@ -281,11 +318,12 @@ pub(crate) struct CoreReactor {
 }
 
 impl CoreReactor {
-    pub(crate) fn new(states: Arc<StateRegistry>) -> Self {
+    pub(crate) fn new(states: Arc<StateRegistry>, tasks: ServerTasks) -> Self {
         let (tx, mut rx) = mpsc::channel::<NewSocketTask>(64);
-        tokio::spawn(async move {
+        let reader_tasks = tasks.clone();
+        tasks.spawn(async move {
             while let Some(task) = rx.recv().await {
-                push_read_half(
+                reader_tasks.spawn(read_connection(
                     task.read_half,
                     task.process_permit,
                     task.addr,
@@ -299,8 +337,7 @@ impl CoreReactor {
                     task.session,
                     task.process_limit,
                     task.read_timeout_secs,
-                )
-                .await;
+                ));
             }
         });
 
@@ -310,7 +347,6 @@ impl CoreReactor {
     pub(crate) async fn run(
         &self,
         tcp_listener: TcpListener,
-        clients: ClientsStructType,
         allow_max_connections: Option<&usize>,
         global_queue: ReactorEventSender,
         connection_limiter: Option<(
@@ -320,13 +356,27 @@ impl CoreReactor {
         )>,
         tcp_config: TcpSocketConfig,
     ) {
+        let connection_count = Arc::new(AtomicUsize::new(0));
         loop {
             // Waiting for a new link
             let client_result = tcp_listener.accept().await;
             if let Ok((socket, addr)) = client_result {
                 let mut socket_permit = true;
                 let mut socket = Some(socket);
-                let mut permit = None;
+                let mut permit = ConnectionPermits::default();
+
+                if let Some(max_connections) = allow_max_connections {
+                    if connection_count
+                        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |count| {
+                            (count < *max_connections).then(|| count + 1)
+                        })
+                        .is_err()
+                    {
+                        warn!("Global connection limit reached, rejecting {addr}");
+                        continue;
+                    }
+                    permit.global = Some(connection_count.clone());
+                }
 
                 // Apply TCP socket configuration
                 if let Some(ref s) = socket {
@@ -417,23 +467,12 @@ impl CoreReactor {
                     }
                 }
 
-                // Check global max connections
-                if let Some(max_connections) = allow_max_connections {
-                    if clients.len() >= *max_connections {
-                        socket_permit = false;
-                        warn!(
-                            "Server socket's count is more than MAX_CONNECTIONS, can not accept new client:{}",
-                            addr
-                        );
-                    }
-                }
-
                 // Check connection limiter (rate limit and per-IP limit)
                 if socket_permit {
                     if let Some((_, _, limiter)) = &connection_limiter {
                         let ip = addr.ip();
-                        permit = limiter.acquire(ip).await;
-                        if permit.is_none() {
+                        permit.per_ip = limiter.acquire(ip).await;
+                        if permit.per_ip.is_none() {
                             socket_permit = false;
                             warn!(
                                 "Connection from {} rejected by connection limiter (rate limit or per-IP limit exceeded)",
@@ -472,10 +511,10 @@ pub(crate) struct TcpReactor {
 }
 
 impl TcpReactor {
-    pub(crate) fn new(states: Arc<StateRegistry>) -> Self {
+    pub(crate) fn new(states: Arc<StateRegistry>, tasks: ServerTasks) -> Self {
         Self {
-            core_reactor: CoreReactor::new(states),
-            event_manager: EventManager::new(),
+            core_reactor: CoreReactor::new(states, tasks.clone()),
+            event_manager: EventManager::new(tasks),
         }
     }
 
@@ -518,14 +557,13 @@ impl TcpReactor {
         // Spawn cleanup task for connection limiter if rate limiting is enabled
         if let Some((rate_limit, _, limiter)) = &connection_limiter {
             if **rate_limit > 0 {
-                limiter.clone().spawn_cleanup_task();
+                self.event_manager.tasks.spawn(limiter.clone().cleanup());
             }
         }
 
         self.core_reactor
             .run(
                 tcp_listener,
-                clients,
                 allow_max_connections,
                 self.event_manager.get_global_queue(),
                 connection_limiter,
