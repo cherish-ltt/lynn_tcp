@@ -1,7 +1,4 @@
 //! Integration tests with custom message header/tail marks.
-//!
-//! Lives in its own test binary because the server-side marks are process-global
-//! (`OnceLock` in `const_config`), initialized by the first server that starts.
 
 use std::time::Duration;
 
@@ -41,7 +38,8 @@ async fn custom_marks_roundtrip() {
             .await
             .add_router(1, echo)
             .start()
-            .await;
+            .await
+            .unwrap();
     });
 
     // Wait for the listener with raw probes (they carry no protocol data).

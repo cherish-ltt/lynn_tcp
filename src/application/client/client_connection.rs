@@ -183,8 +183,8 @@ pub(super) async fn connection_supervisor(
                     "Client - [connection supervisor] connect attempt {}/{} failed: {}",
                     attempts, max_attempts, e
                 );
-                time::sleep(Duration::from_secs(params.reconnect_interval_secs)).await;
             },
         }
+        time::sleep(Duration::from_secs(params.reconnect_interval_secs)).await;
     }
 }

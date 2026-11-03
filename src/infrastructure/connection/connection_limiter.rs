@@ -1,7 +1,10 @@
 use std::{
     collections::HashMap,
     net::IpAddr,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -186,6 +189,20 @@ pub(crate) struct ConnectionPermit {
     ip: IpAddr,
 }
 
+#[derive(Default)]
+pub(crate) struct ConnectionPermits {
+    pub(crate) global: Option<Arc<AtomicUsize>>,
+    pub(crate) per_ip: Option<ConnectionPermit>,
+}
+
+impl Drop for ConnectionPermits {
+    fn drop(&mut self) {
+        if let Some(count) = &self.global {
+            count.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
+}
+
 impl Drop for ConnectionPermit {
     fn drop(&mut self) {
         self.limiter.release_connection(self.ip);
@@ -264,16 +281,13 @@ impl ConnectionLimiter {
     }
 
     /// Starts the periodic cleanup task for the rate limiter.
-    pub fn spawn_cleanup_task(self: Arc<Self>) {
+    pub async fn cleanup(self: Arc<Self>) {
         if let Some(rate_limiter) = &self.rate_limiter {
-            let rate_limiter = rate_limiter.clone();
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(60));
-                loop {
-                    interval.tick().await;
-                    rate_limiter.periodic_cleanup().await;
-                }
-            });
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                rate_limiter.periodic_cleanup().await;
+            }
         }
     }
 }
