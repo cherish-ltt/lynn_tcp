@@ -127,6 +127,7 @@ impl EventManager {
             stealers.push(worker.stealer());
             local_queues.push(worker);
         }
+        let setup_slots = Arc::new(Semaphore::new(*server_max_reactor_taskpool_size));
         let global_queue = self.global_queue.clone();
         let stealers_arc = Arc::new(stealers);
         for (index, local_queue) in local_queues.into_iter().enumerate() {
@@ -138,6 +139,7 @@ impl EventManager {
             let tx = tx.clone();
             let lynn_router = lynn_router.clone();
             let stream_acceptor = stream_acceptor.clone();
+            let setup_slots = setup_slots.clone();
             let mut idle_count: u16 = 0;
 
             let tasks = self.tasks.clone();
@@ -153,41 +155,70 @@ impl EventManager {
                         idle_count = 0;
                         match event.event_type {
                             EventType::NewSocket((socket, addr, permit)) => {
-                                // Perform the (optional) TLS handshake here, off the
-                                // accept loop, so handshakes never serialize accepts.
-                                let Some(stream) = stream_acceptor.accept(socket, addr).await
-                                else {
-                                    continue;
+                                #[cfg(feature = "tls")]
+                                let isolate_handshake =
+                                    matches!(stream_acceptor.as_ref(), StreamAcceptor::Tls(_));
+                                #[cfg(not(feature = "tls"))]
+                                let isolate_handshake = false;
+                                let setup_permit = if isolate_handshake {
+                                    match setup_slots.clone().try_acquire_owned() {
+                                        Ok(permit) => Some(permit),
+                                        Err(_) => {
+                                            warn!(
+                                                "TLS handshake capacity reached, rejecting {addr}"
+                                            );
+                                            continue;
+                                        },
+                                    }
+                                } else {
+                                    None
                                 };
-                                let last_communicate_time =
-                                    Arc::new(RwLock::new(SystemTime::now()));
-                                let (read_half, session) = add_client(
-                                    clients.clone(),
-                                    stream,
-                                    addr,
-                                    last_communicate_time.clone(),
-                                    permit,
-                                    write_timeout_secs,
-                                )
-                                .await;
-                                let process_permit =
-                                    Arc::new(Semaphore::new(server_single_process_permit));
-                                let _ = tx
-                                    .send(NewSocketTask {
-                                        read_half,
-                                        process_permit,
+                                let stream_acceptor = stream_acceptor.clone();
+                                let clients = clients.clone();
+                                let tx = tx.clone();
+                                let lynn_router = lynn_router.clone();
+                                let reactor_event_sender = reactor_event_sender.clone();
+                                let setup = async move {
+                                    let _setup_permit = setup_permit;
+                                    let Some(stream) = stream_acceptor.accept(socket, addr).await
+                                    else {
+                                        return;
+                                    };
+                                    let last_communicate_time =
+                                        Arc::new(RwLock::new(SystemTime::now()));
+                                    let (read_half, session) = add_client(
+                                        clients.clone(),
+                                        stream,
                                         addr,
-                                        clients: clients.clone(),
-                                        message_header_mark,
-                                        message_tail_mark,
-                                        lynn_router: lynn_router.clone(),
-                                        reactor_event_sender: reactor_event_sender.clone(),
-                                        last_communicate_time,
-                                        session,
-                                        process_limit: server_single_process_permit,
-                                        read_timeout_secs,
-                                    })
+                                        last_communicate_time.clone(),
+                                        permit,
+                                        write_timeout_secs,
+                                    )
                                     .await;
+                                    let process_permit =
+                                        Arc::new(Semaphore::new(server_single_process_permit));
+                                    let _ = tx
+                                        .send(NewSocketTask {
+                                            read_half,
+                                            process_permit,
+                                            addr,
+                                            clients: clients.clone(),
+                                            message_header_mark,
+                                            message_tail_mark,
+                                            lynn_router: lynn_router.clone(),
+                                            reactor_event_sender: reactor_event_sender.clone(),
+                                            last_communicate_time,
+                                            session,
+                                            process_limit: server_single_process_permit,
+                                            read_timeout_secs,
+                                        })
+                                        .await;
+                                };
+                                if isolate_handshake {
+                                    tasks.spawn(setup);
+                                } else {
+                                    setup.await;
+                                }
                             },
                             EventType::ExecuteTask(task_body) => {
                                 let (task, context, clients, permit) = task_body;
