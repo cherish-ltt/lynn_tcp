@@ -281,16 +281,13 @@ impl ConnectionLimiter {
     }
 
     /// Starts the periodic cleanup task for the rate limiter.
-    pub fn spawn_cleanup_task(self: Arc<Self>) {
+    pub async fn cleanup(self: Arc<Self>) {
         if let Some(rate_limiter) = &self.rate_limiter {
-            let rate_limiter = rate_limiter.clone();
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(60));
-                loop {
-                    interval.tick().await;
-                    rate_limiter.periodic_cleanup().await;
-                }
-            });
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                rate_limiter.periodic_cleanup().await;
+            }
         }
     }
 }
