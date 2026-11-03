@@ -11,6 +11,7 @@ use tracing_subscriber::fmt;
 
 use crate::application::server::server_common::spawn_check_heart;
 use crate::application::server::server_config::LynnServerConfig;
+use crate::application::server::server_tasks::ServerTasks;
 use crate::const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK};
 use crate::domain::handler::handler_system::{AsyncFunc, HandlerContext, IHandler, IntoSystem};
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType, LynnUser};
@@ -46,13 +47,13 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     // Initialize tracing or use app.logserver()
 ///     tracing_subscriber::fmt::init();
-///     let _ = LynnServer::new()
+///     LynnServer::new()
 ///         .await
 ///         .add_router(1, my_service)
 ///         .add_router(2, my_service_with_buf)
 ///         .add_router(3, my_service_with_clients)
 ///         .start()
-///         .await;
+///         .await?;
 ///     Ok(())
 /// }
 ///
@@ -79,7 +80,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     // Initialize tracing or use app.logserver()
 ///     tracing_subscriber::fmt::init();
-///     let _ = LynnServer::new_with_config(
+///     LynnServer::new_with_config(
 ///         LynnServerConfigBuilder::new()
 ///             .with_addr("0.0.0.0:9177").unwrap()
 ///             .with_server_max_connections(Some(&200))
@@ -93,7 +94,7 @@ pub(crate) type ReactorEventSender = Arc<Injector<ReactorEvent>>;
 ///         .add_router(2, my_service_with_buf)
 ///         .add_router(3, my_service_with_clients)
 ///         .start()
-///         .await;
+///         .await?;
 ///     Ok(())
 /// }
 ///
@@ -123,6 +124,8 @@ pub struct LynnServer<'a> {
     reactor: TcpReactor,
     /// Type-keyed shared state injected into handlers through `AppState<T>`.
     state_registry: Arc<StateRegistry>,
+    _task_owner: tokio::sync::watch::Sender<()>,
+    tasks: ServerTasks,
 }
 
 /// Implementation of methods for the LynnServer struct.
@@ -135,12 +138,15 @@ impl<'a> LynnServer<'a> {
     pub async fn new() -> Self {
         let lynn_config = LynnServerConfig::default();
         let state_registry = Arc::new(StateRegistry::new());
+        let (task_owner, tasks) = ServerTasks::new();
         Self {
             clients: ClientsStruct(Arc::new(DashMap::new())),
             lynn_router: Arc::new(LynnRouter::new()),
             lynn_config,
-            reactor: TcpReactor::new(state_registry.clone()),
+            reactor: TcpReactor::new(state_registry.clone(), tasks.clone()),
             state_registry,
+            _task_owner: task_owner,
+            tasks,
         }
     }
 
@@ -292,19 +298,23 @@ impl<'a> LynnServer<'a> {
         let server_check_heart_interval = *self.lynn_config.get_server_check_heart_interval();
         let server_check_heart_timeout_time =
             *self.lynn_config.get_server_check_heart_timeout_time();
-        spawn_check_heart(
+        self.tasks.spawn(spawn_check_heart(
             server_check_heart_interval,
             server_check_heart_timeout_time,
             clients,
-        );
+        ));
     }
 
-    pub async fn start(mut self) {
+    /// Runs the server until cancelled, returning initialization or transport errors.
+    pub async fn start(self) -> crate::Result<()> {
+        if *self.lynn_config.get_server_max_reactor_taskpool_size() == 0 {
+            return Err(crate::LynnError::config(
+                "server taskpool size must be greater than zero",
+            ));
+        }
         self.init_marks().await;
         let server_arc = Arc::new(self);
-        if let Err(e) = server_arc.run().await {
-            error!("{}", e);
-        }
+        server_arc.run().await
     }
 
     /// Starts the server and begins listening for client connections.
@@ -312,7 +322,7 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// Returns `Ok(())` if the server starts successfully, otherwise returns an error.
-    async fn run(self: Arc<Self>) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run(self: Arc<Self>) -> crate::Result<()> {
         // Binds a TCP listener to the local address.
         let listener = TcpListener::bind(self.lynn_config.get_server_addr()).await?;
         info!(
@@ -320,8 +330,6 @@ impl<'a> LynnServer<'a> {
             self.lynn_config.get_server_addr(),
             tls_state_note(&self.lynn_config)
         );
-
-        self.check_heart().await;
 
         // Create connection limiter if rate limiting or per-IP limiting is enabled
         let rate_limit = *self.lynn_config.get_server_connection_rate_limit();
@@ -357,6 +365,8 @@ impl<'a> LynnServer<'a> {
         };
         #[cfg(not(feature = "tls"))]
         let stream_acceptor = Arc::new(StreamAcceptor::Plain);
+
+        self.check_heart().await;
 
         self.reactor
             .start(

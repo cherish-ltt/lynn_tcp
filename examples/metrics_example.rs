@@ -37,12 +37,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Start the server
-    let _server = LynnServer::new()
+    LynnServer::new()
         .await
         .add_router(1, my_service)
         .add_router(2, my_service_with_metrics)
         .start()
-        .await;
+        .await?;
 
     Ok(())
 }
