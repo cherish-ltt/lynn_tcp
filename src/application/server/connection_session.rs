@@ -35,7 +35,7 @@ impl Drop for ConnectionSession {
 mod tests {
     use super::*;
     use crate::{
-        application::server::server_common::push_read_half,
+        application::server::server_common::read_connection,
         domain::{
             model::lynn_user::LynnUser, routing::router::LynnRouter,
             state::state_registry::StateRegistry,
@@ -112,7 +112,7 @@ mod tests {
             },
         };
         let (read, mut peer) = tokio::io::duplex(64);
-        push_read_half(
+        tokio::spawn(read_connection(
             Box::new(read),
             Arc::new(Semaphore::new(1)),
             addr,
@@ -126,8 +126,7 @@ mod tests {
             session,
             1,
             0,
-        )
-        .await;
+        ));
         send.await;
         timeout(Duration::from_secs(2), async {
             while !clients.is_empty() {

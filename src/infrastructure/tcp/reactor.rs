@@ -21,7 +21,10 @@ use tracing::{error, info, warn};
 
 use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::{ReactorEventSender, TaskBodyOutChannel};
-use crate::application::server::server_common::{add_client, check_handler_result, push_read_half};
+use crate::application::server::server_common::{
+    add_client, check_handler_result, read_connection,
+};
+use crate::application::server::server_tasks::ServerTasks;
 use crate::domain::model::lynn_user::ClientsStructType;
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::state::state_registry::StateRegistry;
@@ -85,12 +88,16 @@ type NewSocketEventSender = Sender<NewSocketTask>;
 /// Event manager - manages the work-stealing event queue
 pub(crate) struct EventManager {
     global_queue: ReactorEventSender,
+    tasks: ServerTasks,
 }
 
 impl EventManager {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(tasks: ServerTasks) -> Self {
         let global_queue = Arc::new(Injector::<ReactorEvent>::new());
-        EventManager { global_queue }
+        EventManager {
+            global_queue,
+            tasks,
+        }
     }
 
     #[allow(
@@ -133,7 +140,8 @@ impl EventManager {
             let stream_acceptor = stream_acceptor.clone();
             let mut idle_count: u16 = 0;
 
-            tokio::spawn(async move {
+            let tasks = self.tasks.clone();
+            self.tasks.spawn(async move {
                 let local_queue = local_queue;
                 let global_queue = global_queue_clone;
                 let stealers_arc = stealers_arc_clone;
@@ -186,12 +194,13 @@ impl EventManager {
                                 // Run the handler in a nested task so a panicking
                                 // handler (e.g. a missing AppState) cannot take
                                 // down this worker.
-                                match tokio::spawn(async move {
-                                    let result = task.handler(context).await;
-                                    check_handler_result(result, clients).await;
-                                    drop(permit);
-                                })
-                                .await
+                                match tasks
+                                    .spawn(async move {
+                                        let result = task.handler(context).await;
+                                        check_handler_result(result, clients).await;
+                                        drop(permit);
+                                    })
+                                    .await
                                 {
                                     Ok(()) => {},
                                     Err(join_error) => {
@@ -278,11 +287,12 @@ pub(crate) struct CoreReactor {
 }
 
 impl CoreReactor {
-    pub(crate) fn new(states: Arc<StateRegistry>) -> Self {
+    pub(crate) fn new(states: Arc<StateRegistry>, tasks: ServerTasks) -> Self {
         let (tx, mut rx) = mpsc::channel::<NewSocketTask>(64);
-        tokio::spawn(async move {
+        let reader_tasks = tasks.clone();
+        tasks.spawn(async move {
             while let Some(task) = rx.recv().await {
-                push_read_half(
+                reader_tasks.spawn(read_connection(
                     task.read_half,
                     task.process_permit,
                     task.addr,
@@ -296,8 +306,7 @@ impl CoreReactor {
                     task.session,
                     task.process_limit,
                     task.read_timeout_secs,
-                )
-                .await;
+                ));
             }
         });
 
@@ -471,10 +480,10 @@ pub(crate) struct TcpReactor {
 }
 
 impl TcpReactor {
-    pub(crate) fn new(states: Arc<StateRegistry>) -> Self {
+    pub(crate) fn new(states: Arc<StateRegistry>, tasks: ServerTasks) -> Self {
         Self {
-            core_reactor: CoreReactor::new(states),
-            event_manager: EventManager::new(),
+            core_reactor: CoreReactor::new(states, tasks.clone()),
+            event_manager: EventManager::new(tasks),
         }
     }
 
@@ -517,7 +526,7 @@ impl TcpReactor {
         // Spawn cleanup task for connection limiter if rate limiting is enabled
         if let Some((rate_limit, _, limiter)) = &connection_limiter {
             if **rate_limit > 0 {
-                limiter.clone().spawn_cleanup_task();
+                self.event_manager.tasks.spawn(limiter.clone().cleanup());
             }
         }
 

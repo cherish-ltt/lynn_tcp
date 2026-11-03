@@ -73,6 +73,10 @@ Lynn_tcp v2.0 is organized into three clean layers following the Onion Architect
 
 ---
 
+### Server Lifecycle
+
+Dropping a server or cancelling `LynnServer::start()` cancels its workers, handlers, heartbeat, pending handshakes and active connections. Cancellation is asynchronous and does not drain queued requests/responses or guarantee a graceful TLS shutdown; complete required exchanges before cancelling.
+
 ### Quick Start
 
 #### Dependencies
