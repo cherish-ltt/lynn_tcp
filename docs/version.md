@@ -1,5 +1,39 @@
 # Version Note
 
+### v2.4.0
+
+#### v2.4.0
+
+Released on 2026-11-03. PRs [#89](https://github.com/cherish-ltt/lynn_tcp/pull/89) and [#90](https://github.com/cherish-ltt/lynn_tcp/pull/90) deliver real transport metrics (#74) and optional TCP/KCP transport (#76). TCP remains the default. See the [full changelog](update_logs/v2.4.0.md) and [KCP configuration, migration and scenarios](kcp.md).
+
+1.feat — optional low-level KCP
+
+- Enable `kcp` and explicitly configure both builders with `with_kcp(KcpConfig::default())`; one instance selects one transport, without automatic fallback. Handlers, routes, state and framing remain shared.
+- Use kcp-ovo `=0.5.2`'s low-level control block, not its high-level Stream/Listener API. Custom fast uses true/10ms/2/true and immediate data/ACK output; normal and custom protocol parameters remain available.
+- Preserve bounded queues, 10 MiB frame-body limits, admission, cancellation, reconnect and timeout ownership. Native `stream_mode=true` is rejected because the HELLO/DATA/EOF envelope requires message boundaries; the framework still sees a byte stream.
+- KCP is unauthenticated and unencrypted, incompatible with standard KCP and upstream high-level peers. TLS+KCP is rejected; use TCP+TLS for sensitive/untrusted paths. ACK-based flush is not application delivery, and Drop does not drain.
+
+2.feat / fix — observability and measurement
+
+- Automatically count server connection lifecycle, parsed/sent messages, handler durations and successful I/O bytes for TCP/TLS/KCP; metrics aggregate across servers in a process, not clients.
+- Remove duplicate manual updates to built-in metrics. OS memory/thread/queue and TCP retransmit/error metrics still require separate collectors; framework byte counts exclude wire overhead and retransmissions.
+- Fix tick-delayed KCP data/ACK output and independent request/reply accounting in benchmark model 1. Preserve missing replies and payload validation; historical backfilled request counts do not prove delivery.
+
+3.build / compatibility
+
+- Require Rust/MSRV 1.99.1; align exact Tokio/bytes dependencies to `=1.52.3` / `=1.11.1`, including default TCP builds. Downstream incompatible exact pins must be reconciled and tested.
+- Upstream allocator conflict #36 and retransmission-backoff/deadline defect #38 are resolved by kcp-ovo 0.5.2 and verified through downstream contracts; no fork or upstream patch is required.
+- Update to `lynn_tcp = "=2.4.0"`; KCP requires UDP reachability, coordinated endpoints and application-level delivery checks. Existing v2.3.0 Result-returning APIs remain unchanged; users of older versions must still apply the v2.3.0 migration.
+- Prefer TCP for clean/LAN or bulk-throughput workloads and TCP+TLS for authenticated/encrypted transport. Evaluate fast KCP for latency-sensitive small messages on controlled lossy UDP paths; `nocwnd=true` can harm shared-link fairness. Normal is a comparison preset, not proof of production safety.
+
+4.verification and limitations
+
+- Both PRs were Squash merged; main `966479a` has exactly the same file tree as validated `c9abd3f`. The stacked baseline sync changed ancestry only; the two documentation conflicts preserved that tree, and the new PR head passed all 11 Linux CI jobs.
+- Prior validation passed 171 default / 223 all-feature tests including doctests, ten independent feature check/test combinations, three process-blackbox modes at 800/800 each, and metrics at 400/400 replies with 9200 bytes each direction. Separate coverage passed 216 tests and measured 92.68% lines without mismatched-data warnings; upstream coverage is excluded.
+- Prior isolated Linux netem measurements (128 bytes, 32 clients, median of three short runs) put KCP at 94.5% of TCP at 20 ms RTT without loss and 2.21/4.40/7.42 times TCP at 10%/20%/30% random loss. Clean loopback reached only 29.9%; some single-client low-loss cases remained slower.
+- Primary runs recorded 1,706,037 requests / 1,705,957 replies, with deficits of TCP 76 / KCP 4 inside the finite drain window. Independent 30-second diagnostics received KCP 15336/15336 and TCP 3036/3036, but do not replace primary deficits or replay identical packet traces.
+- Performance archives retain their original names and pre-release provenance; no v2.4.0 performance rerun is implied. Public networks, Windows, long soaks, bandwidth fairness, correlated loss and CPU/memory profiles remain unverified. Release-only verification is recorded in the changelog and PR comments.
+
 ### v2.3.0
 
 #### v2.3.0

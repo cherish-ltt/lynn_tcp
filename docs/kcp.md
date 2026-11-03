@@ -1,4 +1,62 @@
-# KCP 传输契约
+# KCP 配置、迁移与场景指南
+
+适用 lynn_tcp **v2.4.0**、kcp-ovo **0.5.2**。配置和安全边界以本页为准；合入前的性能证据见 [0.5.2 复测](kcp-v0.5.2-validation.md)，不保证其他网络或负载复现同样收益。
+
+## 从 TCP 或早期 PR 迁移
+
+1. 使用 Rust 1.99.1，更新依赖与 lock；本版本将 Tokio/bytes 精确统一为 `=1.52.3` / `=1.11.1`，即使保持 TCP 也需验证下游依赖解析。应用若直接依赖 Tokio/bytes，可使用兼容约束或这一实测精确组合，不能同时要求另一个兼容系列的精确版本。
+2. 双端显式启用 `kcp`，通过公开 builder 选择同一适配；只启用 feature 不会把默认 TCP 自动改成 KCP。无需直接依赖 kcp-ovo 或替换业务 handler。
+3. 对应地址须允许 UDP 流量；TCP 端口可达不代表 UDP 可达，框架不会穿透 NAT 或自动回退 TCP。生产灰度保留独立 TCP/TCP+TLS 实例和部署配置，客户端明确选择目标传输；不要把敏感数据从 TLS 迁移为明文 KCP。
+4. 从默认 fast 和窗口 32/128 开始，保留既有协议标记、心跳及应用层回复检查，再按下文逐项测量调整。旧 PR 中 `KcpConfig { idle_timeout_secs: n }` 字面量补 `..KcpConfig::default()`；不继续使用旧 tick-only 性能结果或 kcp-ovo 0.5.0。
+5. 连接建立后确认 `client.is_connected()`，处理 `server.start().await` 的错误；`build()` 本身不验证 KCP 组合。非法参数在双端传输初始化时拒绝，客户端连接失败沿用现有重试/未连接语义，不把 builder 成功当作已连通。
+6. 删除对框架自动指标的重复手工累加，执行真实 echo、断开/取消及指标增量验收；严格交付场景必须先取得应用层确认，再释放 owner，见 [指标迁移](../METRICS.md#自动采集边界与迁移)。
+
+双端依赖（默认同时启用 server/client；独立角色设置 `default-features = false`）：
+
+```toml
+[dependencies]
+lynn_tcp = { version = "=2.4.0", features = ["kcp"] }
+tokio = { version = "=1.52.3", features = ["macros", "rt-multi-thread"] }
+```
+
+配置片段仅构造两端配置；启动及逐内容 echo 的完整可运行代码见 [kcp_echo](../examples/kcp_echo.rs)：
+
+```rust
+use lynn_tcp::{
+    lynn_client::LynnClientConfigBuilder,
+    lynn_kcp::KcpConfig,
+    lynn_server::LynnServerConfigBuilder,
+};
+
+fn main() -> lynn_tcp::Result<()> {
+    let kcp = KcpConfig::default();
+    let _server = LynnServerConfigBuilder::new()
+        .with_addr("127.0.0.1:9177")?
+        .with_kcp(kcp.clone())
+        .build();
+    let _client = LynnClientConfigBuilder::new()
+        .with_server_addr("127.0.0.1:9177")?
+        .with_kcp(kcp)
+        .build();
+    Ok(())
+}
+```
+
+## 建议场景与调整顺序
+
+| 场景 | 建议 | 依据与限制 |
+|---|---|---|
+| 回环、稳定局域网、低丢包或吞吐优先 | 优先 TCP | 本次纯回环 KCP 仅为 TCP 的 29.9%；大文件/持续流未测，不预设 KCP 优势 |
+| 有 RTT、受控 UDP 链路、延迟敏感小消息 | 评估默认 fast | 128 B、32 并发、20 ms RTT 无丢包为 TCP 的 94.5%；1 并发低丢包仍可能落后 |
+| 独立随机丢包明显的小消息交互 | 目标环境 A/B 验证 KCP fast | 同轮 10%/20%/30% 丢包吞吐为 TCP 的 2.21/4.40/7.42 倍，不代表突发丢包或拥塞链路 |
+| 需要认证、加密，或不可信共享公网 | 优先 TCP+TLS | 本适配无认证/加密；TLS+KCP 不支持，fast nocwnd 存在公平性/拥塞风险 |
+| 需要保守参数基线或排查 fast 取舍 | 对照 normal | 开启拥塞窗口约束、100 ms 周期输出，可能增加时延；未单独验证其公网公平性 |
+
+先保持默认参数，用真实 payload/并发、目标 RTT/带宽和丢包分布比较 TCP/fast/normal；同时记录吞吐、尾延迟、请求/回复差值、连接错误及资源占用，而非只看响应/s。主要性能表采用固定顺序短时测试，不是统计显著性或容量上限证明。
+
+确有带宽时延积/发送窗口瓶颈时再逐步增大 `snd_wnd/rcv_wnd`；每连接仅一个在途小请求时，增大窗口通常不能解决调度或 ACK 等待成本。interval 更小会增加唤醒与 CPU 成本，且本地 fast 已即时驱动新数据/ACK，不应盲目改成 1 ms。MTU 必须保持 1400；不得以放大队列、关闭 ACK 等待或启用原生流模式来换取跑分。
+
+让 `idle_timeout_secs` 覆盖预期心跳/调度间隔及弱网停顿，并一起检查框架心跳、读写和客户端连接超时；只增大 KCP idle 不能阻止更短的框架超时先关闭连接。缩短 idle 可加快消失对端回收，但会增加暂时断网时的误断。normal/custom 也不提供自动安全或交付保证。
 
 ## 选择与兼容
 

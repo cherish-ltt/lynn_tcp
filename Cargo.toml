@@ -1,13 +1,13 @@
 [package]
 name = "lynn_tcp"
-version = "2.3.0"
+version = "2.4.0"
 edition = "2024"
 rust-version = "1.99.1"
 authors = ["lynn_tcp Contributors"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/cherish-ltt/lynn_tcp"
-description = "Lightweight asynchronous TCP framework"
+description = "Lightweight asynchronous TCP framework with optional KCP transport"
 categories = ["network-programming"]
 keywords = ["tcp" , "tcp-server" , "tcp-client" , "network" , "lynn"]
 

@@ -11,7 +11,7 @@
   <a href="https://docs.rs/lynn_tcp">
     <img src="https://docs.rs/lynn_tcp/badge.svg" alt="documentation"/>
   </a>
-  <a href="https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE">
+  <a href="https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE-MIT">
     <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="license: MIT OR Apache-2.0"/>
   </a>
   <a href="https://www.rust-lang.org">
@@ -22,20 +22,20 @@
 
 English | [简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/README_ZH.md)
 
-**Lynn_tcp** is a lightweight, high-performance asynchronous TCP framework built on Tokio.
+**Lynn_tcp** is a lightweight asynchronous TCP framework built on Tokio, with opt-in KCP transport.
 
 It adopts a **DDD (Domain-Driven Design) + Onion Architecture**, separating core domain logic from infrastructure concerns for better maintainability and extensibility.
 
-### v2.3.0 - Bounded Admission And Explicit Errors
+### v2.4.0 - Optional KCP And Real Transport Metrics
 
-Addresses 11 bug issues and one TLS handshake security report through 12 PRs (#77-#88):
-bounded connection admission, server task cancellation, isolated TLS handshakes, client flushing
-and reconnect delays, per-instance protocol marks, short fields, mTLS identity and outbound limits.
-**Source-breaking API changes:** `LynnServer::start()` now returns `Result<()>`, and
-`HandlerResult::new_with_send` / `new_with_send_to_server` return `Result<HandlerResult>`.
-Handle these errors when upgrading; valid wire formats and default features are unchanged.
-See the [v2.3.0 changelog](docs/update_logs/v2.3.0.md) for migration notes, prior validation evidence
-and coverage/performance limitations. The previously reported receive-buffer issue was already fixed in v2.2.0.
+PRs #89/#90 add opt-in low-level KCP transport with custom fast configuration and
+automatic server connection, message and byte metrics. TCP remains the default;
+kcp-ovo **0.5.2** resolves the upstream allocator and retransmission-backoff defects.
+Rust **1.99.1** is required, with Tokio/bytes pinned to **1.52.3/1.11.1** even for TCP.
+Remove duplicate manual updates to built-in metrics when upgrading.
+See the [v2.4.0 changelog](docs/update_logs/v2.4.0.md), [KCP migration and scenarios](docs/kcp.md)
+and [metrics migration](METRICS.md). Earlier users must also apply the
+[v2.3.0 return-type changes](docs/update_logs/v2.3.0.md); KCP is not a universal speed or security upgrade.
 
 ---
 
@@ -87,11 +87,11 @@ TLS connection setup runs outside business workers, with at most the configured 
 
 Add to your `Cargo.toml`:
 
-**Full features** (recommended):
+**Default server + client** (optional features remain disabled):
 
 ```toml
 [dependencies]
-lynn_tcp = "2.3.0"
+lynn_tcp = "=2.4.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -100,7 +100,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2.3.0", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.4.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -109,7 +109,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2.3.0", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.4.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -350,9 +350,17 @@ Stream/message mode is independent of fast/normal. This adapter requires
 **message mode** for its HELLO/DATA/EOF envelope and explicitly rejects
 `stream_mode=true`; it still exposes a byte stream to the framework. Fast
 disables congestion-window control, not peer-window or queue bounds, and can
-reduce network fairness. See [configuration](docs/kcp.md) and
-[measured performance](docs/kcp-performance.md), including the 10%/20%/30%
+reduce network fairness. See [configuration and migration](docs/kcp.md) and
+[current measured performance](docs/kcp-v0.5.2-validation.md), including the 10%/20%/30%
 packet-loss study and acceptance assessment, not a promise of TCP parity.
+
+**Choose by workload:** prefer TCP for loopback/LAN, bulk throughput, or low-loss
+traffic; use TCP+TLS when authentication and encryption are required. Consider KCP
+fast for latency-sensitive small messages on controlled, lossy UDP paths only after
+target-network validation. Prior 128-byte, 32-client measurements at 20 ms RTT put
+KCP at 94.5% of TCP without loss and 2.21/4.40/7.42 times TCP at 10%/20%/30% loss;
+clean loopback reached only 29.9%. These are pre-release measurements, not SLA guarantees.
+Normal is a conservative comparison preset, not a proven faster or production-safe choice.
 
 ```sh
 cargo run --example kcp_echo --features kcp
@@ -391,7 +399,7 @@ TLS is **disabled by default**. Enable the `tls` feature and attach certificates
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2.3.0", features = ["tls"] }
+lynn_tcp = { version = "=2.4.0", features = ["tls"] }
 ```
 
 ```rust
@@ -671,7 +679,7 @@ A: Yes. After a disconnect it retries 3 times (1s apart) by default, configurabl
 
 This project is dual-licensed under either of:
 
-- MIT license ([LICENSE](LICENSE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
 
 at your option.

@@ -11,7 +11,7 @@
   <a href="https://docs.rs/lynn_tcp">
     <img src="https://docs.rs/lynn_tcp/badge.svg" alt="documentation"/>
   </a>
-  <a href="https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE">
+  <a href="https://github.com/cherish-ltt/lynn_tcp/blob/main/LICENSE-MIT">
     <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="license: MIT OR Apache-2.0"/>
   </a>
   <a href="https://www.rust-lang.org">
@@ -22,20 +22,19 @@
 
 [English](https://github.com/cherish-ltt/lynn_tcp/blob/main/README.md) | 简体中文
 
-**Lynn_tcp** 是一个轻量级、高性能的异步 TCP 框架，基于 Tokio 构建。
+**Lynn_tcp** 是基于 Tokio 构建的轻量级异步 TCP 框架，支持显式启用 KCP 传输。
 
 采用 **DDD（领域驱动设计）+ 洋葱架构**，将核心领域逻辑与基础设施实现分离，提升可维护性和可扩展性。
 
-### v2.3.0 - 有界准入与显式错误
+### v2.4.0 - 可选 KCP 与真实传输指标
 
-通过 12 个 PR（#77-#88）修复 11 个 bug Issue 和 1 项 TLS 握手安全反馈：
-有界连接准入、服务端任务取消、TLS 握手隔离、客户端刷新与重连间隔，
-以及实例协议标记、短字段、mTLS 身份和发送长度限制。
-**源码不兼容的 API 变更：**`LynnServer::start()` 现在返回 `Result<()>`，
-`HandlerResult::new_with_send` / `new_with_send_to_server` 返回 `Result<HandlerResult>`。
-升级时必须处理这些错误；合法报文格式与默认 feature 不变。
-升级指南、合入前验证证据及覆盖率/性能限制见 [v2.3.0 变更日志](docs/update_logs/v2.3.0.md)。
-此前反馈的接收缓冲区问题已在 v2.2.0 修复。
+PR #89/#90 新增底层 KCP 传输、自定义 fast 配置，以及服务端连接、消息和字节自动指标。
+TCP 保持默认；kcp-ovo **0.5.2** 已解除上游全局分配器及重传退避缺陷。
+要求 Rust **1.99.1**，Tokio/bytes 固定为 **1.52.3/1.11.1**，包括默认 TCP 构建。
+升级时删除重复的内置指标手工累加。
+详见 [v2.4.0 变更日志](docs/update_logs/v2.4.0.md)、[KCP 迁移与建议场景](docs/kcp.md)
+和 [指标迁移](METRICS.md)。更早版本用户仍须适配
+[v2.3.0 返回类型变更](docs/update_logs/v2.3.0.md)；KCP 不代表普遍提速或安全升级。
 
 ---
 
@@ -87,11 +86,11 @@ TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配
 
 在 `Cargo.toml` 中添加：
 
-**完整功能**（推荐）：
+**默认服务端 + 客户端**（可选功能仍关闭）：
 
 ```toml
 [dependencies]
-lynn_tcp = "2.3.0"
+lynn_tcp = "=2.4.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -100,7 +99,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2.3.0", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.4.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -109,7 +108,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2.3.0", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.4.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -341,9 +340,15 @@ TCP 保持默认。启用 `kcp` 后，分别使用
 
 消息/流模式与 fast/normal 独立。本适配的 HELLO/DATA/EOF 封装要求**消息模式**，
 显式拒绝 `stream_mode=true`，但框架仍使用字节流。fast 关闭拥塞窗口控制，
-不关闭对端窗口或队列上限，可能降低网络公平性。详见 [配置说明](docs/kcp.md)
-和 [性能实测](docs/kcp-performance.md)（含 10%/20%/30% 丢包研究及验收总结），
+不关闭对端窗口或队列上限，可能降低网络公平性。详见 [配置与迁移](docs/kcp.md)
+和 [当前性能实测](docs/kcp-v0.5.2-validation.md)（含 10%/20%/30% 丢包研究及验收总结），
 不承诺等同 TCP。
+
+**按场景选择：**回环/局域网、大流量吞吐或低丢包优先 TCP，需要认证和加密时使用 TCP+TLS。
+延迟敏感的小消息、受控且有丢包的 UDP 链路可以评估 KCP fast，但须先验证目标网络。
+合入前 128 B、32 并发实测：20 ms RTT 无丢包为 TCP 的 94.5%，10%/20%/30%
+丢包为 TCP 的 2.21/4.40/7.42 倍；纯回环仅 29.9%。这是发布前数据，不是 SLA 保证。
+Normal 是保守对照预设，不代表已证明更快或适合生产。
 
 ```sh
 cargo run --example kcp_echo --features kcp
@@ -376,7 +381,7 @@ TLS **默认关闭**。启用 `tls` feature 并配置证书即手动开启 —�
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "2.3.0", features = ["tls"] }
+lynn_tcp = { version = "=2.4.0", features = ["tls"] }
 ```
 
 ```rust
@@ -654,7 +659,7 @@ git pull && cargo bench --bench benchmark -- --json docs/benchmark/v<版本>-<�
 
 本项目采用双许可，您可任选其一：
 
-- MIT 协议（[LICENSE](LICENSE)）
+- MIT 协议（[LICENSE-MIT](LICENSE-MIT)）
 - Apache License, Version 2.0（[LICENSE-APACHE](LICENSE-APACHE)）
 
 ### 关于贡献
