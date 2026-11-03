@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg" alt="license: MIT OR Apache-2.0"/>
   </a>
   <a href="https://www.rust-lang.org">
-    <img src="https://img.shields.io/badge/rust-1.98.1+-orange.svg" alt="rust version"/>
+    <img src="https://img.shields.io/badge/rust-1.99.1+-orange.svg" alt="rust version"/>
   </a>
 </p>
 </div>
@@ -247,6 +247,7 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `server` | TCP server with multi-route async handlers, heartbeat, connection management | ✅ |
 | `client` | TCP client for sending/receiving messages, automatic reconnection | ✅ |
 | `metrics` | Prometheus integration (17 production metrics, HTTP /metrics endpoint) | ✅ (via `server`) |
+| `kcp` | Optional plaintext UDP/KCP transport using kcp-ovo 0.5.0 | opt-in |
 | `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
 | `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
@@ -329,6 +330,41 @@ failed attempts and established connections ending, including peers that accept 
 immediately close. Zero explicitly disables this delay; dropping the client cancels it.
 
 ---
+
+### TCP Or KCP
+
+TCP remains the default. Enable `kcp`, then use
+`LynnServerConfigBuilder::with_kcp(KcpConfig::default())` and
+`LynnClientConfigBuilder::with_kcp(KcpConfig::default())`, importing
+`lynn_tcp::lynn_kcp::KcpConfig`. Both endpoints reuse the same handlers,
+framing, routes and state. A single instance listens on one transport only.
+
+```sh
+cargo run --example kcp_echo --features kcp
+# Isolated client: default-features = false, features = ["client", "kcp"]
+# Isolated server: default-features = false, features = ["server", "kcp"]
+LYNN_BENCH_TRANSPORT=kcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
+```
+
+KCP is **unencrypted and unauthenticated**; it is not TLS or standard KCP wire
+compatibility. This adapter uses kcp-ovo's 28-byte big-endian header plus a Lynn
+session handshake/envelope; both peers must use this adapter. TCP+TLS remains
+available, but configuring TLS with KCP is rejected, never downgraded.
+
+`KcpConfig::idle_timeout_secs` defaults to 60 and must be nonzero. Drop/abort is
+asynchronous and discards queued data; a vanished UDP peer is reclaimed on idle
+timeout, not immediately. Frames retain the existing 10 MiB body limit and are
+split into bounded KCP messages. `send_data` means local queue acceptance;
+KCP flush waits for transport ACKs, **not application delivery**. Complete an
+application-level exchange before dropping its owner.
+
+Rust **1.99.1** is now required. To compose the upstream exact constraints,
+Tokio/bytes are pinned to **1.52.3/1.11.1** (including default TCP builds).
+Enabling KCP also activates upstream's **global mimalloc allocator** and Tokio
+`full`; applications declaring a different global allocator cannot link this
+feature without an upstream change. KCP is optional, not a promise of improved
+speed. See [KCP transport contract](docs/kcp.md) for lifecycle, bounds, metrics,
+security, interoperability and test details.
 
 ### TLS 1.3 Encryption (feature `tls`)
 

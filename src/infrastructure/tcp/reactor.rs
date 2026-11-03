@@ -35,7 +35,7 @@ use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
 /// Reactor event type
 enum EventType {
-    NewSocket((TcpStream, core::net::SocketAddr, ConnectionPermits)),
+    NewSocket((LynnStream, core::net::SocketAddr, ConnectionPermits)),
     ExecuteTask(TaskBodyOutChannel),
 }
 
@@ -52,7 +52,7 @@ impl ReactorEvent {
 
     #[inline(always)]
     pub(crate) fn crate_new_socket_event(
-        socket: TcpStream,
+        socket: LynnStream,
         addr: core::net::SocketAddr,
         permit: ConnectionPermits,
     ) -> Self {
@@ -501,7 +501,11 @@ impl CoreReactor {
                 if socket_permit {
                     if let Some(s) = socket {
                         info!("Accepted connection from: {}", addr);
-                        global_queue.push(ReactorEvent::crate_new_socket_event(s, addr, permit));
+                        global_queue.push(ReactorEvent::crate_new_socket_event(
+                            LynnStream::Plain(s),
+                            addr,
+                            permit,
+                        ));
                     }
                 } else {
                     if let Some(mut s) = socket {
@@ -545,7 +549,7 @@ impl TcpReactor {
         message_header_mark: u16,
         message_tail_mark: u16,
         lynn_router: Arc<LynnRouter>,
-        tcp_listener: TcpListener,
+        listener: crate::infrastructure::tcp::listener::TransportListener,
         allow_max_connections: Option<&usize>,
         server_max_reactor_taskpool_size: &usize,
         connection_limiter: Option<(
@@ -577,6 +581,20 @@ impl TcpReactor {
             }
         }
 
+        let tcp_listener = match listener {
+            crate::infrastructure::tcp::listener::TransportListener::Tcp(listener) => listener,
+            #[cfg(feature = "kcp")]
+            crate::infrastructure::tcp::listener::TransportListener::Kcp(listener) => {
+                listener
+                    .run(
+                        allow_max_connections.copied(),
+                        connection_limiter.map(|(_, _, limiter)| limiter),
+                        self.event_manager.get_global_queue(),
+                    )
+                    .await;
+                return;
+            },
+        };
         self.core_reactor
             .run(
                 tcp_listener,

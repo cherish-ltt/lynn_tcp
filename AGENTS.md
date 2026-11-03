@@ -74,7 +74,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.98.1"
+          toolchain: "1.99.1"
           components: rustfmt, clippy
 
       - name: Show rustup info
@@ -176,7 +176,7 @@ cognitive-complexity-threshold = 15
 too-many-arguments-threshold = 5
 too-many-lines-threshold = 30
 allow-unwrap-in-tests = true
-msrv = "1.98.1"
+msrv = "1.99.1"
 ```
 
 所有代码必须通过 `cargo clippy --all-targets -- -D warnings` 检查，无警告。
@@ -226,7 +226,7 @@ msrv = "1.98.1"
 
 - **保持本文件（AGENTS.md）更新**：每次修正代码或引入新规范后，请同步更新此文档。
 - **所有变更**必须通过 CI 检查（格式、lint、构建、测试）。
-- **版本锁定**：工具链版本统一使用环境中的版本，但需>=1.98.1（如 CI 和 clippy 配置所示）。
+- **版本锁定**：工具链版本统一使用环境中的版本，但需>=1.99.1（如 CI 和 clippy 配置所示）。
 - **遵循设计**：改动必须遵循原有结构设计，不得私自添加和修改，除非用户发出明确重构指令。
 - **后续开发追加 AGENTS.md 内容**：写入第 10 章节。
 - **测试**：编写单元测试，如果已经安装`cargo-llvm-cov`则检测测试覆盖率>=80%。
@@ -286,6 +286,7 @@ msrv = "1.98.1"
 docs/
 ├── update_logs/        # 每个版本的中文更新日志（vX.Y.Z.md）
 ├── version.md          # 全版本英文历史记录
+├── kcp.md              # KCP 传输、边界与验证契约
 ├── benchmark/          # 基准测试结果存档（JSON，按版本与机型命名）
 ├── FlowChart.png       # v1.x 架构流程图
 ├── FlowChart-v2.png    # v2.x（DDD + 洋葱架构）流程图
@@ -413,3 +414,13 @@ docs/
 - 网络字节按成功读写的实际长度统计，消息发送计数须在完整写入及刷新后增加；TLS 统计框架字节，不冒充线路流量或确认交付。
 - 内置自动采集和手工业务指标必须区分；禁止在示例中伪造内存/连接数据，取消时未排空队列的丢弃统计限制须明确。
 - 指标回归须隔离全局指标污染，覆盖真实 TCP/TLS、异常关闭、并发连接和精确字节差值。
+
+### 10.21 可选 KCP 传输
+
+- `kcp` 默认关闭，双端使用 `with_kcp` 显式选择；单实例不自动回退或同时监听。TLS+KCP 必须显式拒绝。
+- 使用 kcp-ovo 0.5.0 底层控制块及有界适配，保持现有帧/业务层不变；KCP 会话没有加密认证，不兼容标准 KCP 或上游高层 API。
+- 会话先取得总数/每 IP 配额再分派，地址与 conv 同时区分报文；活跃旧会话不被不同 conv 抢占，失效后清理；owner 持有 driver，Drop 必须取消。
+- KCP flush 等待已写字节的传输 ACK，shutdown 等待有序 EOF 确认；均不代表业务交付，强制释放不承诺排空。
+- KCP 保持 10 MiB 帧 body 上限；适配发送分片、接收队列及逐会话报文队列均有界。
+- CI 包含 `kcp`、`client,kcp`、`server,kcp`、`client,server,kcp`；回归覆盖 UDP 仿真、背压、重连、取消及独立进程双传输。
+- kcp-ovo 当前强制全局 mimalloc，必须在文档中告知下游；依赖调整和 MSRV 须以真实组合构建验证。

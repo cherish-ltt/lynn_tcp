@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "crate_version": "2.3.0",
+    "os": "macos",
+    "arch": "aarch64",
+    "transport": "kcp",
+    "logical_cores": 8,
+    "topology": "loopback, echo server in an independent process (bench_echo_server binary)",
+    "payload_bytes": 128,
+    "warmup_secs": 1,
+    "duration_secs": 5,
+    "client_channel_size": 8,
+    "unix_timestamp": 1793700878
+  },
+  "results": [
+    {"model": 1, "clients": 32, "requests": 7834, "responses": 7834, "throughput_rps": 1566.8, "latency": {"avg_ms": 20.423, "p50_ms": 19.933, "p95_ms": 36.153, "p99_ms": 42.613}},
+    {"model": 1, "clients": 128, "requests": 39023, "responses": 39023, "throughput_rps": 7804.6, "latency": {"avg_ms": 16.390, "p50_ms": 19.016, "p95_ms": 29.327, "p99_ms": 31.001}}
+  ]
+}

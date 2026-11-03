@@ -282,3 +282,9 @@ pub mod lynn_client {
     /// The client implementation, handling outgoing connections and requests.
     pub use super::application::client::lynn_client::LynnClient;
 }
+
+/// Optional plaintext KCP transport settings.
+#[cfg(all(feature = "kcp", any(feature = "client", feature = "server")))]
+pub mod lynn_kcp {
+    pub use crate::infrastructure::kcp::KcpConfig;
+}

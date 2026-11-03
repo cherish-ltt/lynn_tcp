@@ -12,7 +12,7 @@
 //!   tasks, one sending requests as fast as the bounded write channel allows,
 //!   one receiving responses. Measures sustained throughput only.
 //!
-//! The server and all clients run in one process over `127.0.0.1`; every
+//! The server runs in a separate process over `127.0.0.1`; every
 //! cell first warms up (not counted), then measures for a fixed window.
 //!
 //! # Run
@@ -220,6 +220,11 @@ impl Drop for BenchServer {
 
 /// Polls until the server accepts TCP connections.
 async fn wait_server(addr: SocketAddr) {
+    #[cfg(feature = "kcp")]
+    if std::env::var("LYNN_BENCH_TRANSPORT").as_deref() == Ok("kcp") {
+        drop(connect_client(addr).await);
+        return;
+    }
     for _ in 0..400 {
         if tokio::net::TcpStream::connect(addr).await.is_ok() {
             return;
@@ -268,8 +273,14 @@ async fn connect_client(addr: SocketAddr) -> LynnClient<'static> {
             .with_server_addr(addr)
             .expect("valid addr")
             .with_server_single_channel_size(&CLIENT_CHANNEL_SIZE)
-            .with_reconnect_max_attempts(&CONNECT_ATTEMPTS)
-            .build();
+            .with_reconnect_max_attempts(&CONNECT_ATTEMPTS);
+        #[cfg(feature = "kcp")]
+        let config = if std::env::var("LYNN_BENCH_TRANSPORT").as_deref() == Ok("kcp") {
+            config.with_kcp(lynn_tcp::lynn_kcp::KcpConfig::default())
+        } else {
+            config
+        };
+        let config = config.build();
         let client = LynnClient::new_with_config(config).await.start().await;
         if client.is_connected() {
             return client;
@@ -505,11 +516,12 @@ fn print_markdown(results: &[CellResult], args: &Args) {
 }
 
 fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Result<()> {
+    let transport = std::env::var("LYNN_BENCH_TRANSPORT").unwrap_or_else(|_| "tcp".into());
     let cores = std::thread::available_parallelism().map_or(0, |n| n.get());
     let mut out = String::with_capacity(1024 + results.len() * 256);
     let _ = writeln!(
         out,
-        "{{\n  \"meta\": {{\n    \"crate_version\": \"{}\",\n    \"os\": \"{}\",\n    \"arch\": \"{}\",\n    \"logical_cores\": {cores},\n    \"topology\": \"loopback, echo server in an independent process (bench_echo_server binary)\",\n    \"payload_bytes\": {},\n    \"warmup_secs\": {},\n    \"duration_secs\": {},\n    \"client_channel_size\": {CLIENT_CHANNEL_SIZE},\n    \"unix_timestamp\": {}\n  }},\n  \"results\": [",
+        "{{\n  \"meta\": {{\n    \"crate_version\": \"{}\",\n    \"os\": \"{}\",\n    \"arch\": \"{}\",\n    \"transport\": \"{transport}\",\n    \"logical_cores\": {cores},\n    \"topology\": \"loopback, echo server in an independent process (bench_echo_server binary)\",\n    \"payload_bytes\": {},\n    \"warmup_secs\": {},\n    \"duration_secs\": {},\n    \"client_channel_size\": {CLIENT_CHANNEL_SIZE},\n    \"unix_timestamp\": {}\n  }},\n  \"results\": [",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH,
@@ -554,6 +566,14 @@ fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Resul
 
 #[tokio::main]
 async fn main() {
+    let transport = std::env::var("LYNN_BENCH_TRANSPORT").unwrap_or_else(|_| "tcp".into());
+    assert!(
+        transport == "tcp" || transport == "kcp",
+        "LYNN_BENCH_TRANSPORT must be tcp or kcp"
+    );
+    #[cfg(not(feature = "kcp"))]
+    assert!(transport != "kcp", "rebuild with --features kcp");
+    println!("transport: {transport}");
     let args = match parse_args() {
         Ok(args) => args,
         Err(err) => {

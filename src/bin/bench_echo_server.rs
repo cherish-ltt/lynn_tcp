@@ -38,6 +38,9 @@ async fn echo_handler(input_buf_vo: InputBufVO) -> HandlerResult {
 }
 
 fn main() {
+    let kcp = std::env::var("LYNN_BENCH_TRANSPORT").as_deref() == Ok("kcp");
+    #[cfg(not(feature = "kcp"))]
+    assert!(!kcp, "rebuild with --features kcp");
     let port: u16 = std::env::args()
         .nth(1)
         .and_then(|arg| arg.parse().ok())
@@ -51,10 +54,16 @@ fn main() {
         // Probe a free port first so the harness can learn it (the server
         // API owns the actual bind, so port 0 cannot be reported back).
         let port = if port == 0 {
-            let probe = TcpListener::bind("127.0.0.1:0").expect("probe bind");
-            let port = probe.local_addr().expect("probe addr").port();
-            drop(probe);
-            port
+            if kcp {
+                std::net::UdpSocket::bind("127.0.0.1:0")
+                    .expect("probe bind")
+                    .local_addr()
+                    .unwrap()
+                    .port()
+            } else {
+                let probe = TcpListener::bind("127.0.0.1:0").expect("probe bind");
+                probe.local_addr().expect("probe addr").port()
+            }
         } else {
             port
         };
@@ -65,8 +74,14 @@ fn main() {
             .with_server_max_connections(Some(&MAX_CONNECTIONS))
             .with_server_max_taskpool_size(&TASKPOOL)
             .with_max_connections_per_ip(&UNLIMITED_PER_IP)
-            .with_connection_rate_limit(&UNLIMITED_RATE)
-            .build();
+            .with_connection_rate_limit(&UNLIMITED_RATE);
+        #[cfg(feature = "kcp")]
+        let config = if kcp {
+            config.with_kcp(lynn_tcp::lynn_kcp::KcpConfig::default())
+        } else {
+            config
+        };
+        let config = config.build();
         println!("READY {port}");
         use std::io::Write as _;
         std::io::stdout().flush().expect("flush READY line");

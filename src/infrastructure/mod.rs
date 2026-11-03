@@ -11,3 +11,6 @@ pub(crate) mod tcp;
 #[cfg(feature = "tls")]
 pub(crate) mod tls;
 pub(crate) mod validation;
+
+#[cfg(all(feature = "kcp", any(feature = "client", feature = "server")))]
+pub(crate) mod kcp;

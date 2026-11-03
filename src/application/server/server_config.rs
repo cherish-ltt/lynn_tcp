@@ -53,6 +53,8 @@ pub struct LynnServerConfig<'a> {
     /// Optional TLS 1.3 configuration. `None` keeps TLS disabled (default).
     #[cfg(feature = "tls")]
     tls: Option<crate::infrastructure::tls::tls_config::TlsServerConfig>,
+    #[cfg(feature = "kcp")]
+    pub(crate) kcp: Option<crate::infrastructure::kcp::KcpConfig>,
 }
 
 /// Implementation for LynnServerConfig, providing methods to create and get the configuration.
@@ -85,6 +87,8 @@ impl<'a> LynnServerConfig<'a> {
             send_buffer_size: &DEFAULT_SEND_BUFFER_SIZE,
             #[cfg(feature = "tls")]
             tls: None,
+            #[cfg(feature = "kcp")]
+            kcp: None,
         }
     }
 
@@ -412,6 +416,13 @@ impl<'a> LynnServerConfigBuilder<'a> {
         server_max_reactor_taskpool_size: &'a usize,
     ) -> Self {
         self.lynn_config.server_max_reactor_taskpool_size = server_max_reactor_taskpool_size;
+        self
+    }
+
+    /// Selects plaintext KCP instead of TCP. TLS and KCP cannot be combined.
+    #[cfg(feature = "kcp")]
+    pub fn with_kcp(mut self, config: crate::infrastructure::kcp::KcpConfig) -> Self {
+        self.lynn_config.kcp = Some(config);
         self
     }
 
