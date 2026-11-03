@@ -252,7 +252,7 @@ metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达
 | 方法 | 说明 | 默认值 |
 |------|------|--------|
 | `with_addr()` | 服务器监听地址 | `0.0.0.0:9177` |
-| `with_server_max_connections()` | 最大并发连接数 | `100_000` |
+| `with_server_max_connections()` | 已接受连接总上限，包含排队、TLS 握手与在线会话（`None` = 不限制） | `100_000` |
 | `with_server_max_taskpool_size()` | 异步任务池大小（吞吐量） | `512` |
 | `with_server_single_process_permit()` | 每连接排队及执行中的请求上限（0=拒绝请求） | `14` |
 | `with_server_check_heart_interval()` | 心跳检测间隔（秒） | `60` |

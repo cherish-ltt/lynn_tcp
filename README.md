@@ -253,7 +253,7 @@ requests close the connection. Unknown paths still return HTTP 404.
 | Method | Description | Default |
 |--------|-------------|---------|
 | `with_addr()` | Server listen address | `0.0.0.0:9177` |
-| `with_server_max_connections()` | Max concurrent connections | `100_000` |
+| `with_server_max_connections()` | Max accepted connections, including queued/TLS handshakes and active sessions (`None` = unlimited) | `100_000` |
 | `with_server_max_taskpool_size()` | Async task pool size (throughput) | `512` |
 | `with_server_single_process_permit()` | Max queued/running requests per connection (0 = reject requests) | `14` |
 | `with_server_check_heart_interval()` | Heartbeat check interval (s) | `60` |
