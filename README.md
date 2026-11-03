@@ -308,6 +308,10 @@ The client flushes each frame, so TLS backpressure does not leave the last reque
 for another message or heartbeat. Write or flush failure ends the connection; partially
 sent frames are not retried. Dropping the client can still cancel blocked flushing.
 
+The first connection attempt is immediate. The reconnect interval applies after both
+failed attempts and established connections ending, including peers that accept then
+immediately close. Zero explicitly disables this delay; dropping the client cancels it.
+
 ---
 
 ### TLS 1.3 Encryption (feature `tls`)

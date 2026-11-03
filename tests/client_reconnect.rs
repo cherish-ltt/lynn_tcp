@@ -184,3 +184,33 @@ async fn initial_connect_failure_leaves_client_disconnected() {
     );
     assert!(got.unwrap().is_none());
 }
+
+#[tokio::test]
+async fn accepted_then_closed_sessions_obey_reconnect_interval() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = LynnClientConfigBuilder::new()
+        .with_server_addr(listener.local_addr().unwrap())
+        .unwrap()
+        .with_server_check_heart_interval(&600)
+        .with_reconnect_interval_secs(&1)
+        .build();
+    let client = LynnClient::new_with_config(config).await.start().await;
+    let (mut peer, _) = listener.accept().await.unwrap();
+    for _ in 0..2 {
+        let disconnected_at = Instant::now();
+        drop(peer);
+        assert!(
+            timeout(Duration::from_millis(150), listener.accept())
+                .await
+                .is_err(),
+            "accepted-then-closed sessions must not bypass the reconnect interval"
+        );
+        (peer, _) = timeout(Duration::from_secs(2), listener.accept())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(disconnected_at.elapsed() >= Duration::from_secs(1));
+    }
+    drop(client);
+    drop(peer);
+}
