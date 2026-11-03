@@ -11,6 +11,7 @@ use tracing_subscriber::fmt;
 
 use crate::application::server::server_common::spawn_check_heart;
 use crate::application::server::server_config::LynnServerConfig;
+use crate::application::server::server_tasks::ServerTasks;
 use crate::const_config::{SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK};
 use crate::domain::handler::handler_system::{AsyncFunc, HandlerContext, IHandler, IntoSystem};
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType, LynnUser};
@@ -123,6 +124,8 @@ pub struct LynnServer<'a> {
     reactor: TcpReactor,
     /// Type-keyed shared state injected into handlers through `AppState<T>`.
     state_registry: Arc<StateRegistry>,
+    _task_owner: tokio::sync::watch::Sender<()>,
+    tasks: ServerTasks,
 }
 
 /// Implementation of methods for the LynnServer struct.
@@ -135,12 +138,15 @@ impl<'a> LynnServer<'a> {
     pub async fn new() -> Self {
         let lynn_config = LynnServerConfig::default();
         let state_registry = Arc::new(StateRegistry::new());
+        let (task_owner, tasks) = ServerTasks::new();
         Self {
             clients: ClientsStruct(Arc::new(DashMap::new())),
             lynn_router: Arc::new(LynnRouter::new()),
             lynn_config,
-            reactor: TcpReactor::new(state_registry.clone()),
+            reactor: TcpReactor::new(state_registry.clone(), tasks.clone()),
             state_registry,
+            _task_owner: task_owner,
+            tasks,
         }
     }
 
@@ -292,11 +298,11 @@ impl<'a> LynnServer<'a> {
         let server_check_heart_interval = *self.lynn_config.get_server_check_heart_interval();
         let server_check_heart_timeout_time =
             *self.lynn_config.get_server_check_heart_timeout_time();
-        spawn_check_heart(
+        self.tasks.spawn(spawn_check_heart(
             server_check_heart_interval,
             server_check_heart_timeout_time,
             clients,
-        );
+        ));
     }
 
     /// Runs the server until cancelled, returning initialization or transport errors.
@@ -319,8 +325,6 @@ impl<'a> LynnServer<'a> {
             self.lynn_config.get_server_addr(),
             tls_state_note(&self.lynn_config)
         );
-
-        self.check_heart().await;
 
         // Create connection limiter if rate limiting or per-IP limiting is enabled
         let rate_limit = *self.lynn_config.get_server_connection_rate_limit();
@@ -356,6 +360,8 @@ impl<'a> LynnServer<'a> {
         };
         #[cfg(not(feature = "tls"))]
         let stream_acceptor = Arc::new(StreamAcceptor::Plain);
+
+        self.check_heart().await;
 
         self.reactor
             .start(
