@@ -14,10 +14,7 @@ use tracing::{error, info, warn};
 
 use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::ReactorEventSender;
-use crate::const_config::{
-    DEFAULT_MAX_RECEIVE_BYTES_SIZE, DEFAULT_MESSAGE_HEADER_MARK, DEFAULT_MESSAGE_TAIL_MARK,
-    SERVER_MESSAGE_HEADER_MARK, SERVER_MESSAGE_TAIL_MARK,
-};
+use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
 use crate::domain::handler::handler_system::AsyncFunc;
 use crate::domain::handler::handler_system::{ClientsContext, HandlerContext};
 use crate::domain::model::handler_result::HandlerResult;
@@ -97,6 +94,8 @@ pub(super) async fn spawn_check_heart(
 pub(crate) async fn check_handler_result(
     mut handler_result: HandlerResult,
     clients: ClientsStructType,
+    message_header_mark: u16,
+    message_tail_mark: u16,
 ) {
     // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
     if handler_result.get_is_send() {
@@ -104,14 +103,7 @@ pub(crate) async fn check_handler_result(
         // response would fall back to the default marks even on servers
         // configured with custom header/tail marks.
         if !handler_result.is_with_mark() {
-            handler_result.set_marks(
-                *SERVER_MESSAGE_HEADER_MARK
-                    .get()
-                    .unwrap_or(&DEFAULT_MESSAGE_HEADER_MARK),
-                *SERVER_MESSAGE_TAIL_MARK
-                    .get()
-                    .unwrap_or(&DEFAULT_MESSAGE_TAIL_MARK),
-            );
+            handler_result.set_marks(message_header_mark, message_tail_mark);
         }
         let response = handler_result.get_response_data();
         if let Some(response) = response {

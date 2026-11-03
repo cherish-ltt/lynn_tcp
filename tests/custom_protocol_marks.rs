@@ -1,7 +1,4 @@
 //! Integration tests with custom message header/tail marks.
-//!
-//! Lives in its own test binary because the server-side marks are process-global
-//! (`OnceLock` in `const_config`), initialized by the first server that starts.
 
 use std::time::Duration;
 

@@ -1,7 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::{LazyLock, OnceLock},
-};
+use std::{net::SocketAddr, sync::LazyLock};
 
 pub(crate) const DEFAULT_ADDR: LazyLock<SocketAddr> =
     LazyLock::new(|| DEFAULT_IPV4.parse::<SocketAddr>().unwrap());
@@ -26,10 +23,6 @@ pub(crate) const DEFAULT_CHECK_HEART_TIMEOUT_TIME: u64 = 30;
 pub(crate) const DEFAULT_MESSAGE_HEADER_MARK: u16 = 9177;
 /// The default message tail mark, used to identify the end of a message.
 pub(crate) const DEFAULT_MESSAGE_TAIL_MARK: u16 = 7719;
-/// A OnceLock for the server message header mark, used to store the message header mark for the server.
-pub(crate) static SERVER_MESSAGE_HEADER_MARK: OnceLock<u16> = OnceLock::new();
-/// A OnceLock for the server message tail mark, used to store the message tail mark for the server.
-pub(crate) static SERVER_MESSAGE_TAIL_MARK: OnceLock<u16> = OnceLock::new();
 /// The default maximum number of connections allowed per IP address.
 pub(crate) const DEFAULT_MAX_CONNECTIONS_PER_IP: usize = 10;
 /// The default connection rate limit (connections per second). 0 means no limit.
