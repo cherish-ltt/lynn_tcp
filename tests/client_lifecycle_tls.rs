@@ -78,6 +78,10 @@ async fn drop_closes_authenticated_tls_connection() {
         .expect("TLS transport must close promptly");
     match closed {
         Ok(n) => assert_eq!(n, 0),
-        Err(error) => assert_eq!(error.kind(), std::io::ErrorKind::UnexpectedEof),
+        // Owner cancellation does not promise close_notify or drain TLS tickets.
+        Err(error) => assert!(matches!(
+            error.kind(),
+            std::io::ErrorKind::UnexpectedEof | std::io::ErrorKind::ConnectionReset
+        )),
     }
 }
