@@ -351,6 +351,10 @@ let config = LynnClientConfigBuilder::new()
 
 Miss-configured TLS fails fast (missing files, invalid pairs) and handshake failures simply drop the offending connection. Run the runnable demo: `cargo run --example tls_example --features tls`.
 
+An explicitly configured mTLS client identity is preserved even in development-only
+`danger_accept_invalid_certs` mode. Client certificates and private keys must be supplied
+together; incomplete or invalid identities fail configuration instead of silently disabling mTLS.
+
 Without `with_server_name`, certificate name verification uses the server's IPv4 or IPv6
 address (for example, `[::1]:9177` requires an `::1` IP SAN). An explicit server name takes
 precedence; CA trust and name verification remain enabled by default.

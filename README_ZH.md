@@ -346,6 +346,9 @@ let config = LynnClientConfigBuilder::new()
 
 TLS 配置错误（文件缺失、证书私钥不配对）会在启动时立即报错；握手失败的连接会被直接关闭。可运行演示：`cargo run --example tls_example --features tls`。
 
+显式配置的 mTLS 客户端身份在仅供开发的 `danger_accept_invalid_certs` 模式下仍会保留。
+客户端证书与私钥必须同时提供；残缺或无效身份会使配置失败，不会静默关闭 mTLS。
+
 未设置 `with_server_name` 时，证书名称校验使用服务器的 IPv4 或 IPv6 地址
 （例如 `[::1]:9177` 需要证书包含 `::1` IP SAN）。显式服务器名称优先，默认仍校验 CA 信任及证书名称。
 
