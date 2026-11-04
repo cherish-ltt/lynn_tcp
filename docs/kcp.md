@@ -1,6 +1,6 @@
 # KCP 配置、迁移与场景指南
 
-适用 lynn_tcp **v2.4.0**、kcp-ovo **0.5.2**。配置和安全边界以本页为准；合入前的性能证据见 [0.5.2 复测](kcp-v0.5.2-validation.md)，不保证其他网络或负载复现同样收益。
+适用 lynn_tcp **v2.4.0 后的当前源码**、kcp-ovo **0.6.0**；已发布 v2.4.0 使用 0.5.2。配置和安全边界以本页为准；当前依赖对照见 [0.5.2/0.6.0 配对复测](kcp-v0.6.0-validation.md)，历史证据见 [0.5.2 复测](kcp-v0.5.2-validation.md)，不保证其他网络或负载复现同样收益。
 
 ## 从 TCP 或早期 PR 迁移
 
@@ -44,15 +44,17 @@ fn main() -> lynn_tcp::Result<()> {
 
 ## 建议场景与调整顺序
 
+下表数值来自 [历史 0.5.2 复测](kcp-v0.5.2-validation.md)，不是 0.6.0 测量值；新版配对结果见 [0.6.0 复测](kcp-v0.6.0-validation.md)。
+
 | 场景 | 建议 | 依据与限制 |
 |---|---|---|
-| 回环、稳定局域网、低丢包或吞吐优先 | 优先 TCP | 本次纯回环 KCP 仅为 TCP 的 29.9%；大文件/持续流未测，不预设 KCP 优势 |
+| 回环、稳定局域网、低丢包或吞吐优先 | 优先 TCP | 历史纯回环 KCP 仅为 TCP 的 29.9%；大文件/持续流未测，不预设 KCP 优势 |
 | 有 RTT、受控 UDP 链路、延迟敏感小消息 | 评估默认 fast | 128 B、32 并发、20 ms RTT 无丢包为 TCP 的 94.5%；1 并发低丢包仍可能落后 |
 | 独立随机丢包明显的小消息交互 | 目标环境 A/B 验证 KCP fast | 同轮 10%/20%/30% 丢包吞吐为 TCP 的 2.21/4.40/7.42 倍，不代表突发丢包或拥塞链路 |
 | 需要认证、加密，或不可信共享公网 | 优先 TCP+TLS | 本适配无认证/加密；TLS+KCP 不支持，fast nocwnd 存在公平性/拥塞风险 |
 | 需要保守参数基线或排查 fast 取舍 | 对照 normal | 开启拥塞窗口约束、100 ms 周期输出，可能增加时延；未单独验证其公网公平性 |
 
-先保持默认参数，用真实 payload/并发、目标 RTT/带宽和丢包分布比较 TCP/fast/normal；同时记录吞吐、尾延迟、请求/回复差值、连接错误及资源占用，而非只看响应/s。主要性能表采用固定顺序短时测试，不是统计显著性或容量上限证明。
+先保持默认参数，用真实 payload/并发、目标 RTT/带宽和丢包分布比较 TCP/fast/normal；同时记录吞吐、尾延迟、请求/回复差值、连接错误及资源占用，而非只看响应/s。该历史研究采用固定顺序短时测试，0.6.0 配对复测交错新旧顺序；两者均不是统计显著性或容量上限证明。
 
 确有带宽时延积/发送窗口瓶颈时再逐步增大 `snd_wnd/rcv_wnd`；每连接仅一个在途小请求时，增大窗口通常不能解决调度或 ACK 等待成本。interval 更小会增加唤醒与 CPU 成本，且本地 fast 已即时驱动新数据/ACK，不应盲目改成 1 ms。MTU 必须保持 1400；不得以放大队列、关闭 ACK 等待或启用原生流模式来换取跑分。
 
@@ -63,9 +65,10 @@ fn main() -> lynn_tcp::Result<()> {
 - TCP 默认不变；feature `kcp` 默认关闭，双端 builder 的 `with_kcp(KcpConfig)` 显式选择 UDP/KCP；不自动回退、不同时监听。
 - TCP 专用的 nodelay、keepalive 和 socket buffer 配置不作用于 KCP；KCP 通过 `KcpConfig::protocol` 设置底层参数，框架读写超时继续生效。
 - 业务 handler、AppState、多路由、广播和既有帧格式复用；只改变传输接入。独立角色关闭默认 feature 后使用 `client,kcp` 或 `server,kcp`。
-- 固定 kcp-ovo `=0.5.2`，直接使用 `core::kcp::Kcp`，不使用消息式高层 KcpStream/KcpListener。上游消息 API 缺少独立 accept/关闭会话及框架所需的所有权控制。
+- 固定 kcp-ovo `=0.6.0`，直接使用 `core::kcp::Kcp`，不使用消息式高层 KcpStream/KcpListener。上游消息 API 缺少独立 accept/关闭会话及框架所需的所有权控制。
+- `KcpConfig.protocol` 暴露上游配置类型；应用若另外依赖 `kcp-ovo =0.5.2` 并直接传入配置，需同步升级，或改用本库的 `lynn_kcp::KcpOptions` 重导出，避免两个版本的 Rust 类型不匹配。普通 builder/默认配置与线路格式不变。
 - Rust 1.99.1；上游精确锁定使 Tokio/bytes 必须与本仓库一致，采用 `=1.52.3` / `=1.11.1`，不能把不同 semver-compatible 精确版本当成可以重复安装。
-- 上游 [#36](https://github.com/cherish-ltt/kcp-ovo/issues/36) 已修复；当前 0.5.2 不再强制全局 mimalloc，下游自定义全局分配器可与 `kcp` 共存，已有实际编译/运行回归。上游仍启用 Tokio `full`。没有修改、fork 或发布上游。
+- 上游 [#36](https://github.com/cherish-ltt/kcp-ovo/issues/36) 已修复；0.5.2 起不再强制全局 mimalloc，下游自定义全局分配器可与 `kcp` 共存，已有实际编译/运行回归。上游仍启用 Tokio `full`。没有修改、fork 或发布上游。
 
 ## Fast、Normal 与流模式
 
@@ -101,7 +104,7 @@ let custom = KcpConfig {
 
 本适配必须 `stream_mode=false`：HELLO、DATA、EOF 是 KCP 消息封装；直接打开上游流模式会合并/拆分这些边界。因此两端均在启动前**拒绝** stream_mode=true，而非静默忽略。应用仍获得 AsyncRead/AsyncWrite 字节流；将来若采用原生 KCP 流模式，需要单独版本化并实现有界会话封装解析，不能仅翻转 bool。
 
-历史性能根因见 [KCP 性能研究](kcp-performance.md)，当前验收见 [0.5.2 复测](kcp-v0.5.2-validation.md)。已报告的 [kcp-ovo #38](https://github.com/cherish-ltt/kcp-ovo/issues/38) 在 0.5.2 修复并关闭；本项目验证 normal 累加 max、fast 累加半个 RTO，以及使用新 RTO 安排下次重传。未在下游私改算法；修复改变丢包恢复时刻，不能把原版 fast 的宣传值或旧版数据当本适配保证。
+历史性能根因见 [KCP 性能研究](kcp-performance.md)，当前验收见 [0.5.2/0.6.0 配对复测](kcp-v0.6.0-validation.md)。已报告的 [kcp-ovo #38](https://github.com/cherish-ltt/kcp-ovo/issues/38) 在 0.5.2 修复并关闭，0.6.0 保留该策略；本项目验证 normal 累加 max、fast 累加半个 RTO，以及使用新 RTO 安排下次重传。未在下游私改算法；不能把上游微基准或旧版数据当本适配端到端性能保证。
 
 ## 安全及互操作
 

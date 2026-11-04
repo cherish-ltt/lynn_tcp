@@ -698,9 +698,9 @@ dependencies = [
 
 [[package]]
 name = "kcp-ovo"
-version = "0.5.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1937c022fd6dbd720d971706f8098af8f30d4e52f04f98aeeaa72e30459186fe"
+checksum = "e3daa3ce7786fa8f056d2c2b0170291103d7613b189c9ebce30ebe52827a1062"
 dependencies = [
  "bytes",
  "dashmap",

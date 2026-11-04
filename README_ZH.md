@@ -29,7 +29,8 @@
 ### v2.4.0 - 可选 KCP 与真实传输指标
 
 PR #89/#90 新增底层 KCP 传输、自定义 fast 配置，以及服务端连接、消息和字节自动指标。
-TCP 保持默认；kcp-ovo **0.5.2** 已解除上游全局分配器及重传退避缺陷。
+TCP 保持默认；v2.4.0 发布时使用 kcp-ovo **0.5.2**，解除上游全局分配器及重传退避缺陷。
+当前源码锁定 **0.6.0**，详见 [依赖配对复测](docs/kcp-v0.6.0-validation.md)，不代表 lynn_tcp 新版本已发布。
 要求 Rust **1.99.1**，Tokio/bytes 固定为 **1.52.3/1.11.1**，包括默认 TCP 构建。
 升级时删除重复的内置指标手工累加。
 详见 [v2.4.0 变更日志](docs/update_logs/v2.4.0.md)、[KCP 迁移与建议场景](docs/kcp.md)
@@ -246,7 +247,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `server` | TCP 服务器，支持多路由异步 Handler、心跳、连接管理 | ✅ |
 | `client` | TCP 客户端，支持消息收发与断线自动重连 | ✅ |
 | `metrics` | Prometheus 集成（17 个生产级指标，HTTP /metrics 端点） | ✅（由 `server` 启用） |
-| `kcp` | 基于 kcp-ovo 0.5.2 的可选明文 UDP/KCP 传输 | 默认关闭 |
+| `kcp` | 基于 kcp-ovo 0.6.0 的可选明文 UDP/KCP 传输 | 默认关闭 |
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
@@ -341,12 +342,12 @@ TCP 保持默认。启用 `kcp` 后，分别使用
 消息/流模式与 fast/normal 独立。本适配的 HELLO/DATA/EOF 封装要求**消息模式**，
 显式拒绝 `stream_mode=true`，但框架仍使用字节流。fast 关闭拥塞窗口控制，
 不关闭对端窗口或队列上限，可能降低网络公平性。详见 [配置与迁移](docs/kcp.md)
-和 [当前性能实测](docs/kcp-v0.5.2-validation.md)（含 10%/20%/30% 丢包研究及验收总结），
+和 [当前性能实测](docs/kcp-v0.6.0-validation.md)（含 10%/20%/30% 丢包研究及验收总结），
 不承诺等同 TCP。
 
 **按场景选择：**回环/局域网、大流量吞吐或低丢包优先 TCP，需要认证和加密时使用 TCP+TLS。
 延迟敏感的小消息、受控且有丢包的 UDP 链路可以评估 KCP fast，但须先验证目标网络。
-合入前 128 B、32 并发实测：20 ms RTT 无丢包为 TCP 的 94.5%，10%/20%/30%
+历史 0.5.2、128 B、32 并发实测：20 ms RTT 无丢包为 TCP 的 94.5%，10%/20%/30%
 丢包为 TCP 的 2.21/4.40/7.42 倍；纯回环仅 29.9%。这是发布前数据，不是 SLA 保证。
 Normal 是保守对照预设，不代表已证明更快或适合生产。
 
@@ -367,12 +368,15 @@ TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
 **不代表业务交付**；释放 owner 前应完成应用层确认交互。
 
 现要求 Rust **1.99.1**。为兼容上游精确约束，Tokio/bytes 锁定为
-**1.52.3/1.11.1**（包括默认 TCP 构建）。锁定的 kcp-ovo **0.5.2** 已修复全局分配器冲突
+**1.52.3/1.11.1**（包括默认 TCP 构建）。锁定的 kcp-ovo **0.6.0** 保留 0.5.2 的全局分配器冲突
 （[#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)）与超时退避/重传期限
-（[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)），支持应用自选全局分配器。
+（[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)）修复，支持应用自选全局分配器。
 上游仍启用 Tokio `full`；底层适配与自定义 fast 配置不变。
-回归结果与同条件 TCP/KCP 实测见 [0.5.2 复测](docs/kcp-v0.5.2-validation.md)，
-历史 0.5.0 数据按版本独立保留。KCP 默认关闭，不承诺更快。
+回归结果与同条件 TCP/KCP 实测见 [0.5.2/0.6.0 配对复测](docs/kcp-v0.6.0-validation.md)，
+历史 0.5.0/0.5.2 数据按版本独立保留。KCP 默认关闭，不承诺更快。
+配对复测既有改善也有下降，不支持普遍提速；报告保留原矩阵及单独汇报的补测。
+应用若直接传入另行依赖的上游配置类型，须同步升级该依赖，或使用
+`lynn_kcp::KcpOptions` 重导出，避免不同版本的 Rust 类型不匹配。
 生命周期、内存边界、指标、安全、互操作与测试见 [KCP 传输契约](docs/kcp.md)。
 
 ### TLS 1.3 传输加密（feature `tls`）
