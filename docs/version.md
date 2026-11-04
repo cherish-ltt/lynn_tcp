@@ -1,5 +1,29 @@
 # Version Note
 
+### v2.4.1
+
+#### v2.4.1
+
+Released on 2026-11-04. PR [#96](https://github.com/cherish-ltt/lynn_tcp/pull/96) upgrades the optional KCP dependency from 0.5.2 to 0.6.0 and adds downstream compatibility contracts and paired performance evidence. See the [full changelog](update_logs/v2.4.1.md), [KCP migration guide](kcp.md) and [paired validation report](kcp-v0.6.0-validation.md).
+
+1.build / test — dependency upgrade
+
+- Pin kcp-ovo `=0.6.0`; retain Rust 1.99.1, Tokio 1.52.3 and bytes 1.11.1. Upstream reduces parsing/receive/ACK/queue/allocation overhead; local production transport and benchmark source remain unchanged.
+- Add fast/normal input-buffer reuse, single/multi-fragment reception and reordered/duplicate/full-window recovery contracts; the same four dependency tests pass on both versions, including the existing allocator/RTO checks.
+- TCP remains default, KCP remains opt-in, and the custom fast preset, message framing, bounded queues, cancellation and ACK flush semantics are unchanged.
+
+2.compatibility and upgrade
+
+- Update to `lynn_tcp = "=2.4.1"`. Although this is a patch release, `KcpConfig.protocol` exposes an upstream type: applications passing a separately imported 0.5.2 configuration must also upgrade that dependency or use the `lynn_kcp::KcpOptions` re-export.
+- Ordinary builders and valid wire formats are unchanged. KCP is still unauthenticated/unencrypted; TLS+KCP and native stream mode remain rejected. Transport ACKs are not application delivery; fast nocwnd does not guarantee fairness.
+
+3.verification and measured limits
+
+- Squash commit `1ab96be` has the same tree as validated `8375e18`; its PR CI passed all 11 jobs. Prior local validation passed 171 default / 225 all-feature tests including doctests, ten isolated feature combinations, process blackboxes and all prek hooks; separate line coverage was 92.97% (4165/4480), excluding upstream code.
+- At 32 clients, three-run median KCP throughput changed by +18.1% for 128-byte clean loopback, -11.8% for 128-byte/20-ms/30%-loss, and -13.4% for 16-KiB clean loopback. Separately reported 10-second follow-ups gave +9.8%/-4.0%/+3.9%; TCP controls also fluctuated. There is no proven general speedup or stable regression attribution.
+- All 132 invocations / 228 cells exited successfully, but the original study retained 149 finite-window reply deficits and one 0/0 cell; the follow-up retained 99 deficits. Successful exit does not establish progress or full delivery, and deficits do not prove permanent loss.
+- Preserve pre-release sample names, versions, hashes and all results; no performance or coverage rerun under v2.4.1 is implied. Release packaging and publication are verified separately. Public networks, Windows, long soaks, congestion/fairness, correlated loss and CPU/memory profiles remain unverified.
+
 ### v2.4.0
 
 #### v2.4.0

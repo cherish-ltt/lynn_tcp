@@ -26,18 +26,19 @@ English | [简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/READM
 
 It adopts a **DDD (Domain-Driven Design) + Onion Architecture**, separating core domain logic from infrastructure concerns for better maintainability and extensibility.
 
-### v2.4.0 - Optional KCP And Real Transport Metrics
+### v2.4.1 - KCP Dependency Upgrade And Paired Validation
 
-PRs #89/#90 add opt-in low-level KCP transport with custom fast configuration and
-automatic server connection, message and byte metrics. TCP remains the default.
-The v2.4.0 release used kcp-ovo **0.5.2**, resolving the upstream allocator and
-retransmission-backoff defects. This source revision pins **0.6.0**; see the
-[paired dependency retest](docs/kcp-v0.6.0-validation.md), not a new lynn_tcp release.
-Rust **1.99.1** is required, with Tokio/bytes pinned to **1.52.3/1.11.1** even for TCP.
-Remove duplicate manual updates to built-in metrics when upgrading.
-See the [v2.4.0 changelog](docs/update_logs/v2.4.0.md), [KCP migration and scenarios](docs/kcp.md)
-and [metrics migration](METRICS.md). Earlier users must also apply the
-[v2.3.0 return-type changes](docs/update_logs/v2.3.0.md); KCP is not a universal speed or security upgrade.
+PR #96 upgrades kcp-ovo from **0.5.2 to 0.6.0**, retaining the transport adapter,
+custom fast preset and allocator/retransmission fixes. TCP remains the default;
+KCP remains opt-in and unencrypted. The [paired dependency retest](docs/kcp-v0.6.0-validation.md)
+records both gains and declines, not a general speedup; its pre-release samples are unchanged.
+Applications passing separately imported upstream configuration types must upgrade
+that dependency too, or use `lynn_kcp::KcpOptions`, even though this is a patch release.
+Rust **1.99.1** and Tokio/bytes **1.52.3/1.11.1** remain unchanged, including TCP builds.
+See the [v2.4.1 changelog](docs/update_logs/v2.4.1.md) and [KCP migration and scenarios](docs/kcp.md).
+Users upgrading from before v2.4.0 must also remove duplicate built-in
+[metrics updates](METRICS.md); earlier users must apply the
+[v2.3.0 return-type changes](docs/update_logs/v2.3.0.md).
 
 ---
 
@@ -93,7 +94,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lynn_tcp = "=2.4.0"
+lynn_tcp = "=2.4.1"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -102,7 +103,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.0", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.4.1", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -111,7 +112,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.0", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.4.1", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -405,7 +406,7 @@ TLS is **disabled by default**. Enable the `tls` feature and attach certificates
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.0", features = ["tls"] }
+lynn_tcp = { version = "=2.4.1", features = ["tls"] }
 ```
 
 ```rust

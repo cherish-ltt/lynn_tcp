@@ -26,16 +26,17 @@
 
 采用 **DDD（领域驱动设计）+ 洋葱架构**，将核心领域逻辑与基础设施实现分离，提升可维护性和可扩展性。
 
-### v2.4.0 - 可选 KCP 与真实传输指标
+### v2.4.1 - KCP 依赖升级与配对验证
 
-PR #89/#90 新增底层 KCP 传输、自定义 fast 配置，以及服务端连接、消息和字节自动指标。
-TCP 保持默认；v2.4.0 发布时使用 kcp-ovo **0.5.2**，解除上游全局分配器及重传退避缺陷。
-当前源码锁定 **0.6.0**，详见 [依赖配对复测](docs/kcp-v0.6.0-validation.md)，不代表 lynn_tcp 新版本已发布。
-要求 Rust **1.99.1**，Tokio/bytes 固定为 **1.52.3/1.11.1**，包括默认 TCP 构建。
-升级时删除重复的内置指标手工累加。
-详见 [v2.4.0 变更日志](docs/update_logs/v2.4.0.md)、[KCP 迁移与建议场景](docs/kcp.md)
-和 [指标迁移](METRICS.md)。更早版本用户仍须适配
-[v2.3.0 返回类型变更](docs/update_logs/v2.3.0.md)；KCP 不代表普遍提速或安全升级。
+PR #96 将 kcp-ovo 从 **0.5.2 升级至 0.6.0**，保留传输适配、自定义 fast 配置及分配器/重传修复。
+TCP 保持默认，KCP 仍需显式启用且无加密。[依赖配对复测](docs/kcp-v0.6.0-validation.md)
+同时记录改善与下降，不支持普遍提速；发布前原始样本保持不变。
+尽管是补丁版本，直接传入另行导入的上游配置类型的应用仍须同步升级该依赖，
+或使用 `lynn_kcp::KcpOptions` 重导出。
+Rust **1.99.1** 与 Tokio/bytes **1.52.3/1.11.1** 不变，包括默认 TCP 构建。
+详见 [v2.4.1 变更日志](docs/update_logs/v2.4.1.md) 和 [KCP 迁移与建议场景](docs/kcp.md)。
+从 v2.4.0 之前升级时仍须删除重复的内置 [指标累加](METRICS.md)，更早版本用户还须适配
+[v2.3.0 返回类型变更](docs/update_logs/v2.3.0.md)。
 
 ---
 
@@ -91,7 +92,7 @@ TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配
 
 ```toml
 [dependencies]
-lynn_tcp = "=2.4.0"
+lynn_tcp = "=2.4.1"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -100,7 +101,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.0", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.4.1", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -109,7 +110,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.0", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.4.1", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -385,7 +386,7 @@ TLS **默认关闭**。启用 `tls` feature 并配置证书即手动开启 —�
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.0", features = ["tls"] }
+lynn_tcp = { version = "=2.4.1", features = ["tls"] }
 ```
 
 ```rust
