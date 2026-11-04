@@ -29,8 +29,10 @@ It adopts a **DDD (Domain-Driven Design) + Onion Architecture**, separating core
 ### v2.4.0 - Optional KCP And Real Transport Metrics
 
 PRs #89/#90 add opt-in low-level KCP transport with custom fast configuration and
-automatic server connection, message and byte metrics. TCP remains the default;
-kcp-ovo **0.5.2** resolves the upstream allocator and retransmission-backoff defects.
+automatic server connection, message and byte metrics. TCP remains the default.
+The v2.4.0 release used kcp-ovo **0.5.2**, resolving the upstream allocator and
+retransmission-backoff defects. This source revision pins **0.6.0**; see the
+[paired dependency retest](docs/kcp-v0.6.0-validation.md), not a new lynn_tcp release.
 Rust **1.99.1** is required, with Tokio/bytes pinned to **1.52.3/1.11.1** even for TCP.
 Remove duplicate manual updates to built-in metrics when upgrading.
 See the [v2.4.0 changelog](docs/update_logs/v2.4.0.md), [KCP migration and scenarios](docs/kcp.md)
@@ -247,7 +249,7 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `server` | TCP server with multi-route async handlers, heartbeat, connection management | ✅ |
 | `client` | TCP client for sending/receiving messages, automatic reconnection | ✅ |
 | `metrics` | Prometheus integration (17 production metrics, HTTP /metrics endpoint) | ✅ (via `server`) |
-| `kcp` | Optional plaintext UDP/KCP transport using kcp-ovo 0.5.2 | opt-in |
+| `kcp` | Optional plaintext UDP/KCP transport using kcp-ovo 0.6.0 | opt-in |
 | `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
 | `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
@@ -351,13 +353,13 @@ Stream/message mode is independent of fast/normal. This adapter requires
 `stream_mode=true`; it still exposes a byte stream to the framework. Fast
 disables congestion-window control, not peer-window or queue bounds, and can
 reduce network fairness. See [configuration and migration](docs/kcp.md) and
-[current measured performance](docs/kcp-v0.5.2-validation.md), including the 10%/20%/30%
+[current measured performance](docs/kcp-v0.6.0-validation.md), including the 10%/20%/30%
 packet-loss study and acceptance assessment, not a promise of TCP parity.
 
 **Choose by workload:** prefer TCP for loopback/LAN, bulk throughput, or low-loss
 traffic; use TCP+TLS when authentication and encryption are required. Consider KCP
 fast for latency-sensitive small messages on controlled, lossy UDP paths only after
-target-network validation. Prior 128-byte, 32-client measurements at 20 ms RTT put
+target-network validation. Historical 0.5.2, 128-byte, 32-client measurements at 20 ms RTT put
 KCP at 94.5% of TCP without loss and 2.21/4.40/7.42 times TCP at 10%/20%/30% loss;
 clean loopback reached only 29.9%. These are pre-release measurements, not SLA guarantees.
 Normal is a conservative comparison preset, not a proven faster or production-safe choice.
@@ -383,13 +385,17 @@ application-level exchange before dropping its owner.
 
 Rust **1.99.1** is now required. To compose the upstream exact constraints,
 Tokio/bytes are pinned to **1.52.3/1.11.1** (including default TCP builds).
-The pinned kcp-ovo **0.5.2** fixes the global allocator conflict
+The pinned kcp-ovo **0.6.0** retains the 0.5.2 fixes for the global allocator conflict
 ([#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)) and timeout backoff/deadlines
 ([#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)); application-owned allocators
 are supported. Upstream still enables Tokio `full`. The low-level adapter and
-custom fast preset are unchanged. See the [0.5.2 retest](docs/kcp-v0.5.2-validation.md)
-for regression results and same-condition TCP/KCP measurements; historical 0.5.0
+custom fast preset are unchanged. See the [0.5.2/0.6.0 paired retest](docs/kcp-v0.6.0-validation.md)
+for regression results and same-condition TCP/KCP measurements; historical 0.5.0/0.5.2
 data remains versioned separately. KCP is optional, not a promise of improved speed.
+The paired retest shows workload-dependent gains and declines, not a general speedup;
+the report preserves both the original matrix and the separately reported follow-up.
+Applications passing a separately imported upstream configuration must also upgrade
+that dependency, or use the `lynn_kcp::KcpOptions` re-export to avoid versioned type mismatches.
 See [KCP transport contract](docs/kcp.md)
 for lifecycle, bounds, metrics, security, interoperability and test details.
 
