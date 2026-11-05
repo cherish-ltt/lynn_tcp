@@ -1,6 +1,9 @@
 use std::{
     net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use crossbeam_deque::Injector;
@@ -9,6 +12,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use tracing::{Level, error, info, warn};
 use tracing_subscriber::fmt;
 
+use crate::application::server::broadcast::BroadcastHandle;
 use crate::application::server::server_common::spawn_check_heart;
 use crate::application::server::server_config::LynnServerConfig;
 use crate::application::server::server_tasks::ServerTasks;
@@ -125,6 +129,7 @@ pub struct LynnServer<'a> {
     state_registry: Arc<StateRegistry>,
     _task_owner: tokio::sync::watch::Sender<()>,
     tasks: ServerTasks,
+    started: Arc<AtomicBool>,
 }
 
 /// Implementation of methods for the LynnServer struct.
@@ -146,6 +151,7 @@ impl<'a> LynnServer<'a> {
             state_registry,
             _task_owner: task_owner,
             tasks,
+            started: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -237,6 +243,20 @@ impl<'a> LynnServer<'a> {
     pub fn add_router<Param>(mut self, method_id: u16, handler: impl IntoSystem<Param>) -> Self {
         self.lynn_router.add_router(method_id, handler);
         self
+    }
+
+    /// Returns a clonable background broadcast handle before consuming `self` in `start`.
+    /// The handle does not own server tasks; calls before startup or after shutdown fail.
+    pub fn broadcast_handle(&self) -> BroadcastHandle {
+        BroadcastHandle::new(
+            &self.clients.0,
+            self.started.clone(),
+            self.tasks.clone(),
+            (
+                *self.lynn_config.get_message_header_mark(),
+                *self.lynn_config.get_message_tail_mark(),
+            ),
+        )
     }
 
     /// Registers a shared state value that handlers can extract through
@@ -367,6 +387,7 @@ impl<'a> LynnServer<'a> {
         let stream_acceptor = Arc::new(StreamAcceptor::Plain);
 
         self.check_heart().await;
+        self.started.store(true, Ordering::Release);
 
         self.reactor
             .start(

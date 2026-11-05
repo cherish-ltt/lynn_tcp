@@ -75,6 +75,10 @@ name = "basic_server"
 required-features = ["server"]
 
 [[example]]
+name = "background_broadcast"
+required-features = ["server"]
+
+[[example]]
 name = "custom_config_server"
 required-features = ["server"]
 

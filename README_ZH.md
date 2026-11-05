@@ -465,6 +465,25 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 
 客户端与服务端会拒绝错误的帧头、长度和帧尾，并关闭对应传输连接（包括 TLS）；正常分片与粘包仍受支持。接收解析器最多保留 10 MiB 帧上限、10 字节帧头及一次 1 KiB socket 读取的数据；终止性解析错误会释放缓存并拒绝后续输入。这是单解析器的数据保留上限，不是进程级内存配额。客户端在协议错误后仍遵循已配置的重连策略。
 
+### 后台广播
+
+在 `server.start()` 消费服务端前，调用 `let broadcast = server.broadcast_handle()`。
+应用管理的后台任务可直接调用 `broadcast.broadcast(method_id, payload: Bytes)`，无需客户端请求触发。
+句柄可克隆，使用所属服务端的帧标记，支持 TCP、TLS 和 KCP。应用自主管理周期任务的示例见
+[`background_broadcast`](examples/background_broadcast.rs)，运行 `cargo run --example background_broadcast`。
+
+每次调用先获取在线连接快照，再对各连接的有界写队列进行一次非等待入队，返回
+`BroadcastReport { enqueued, full, closed }`。没有在线目标时全部为零；满队列或关闭队列
+不会拖慢健康目标。快照期间连接或断开的目标可能包含或不包含在本次广播中。
+计数只表示入队，不代表写入完成、传输确认或业务交付。部分成功明确可见，由应用决定丢弃或重试；
+重试整次广播可能造成重复交付。
+
+启动前或 owner 取消后调用返回 `LynnError::Server`。句柄不保活服务端、任务或 AppState；
+与关闭并发的调用可能入队成功但随后被丢弃。超过 10 MiB 减 5 字节的 payload 在编码及入队前
+返回 `LynnError::Protocol`，空 payload 合法。原有 Handler 响应仍保留等待背压；自动发送消息数和
+字节数仍按实际写入统计，队列拒绝计入丢弃消息数。调度与取消由应用管理，框架不提供定时器、
+重试策略或交付保证。
+
 ### 客户端断线自动重连
 
 服务端在断线、传输错误、心跳驱逐或 TLS 握手失败后归还连接配额。读取 EOF 后先完成已接收的处理任务并发送其响应，再关闭写半部；无响应会话仍受心跳驱逐约束。处理许可覆盖请求排队、执行直至响应入队，超限请求被拒绝并记录告警，不再无界排队。

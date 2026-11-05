@@ -97,6 +97,10 @@ impl LynnUser {
         self.last_communicate_time.clone()
     }
 
+    pub(crate) fn response_sender(&self) -> Sender<LynnUserSignal> {
+        self.sender.clone()
+    }
+
     #[inline(always)]
     pub(crate) fn send_response(
         &self,

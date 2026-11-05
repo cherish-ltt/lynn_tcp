@@ -209,6 +209,7 @@ pub mod lynn_metrics {
 /// The server module, containing the server configuration API and server implementation.
 #[cfg(feature = "server")]
 pub mod lynn_server {
+    pub use super::application::server::broadcast::{BroadcastHandle, BroadcastReport};
     /// The server implementation, handling incoming connections and requests.
     pub use super::application::server::lynn_server::LynnServer;
     /// The server configuration API, providing methods to configure the server.
