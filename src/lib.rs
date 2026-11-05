@@ -255,7 +255,7 @@ pub mod lynn_state {
 
 /// Built-in SeaORM integration: register a database handle with
 /// `LynnServer::with_db(...)` (or `with_state`) and extract it in handlers
-/// through the [`DbConn`] alias. Requires the optional `seaorm` feature.
+/// through the [`DbConn`](lynn_seaorm::DbConn) alias. Requires the optional `seaorm` feature.
 #[cfg(feature = "seaorm")]
 pub mod lynn_seaorm {
     /// Re-export of `sea_orm` for convenient access in handler code.

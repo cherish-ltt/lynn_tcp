@@ -26,18 +26,24 @@ English | [简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/READM
 
 It adopts a **DDD (Domain-Driven Design) + Onion Architecture**, separating core domain logic from infrastructure concerns for better maintainability and extensibility.
 
-### v2.4.2 - KCP Dependency And Byte API Update
+### v2.5.0 - Background Broadcast And Request Middleware
 
-[Issue #97](https://github.com/cherish-ltt/lynn_tcp/issues/97) upgrades kcp-ovo from
-**0.6.0 to 0.8.0** and adapts the low-level transport to its slice/`Vec<u8>` byte API.
-TCP remains the default; KCP remains opt-in and unencrypted, with the same custom
-fast preset, message boundaries and ACK semantics. This release does not add the
-upstream high-level drain API or claim a performance gain; historical measurements remain unchanged.
-Applications passing separately imported upstream configuration types must upgrade
-that dependency to 0.8.0 too, or use `lynn_kcp::KcpOptions`, even though this is a patch release.
-Rust **1.99.1** and Tokio/bytes **1.52.3/1.11.1** remain unchanged, including TCP builds.
-See the [v2.4.2 changelog](docs/update_logs/v2.4.2.md), [upgrade validation](docs/kcp-v0.8.0-validation.md)
-and [KCP migration and scenarios](docs/kcp.md).
+[Issue #91](https://github.com/cherish-ltt/lynn_tcp/issues/91) adds an instance-scoped
+`BroadcastHandle` for background tasks, reporting enqueued, full and closed targets
+without waiting for slow connections. The handle does not keep the server alive;
+queue acceptance is not delivery.
+[Issue #95](https://github.com/cherish-ltt/lynn_tcp/issues/95) adds global and route-level
+async middleware with single-use `Next`, isolated request data and `RequestContext`.
+Existing handlers remain supported; timeouts do not roll back side effects.
+See the [v2.5.0 changelog](docs/update_logs/v2.5.0.md),
+[middleware guide](docs/middleware.md) and [measured costs](docs/middleware-performance.md).
+The performance archive preserves its pre-release version and hashes; an empty chain
+does not imply zero memory cost, and the measurements do not establish a stable throughput change.
+
+Rust **1.99.1**, Tokio/bytes **1.52.3/1.11.1** and optional kcp-ovo **0.8.0** remain unchanged.
+TCP stays the default; KCP remains unauthenticated and unencrypted. Applications passing
+older upstream configuration types must upgrade that dependency to 0.8.0 or use
+`lynn_kcp::KcpOptions`; see [KCP migration and scenarios](docs/kcp.md).
 Users upgrading from before v2.4.0 must also remove duplicate built-in
 [metrics updates](METRICS.md); earlier users must apply the
 [v2.3.0 return-type changes](docs/update_logs/v2.3.0.md).
@@ -96,7 +102,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lynn_tcp = "=2.4.2"
+lynn_tcp = "=2.5.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -105,7 +111,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.2", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.5.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -114,7 +120,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.2", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.5.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -394,10 +400,10 @@ compatible dependency ranges. The pinned kcp-ovo **0.8.0** retains the fixes for
 ([#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)); application-owned allocators
 are supported. Upstream still enables Tokio `full`. The adapter now uses borrowed
 slices and `Vec<u8>` at upstream byte API boundaries; the custom fast preset is unchanged.
-See the [0.8.0 upgrade validation](docs/kcp-v0.8.0-validation.md) for this release.
+See the [v2.4.2 upgrade validation](docs/kcp-v0.8.0-validation.md) for the 0.8.0 migration.
 The [0.5.2/0.6.0 paired retest](docs/kcp-v0.6.0-validation.md) and earlier data remain
-historical evidence, with gains and declines preserved. No 0.8.0 performance measurement
-is included in this release, and KCP remains optional without a speed guarantee.
+historical evidence, with gains and declines preserved. This release adds no KCP performance
+measurement, and KCP remains optional without a speed guarantee.
 Applications passing a separately imported upstream configuration must also upgrade
 that dependency to 0.8.0, or use the `lynn_kcp::KcpOptions` re-export to avoid versioned type mismatches.
 See [KCP transport contract](docs/kcp.md)
@@ -409,7 +415,7 @@ TLS is **disabled by default**. Enable the `tls` feature and attach certificates
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.2", features = ["tls"] }
+lynn_tcp = { version = "=2.5.0", features = ["tls"] }
 ```
 
 ```rust

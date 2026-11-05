@@ -1,5 +1,44 @@
 # Version Note
 
+### v2.5.0
+
+#### v2.5.0
+
+Release notes dated 2026-11-05. [Issue #91](https://github.com/cherish-ltt/lynn_tcp/issues/91) / [PR #99](https://github.com/cherish-ltt/lynn_tcp/pull/99) add background broadcast; [Issue #95](https://github.com/cherish-ltt/lynn_tcp/issues/95) / [PR #100](https://github.com/cherish-ltt/lynn_tcp/pull/100) add asynchronous request middleware. Both use the existing `server` feature and TCP/TLS/KCP paths. See the [full changelog](update_logs/v2.5.0.md), [middleware guide](middleware.md) and [performance comparison](middleware-performance.md).
+
+1.feat — background broadcast
+
+- Obtain a clonable `BroadcastHandle` with `LynnServer::broadcast_handle()` before `start()` consumes the server. Application-owned background work calls `broadcast(method_id, payload: Bytes)` without an inbound request.
+- Snapshot connection senders and attempt one non-waiting enqueue per bounded queue, returning `BroadcastReport { enqueued, full, closed }`; full/closed targets do not prevent other enqueue attempts. Existing Handler responses retain waiting backpressure.
+- Handles use instance-specific frame markers and do not keep the server, tasks or AppState alive. Calls before startup or after cancellation fail; concurrent connection changes may be absent from the snapshot. Empty payloads are valid and payloads above 10 MiB minus 5 bytes are rejected before encoding/enqueue.
+- Queue acceptance is not write completion, transport acknowledgment or application delivery. Cancellation may discard accepted frames and whole-broadcast retries may duplicate delivery; scheduling, cancellation and confirmation belong to the application. See the [runnable example](../examples/background_broadcast.rs).
+
+2.feat — asynchronous middleware
+
+- Register global layers with `with_middleware` and route layers with `add_router_with_middleware` / `MiddlewareChain`. Global layers wrap route layers; registration order is entry order and return order is reversed. Plans freeze before startup; duplicate routes replace the Handler and local chain together.
+- `Next::run(self, request)` consumes both values and can continue once. Layers may short-circuit, map errors or replace responses through existing validated `HandlerResult` constructors. No retry/rerouting, default authentication policy or generic rejection frame is introduced.
+- `MiddlewareRequest` exposes read-only request metadata/payload and shared AppState access, plus isolated typed request data. Data allocates on first insert and freezes into a Handler's read-only `RequestContext`; missing values return `None`. `ResponseView` provides read-only response metadata, payload and destinations.
+- Preserve request permits through the entire chain and final enqueue; normal EOF waits for that work. Layers run inside existing owned tasks. Empty chains bypass middleware request/Next/type-map construction; heartbeats, unknown routes, malformed frames and proactive broadcast bypass the inbound chain.
+- Timeout covers only the wrapped inner Future, excluding queues, outer return work and network sends. It cannot preempt non-yielding synchronous code or undo side effects. Panic/cancellation does not guarantee async return cleanup. Unhandled errors are logged/dropped once without exposing internal errors or closing a healthy connection.
+- Handler duration still covers terminal Handler execution and parameter extraction; short-circuits create no Handler sample. Chain tracing and application success need separate interpretation; transport counters retain their actual I/O boundary.
+
+3.compatibility and upgrade
+
+- Update to `lynn_tcp = "=2.5.0"`. Existing `add_router`, ordinary Handler signatures, valid wire formats and default features remain usable unchanged. Select `default-features = false, features = ["server"]` for a server-only dependency.
+- Run `cargo run --example background_broadcast` or `cargo run --example middleware_example` to try the new APIs. Validate identity before insertion, reject missing identity explicitly, place error mapping outside fallible layers and design transaction/idempotency behavior around timeout.
+- Retain Rust 1.99.1, Tokio `=1.52.3`, bytes `=1.11.1` and optional kcp-ovo `=0.8.0`. Follow the [KCP guide](kcp.md) for both endpoints and older upstream configuration-type migration. KCP remains unauthenticated/unencrypted; TLS+KCP and native stream mode remain rejected. Earlier upgrades still require the [v2.3.0 return-type migration](update_logs/v2.3.0.md) and [metrics migration](../METRICS.md).
+
+4.validation and measured limits
+
+- PR #99, PR #100 and merged main `190be310f31feadb311d3c0c74343b036ecc6fe2` each passed all 11 CI jobs; the final PR CI passed 201 default / 259 all-feature tests. Separate pre-release production line coverage was 93.52% (4462/4771). These are feature-integration results, not verification of the subsequent version bump or publication.
+- After the 2.5.0 version bump, all 13 `prek run --all-files` hooks passed, including all-feature check/Clippy/tests. Old cached Node environments produced version-mismatch notices; every effective hook ran successfully. Fixing the SeaORM `DbConn` documentation link allowed all-feature rustdoc with `-D warnings` to pass. `cargo package --locked --allow-dirty --all-features` packaged 243 files and built the extracted package; new APIs, examples and release notes are included. Production logic and dependency versions are unchanged.
+- Pre-release TCP loopback measurements used Apple M1 Pro/macOS arm64, Rust 1.99.1, 128-byte payloads, 1/64 clients, two-second warmup and five-second windows. All 24 cells and 780 client outcomes completed successfully, with 3,892,394 requests and equally many payload-checked responses. The harness now rejects warmup exits/incomplete clients and retains client counts when server shutdown fails.
+- At 64 clients, three-run median throughput was 71,281.4 / 63,149.2 / 65,974.2 / 57,766.6 responses/s for baseline/empty/pass/composed. Ranges overlap and paired directions change; no stable speedup or regression is established. Empty-chain allocation calls stay near baseline, but requested allocation bytes rise about 180 B/handled request (6.3%) and peak RSS about 0.55 MiB; nonempty chains allocate more.
+- Allocation/CPU/RSS cover the whole server lifetime, and atomic allocation counting perturbs performance. No allocation-stack or Future-layout profiling attributes the added bytes precisely. Empty-chain structural checks do not establish zero resource cost; real authentication/logging, public networks, Windows and long soaks remain outside this performance study.
+- Keep the original [v2.4.2 middleware archive](benchmark/v2.4.2-middleware-apple-m1-pro/manifest.json), versions and hashes: baseline `3011b076e92d24e797f72f9125cc0cc431e2237a`, middleware source/Cargo digest `659feda7fe0293180b95158e5f976c03065bc0b11bb2ea16ae475523082e1d23`. This was measured before the version bump; no v2.5.0 performance rerun is implied. Release CI, GitHub Release and crates.io publication require separate verification; these notes do not assert publication completion.
+
+Signature: GPT-6-Astra-Ultra
+
 ### v2.4.2
 
 #### v2.4.2
