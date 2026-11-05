@@ -12,11 +12,24 @@ async fn invalid_handshake_conv_isolation_and_per_ip_permits_follow_session_owne
     let task = tokio::spawn(listener.run(Some(2), Some(limiter), queue.clone()));
     let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
     socket.connect(addr).await.unwrap();
-    socket.send(&[0; 3]).await.unwrap();
+    socket.send(&[0; 27]).await.unwrap();
     let invalid = KcpPacketHeader::new(1, KcpCmd::Push, 0, 128, 0, 0, 0, 3);
-    let mut packet = invalid.to_bytes().unwrap().to_vec();
+    let mut packet = invalid.to_bytes().unwrap();
     packet.extend_from_slice(b"bad");
     socket.send(&packet).await.unwrap();
+    for declared in [HELLO.len() - 1, HELLO.len() + 1] {
+        let header = KcpPacketHeader::new(1, KcpCmd::Push, 0, 128, 0, 0, 0, declared as u32);
+        let mut packet = header.to_bytes().unwrap();
+        packet.extend_from_slice(HELLO);
+        socket.send(&packet).await.unwrap();
+    }
+    for declared in [HELLO.len(), HELLO.len() + 1] {
+        let header = KcpPacketHeader::new(1, KcpCmd::Push, 0, 128, 0, 0, 0, declared as u32);
+        let mut packet = header.to_bytes().unwrap();
+        packet.extend_from_slice(HELLO);
+        packet.push(0);
+        socket.send(&packet).await.unwrap();
+    }
     sleep(Duration::from_millis(30)).await;
     assert!(queue.is_empty());
 
@@ -31,7 +44,7 @@ async fn invalid_handshake_conv_isolation_and_per_ip_permits_follow_session_owne
 
     let different_conv =
         KcpPacketHeader::new(43, KcpCmd::Push, 0, 128, 0, 0, 0, HELLO.len() as u32);
-    let mut packet = different_conv.to_bytes().unwrap().to_vec();
+    let mut packet = different_conv.to_bytes().unwrap();
     packet.extend_from_slice(HELLO);
     socket.send(&packet).await.unwrap();
     let other = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());

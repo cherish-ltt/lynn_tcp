@@ -1,5 +1,31 @@
 # Version Note
 
+### v2.4.2
+
+#### v2.4.2
+
+Released on 2026-11-05. [Issue #97](https://github.com/cherish-ltt/lynn_tcp/issues/97) upgrades the optional KCP dependency from 0.6.0 to 0.8.0 and adapts the low-level transport to upstream byte API changes. See the [full changelog](update_logs/v2.4.2.md), [KCP migration guide](kcp.md) and [upgrade validation](kcp-v0.8.0-validation.md).
+
+1.build / fix — dependency and byte API update
+
+- Pin kcp-ovo `=0.8.0`; retain Rust 1.99.1 and this project's exact Tokio 1.52.3 / bytes 1.11.1 dependencies, although upstream now accepts compatible ranges.
+- Adapt header parsing to borrowed slices and receive/output paths to `Vec<u8>`. Preserve complete datagrams for `Kcp::input`, exact declared-payload length validation, message boundaries and bounded queues.
+- TCP remains default and KCP opt-in. Keep the custom fast preset, normal mode, cancellation and ACK-based flush; the upstream high-level drain API is not exposed.
+
+2.compatibility and upgrade
+
+- Update to `lynn_tcp = "=2.4.2"`. `KcpConfig.protocol` and `lynn_kcp::KcpOptions` expose the 0.8.0 configuration type; applications passing separately imported older upstream types must also upgrade that dependency or use the re-export.
+- Ordinary builders, valid wire formats and handlers are unchanged. KCP remains unauthenticated/unencrypted; TLS+KCP and native stream mode remain rejected. Transport ACKs are not application delivery, and Drop does not drain.
+
+3.validation and limits
+
+- Retain allocator/RTO, input-buffer reuse and reordered/duplicate packet contracts, and add short-header/malformed HELLO length/trailing-byte coverage for the slice parser migration. The dependency-only update failed with two `E0308` errors; the adapted build and all 25 targeted KCP tests pass. Further results belong to the [0.8.0 report](kcp-v0.8.0-validation.md).
+- Default/all-feature tests pass at 171/225 including doctests, as do checks/tests for ten isolated feature combinations, KCP package verification and all 13 prek hooks without warnings. Metrics return 400/400 replies with exactly 9200 bytes each direction and five closed connections; mixed 0.6.0/0.8.0 fast/normal processes exchange 3264/3264 exact responses, including 64 large payloads, on macOS arm64 loopback.
+- Separate coverage passes 218 tests and measures 93.05% of production lines (4166/4477). LLVM 23.1.1 retains 663 placeholder-mapping warnings; all 44 affected symbols' real counts and the complete mapping denominators were independently checked against the original profile and empty-profile/unit baselines, as detailed in the validation report.
+- No 0.8.0 performance measurement is included. Earlier performance samples and their versions, hashes, gains and declines remain unchanged; they do not establish this release's performance. GitHub Release and crates.io publication are verified separately.
+
+Signature: GPT-6-Astra-Ultra
+
 ### v2.4.1
 
 #### v2.4.1

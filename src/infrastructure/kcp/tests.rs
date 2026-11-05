@@ -132,21 +132,30 @@ async fn nonreading_peer_bounds_writes_and_drop_cancels_blocked_transport() {
 
 #[tokio::test]
 async fn handshake_and_invalid_datagram_errors_terminate_worker() {
-    let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
-    let peer = UdpSocket::bind("127.0.0.1:0").await.unwrap();
-    let (tx, rx) = mpsc::channel(8);
-    let (mut stream, ready) = KcpStream::start(
-        socket,
-        peer.local_addr().unwrap(),
-        5,
-        KcpConfig::default(),
-        Some(rx),
-    )
-    .unwrap();
-    tx.send(vec![0; 3]).await.unwrap();
-    assert!(ready.await.is_err());
-    assert!(stream.read(&mut [0]).await.is_err());
-    assert!(stream.write(b"x").await.is_err());
+    let mut packets = vec![vec![0; 27]];
+    for declared in [HELLO.len() - 1, HELLO.len() + 1] {
+        let header = KcpPacketHeader::new(5, KcpCmd::Push, 0, 128, 0, 0, 0, declared as u32);
+        let mut packet = header.to_bytes().unwrap();
+        packet.extend_from_slice(HELLO);
+        packets.push(packet);
+    }
+    for packet in packets {
+        let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+        let peer = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let (tx, rx) = mpsc::channel(8);
+        let (mut stream, ready) = KcpStream::start(
+            socket,
+            peer.local_addr().unwrap(),
+            5,
+            KcpConfig::default(),
+            Some(rx),
+        )
+        .unwrap();
+        tx.send(packet).await.unwrap();
+        assert!(ready.await.is_err());
+        assert!(stream.read(&mut [0]).await.is_err());
+        assert!(stream.write(b"x").await.is_err());
+    }
 }
 
 #[tokio::test]
@@ -163,17 +172,17 @@ async fn wrong_conversation_is_ignored_but_invalid_session_message_closes() {
     )
     .unwrap();
     let mut header = KcpPacketHeader::new(9, KcpCmd::Push, 0, 128, 0, 0, 0, HELLO.len() as u32);
-    let mut packet = header.to_bytes().unwrap().to_vec();
+    let mut packet = header.to_bytes().unwrap();
     packet.extend_from_slice(HELLO);
     tx.send(packet).await.unwrap();
     header.conv = 5;
-    let mut packet = header.to_bytes().unwrap().to_vec();
+    let mut packet = header.to_bytes().unwrap();
     packet.extend_from_slice(HELLO);
     tx.send(packet).await.unwrap();
     ready.await.unwrap().unwrap();
     header.sn = 1;
     header.len = 1;
-    let mut packet = header.to_bytes().unwrap().to_vec();
+    let mut packet = header.to_bytes().unwrap();
     packet.push(99);
     tx.send(packet).await.unwrap();
     assert!(

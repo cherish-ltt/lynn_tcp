@@ -26,15 +26,17 @@
 
 采用 **DDD（领域驱动设计）+ 洋葱架构**，将核心领域逻辑与基础设施实现分离，提升可维护性和可扩展性。
 
-### v2.4.1 - KCP 依赖升级与配对验证
+### v2.4.2 - KCP 依赖与字节 API 升级
 
-PR #96 将 kcp-ovo 从 **0.5.2 升级至 0.6.0**，保留传输适配、自定义 fast 配置及分配器/重传修复。
-TCP 保持默认，KCP 仍需显式启用且无加密。[依赖配对复测](docs/kcp-v0.6.0-validation.md)
-同时记录改善与下降，不支持普遍提速；发布前原始样本保持不变。
-尽管是补丁版本，直接传入另行导入的上游配置类型的应用仍须同步升级该依赖，
+[Issue #97](https://github.com/cherish-ltt/lynn_tcp/issues/97) 将 kcp-ovo 从 **0.6.0 升级至 0.8.0**，
+并将底层传输适配到借用切片/`Vec<u8>` 字节 API。
+TCP 保持默认，KCP 仍需显式启用且无加密，自定义 fast 配置、消息边界和 ACK 语义不变。
+本次不引入上游高层 drain API，不宣称性能提升；历史性能数据保持不变。
+尽管是补丁版本，直接传入另行导入的上游配置类型的应用仍须同步升级该依赖至 0.8.0，
 或使用 `lynn_kcp::KcpOptions` 重导出。
 Rust **1.99.1** 与 Tokio/bytes **1.52.3/1.11.1** 不变，包括默认 TCP 构建。
-详见 [v2.4.1 变更日志](docs/update_logs/v2.4.1.md) 和 [KCP 迁移与建议场景](docs/kcp.md)。
+详见 [v2.4.2 变更日志](docs/update_logs/v2.4.2.md)、[升级验证](docs/kcp-v0.8.0-validation.md)
+和 [KCP 迁移与建议场景](docs/kcp.md)。
 从 v2.4.0 之前升级时仍须删除重复的内置 [指标累加](METRICS.md)，更早版本用户还须适配
 [v2.3.0 返回类型变更](docs/update_logs/v2.3.0.md)。
 
@@ -92,7 +94,7 @@ TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配
 
 ```toml
 [dependencies]
-lynn_tcp = "=2.4.1"
+lynn_tcp = "=2.4.2"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -101,7 +103,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.1", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.4.2", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -110,7 +112,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.1", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.4.2", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -248,7 +250,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `server` | TCP 服务器，支持多路由异步 Handler、心跳、连接管理 | ✅ |
 | `client` | TCP 客户端，支持消息收发与断线自动重连 | ✅ |
 | `metrics` | Prometheus 集成（17 个生产级指标，HTTP /metrics 端点） | ✅（由 `server` 启用） |
-| `kcp` | 基于 kcp-ovo 0.6.0 的可选明文 UDP/KCP 传输 | 默认关闭 |
+| `kcp` | 基于 kcp-ovo 0.8.0 的可选明文 UDP/KCP 传输 | 默认关闭 |
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
@@ -343,7 +345,7 @@ TCP 保持默认。启用 `kcp` 后，分别使用
 消息/流模式与 fast/normal 独立。本适配的 HELLO/DATA/EOF 封装要求**消息模式**，
 显式拒绝 `stream_mode=true`，但框架仍使用字节流。fast 关闭拥塞窗口控制，
 不关闭对端窗口或队列上限，可能降低网络公平性。详见 [配置与迁移](docs/kcp.md)
-和 [当前性能实测](docs/kcp-v0.6.0-validation.md)（含 10%/20%/30% 丢包研究及验收总结），
+和 [历史 0.5.2/0.6.0 性能实测](docs/kcp-v0.6.0-validation.md)（含 10%/20%/30% 丢包研究及验收总结），
 不承诺等同 TCP。
 
 **按场景选择：**回环/局域网、大流量吞吐或低丢包优先 TCP，需要认证和加密时使用 TCP+TLS。
@@ -368,15 +370,15 @@ TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
 上限，拆分为有界 KCP 消息。`send_data` 表示本地入队，KCP flush 等待传输 ACK，
 **不代表业务交付**；释放 owner 前应完成应用层确认交互。
 
-现要求 Rust **1.99.1**。为兼容上游精确约束，Tokio/bytes 锁定为
-**1.52.3/1.11.1**（包括默认 TCP 构建）。锁定的 kcp-ovo **0.6.0** 保留 0.5.2 的全局分配器冲突
+要求 Rust **1.99.1**。尽管 kcp-ovo 0.8.0 已允许兼容依赖范围，本项目仍将 Tokio/bytes 精确锁定为
+**1.52.3/1.11.1**（包括默认 TCP 构建）。锁定的 kcp-ovo **0.8.0** 保留全局分配器冲突
 （[#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)）与超时退避/重传期限
 （[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)）修复，支持应用自选全局分配器。
-上游仍启用 Tokio `full`；底层适配与自定义 fast 配置不变。
-回归结果与同条件 TCP/KCP 实测见 [0.5.2/0.6.0 配对复测](docs/kcp-v0.6.0-validation.md)，
-历史 0.5.0/0.5.2 数据按版本独立保留。KCP 默认关闭，不承诺更快。
-配对复测既有改善也有下降，不支持普遍提速；报告保留原矩阵及单独汇报的补测。
-应用若直接传入另行依赖的上游配置类型，须同步升级该依赖，或使用
+上游仍启用 Tokio `full`；适配层在上游字节 API 边界改用借用切片与 `Vec<u8>`，自定义 fast 配置不变。
+本次结果见 [0.8.0 升级验证](docs/kcp-v0.8.0-validation.md)。
+[0.5.2/0.6.0 配对复测](docs/kcp-v0.6.0-validation.md) 与更早数据仍是历史证据，保留其中的改善与下降。
+本次未测量 0.8.0 性能，KCP 仍默认关闭且不承诺更快。
+应用若直接传入另行依赖的上游配置类型，须同步升级该依赖至 0.8.0，或使用
 `lynn_kcp::KcpOptions` 重导出，避免不同版本的 Rust 类型不匹配。
 生命周期、内存边界、指标、安全、互操作与测试见 [KCP 传输契约](docs/kcp.md)。
 
@@ -386,7 +388,7 @@ TLS **默认关闭**。启用 `tls` feature 并配置证书即手动开启 —�
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.1", features = ["tls"] }
+lynn_tcp = { version = "=2.4.2", features = ["tls"] }
 ```
 
 ```rust

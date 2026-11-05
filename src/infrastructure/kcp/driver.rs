@@ -78,7 +78,7 @@ impl Driver {
                 offset = 0;
                 match self.kcp.recv() {
                     Ok(message) if !established => {
-                        if message.as_ref() != HELLO {
+                        if message != HELLO {
                             return Err(io::Error::other("invalid KCP handshake"));
                         }
                         if !client {
@@ -130,7 +130,7 @@ impl Driver {
                     }
                 } => {
                     let packet = packet?;
-                    let (header, payload) = KcpPacketHeader::from_bytes(&mut bytes::Bytes::copy_from_slice(&packet)).map_err(io::Error::other)?;
+                    let (header, payload) = KcpPacketHeader::from_bytes(&mut packet.as_slice()).map_err(io::Error::other)?;
                     if header.conv != self.kcp.conv { continue; }
                     if header.len as usize != payload.len() || packet.len() > 1400 || header.frg as usize >= (CHUNK + 1).div_ceil(1372) { return Err(io::Error::other("invalid KCP datagram length or fragmentation")); }
                     self.kcp.current = start.elapsed().as_millis() as u64;
