@@ -77,10 +77,13 @@ async fn read_frame(
     marks: (u16, u16),
 ) {
     let mut frame = vec![0; payload.len() + 15];
-    timeout(Duration::from_secs(4), peer.read_exact(&mut frame))
-        .await
-        .unwrap()
-        .unwrap();
+    match timeout(Duration::from_secs(4), peer.read_exact(&mut frame)).await {
+        Ok(result) => result.unwrap(),
+        Err(error) => panic!(
+            "frame read timed out: method={method}, payload_len={}, {error}",
+            payload.len()
+        ),
+    };
     assert_eq!(&frame[..2], &marks.0.to_le_bytes());
     assert_eq!(&frame[2..10], &(payload.len() as u64 + 5).to_le_bytes());
     assert_eq!(frame[10], 1);
@@ -117,7 +120,9 @@ async fn first_push(handle: &BroadcastHandle, payload: Bytes) {
 #[tokio::test]
 async fn background_push_limits_metrics_and_instance_marks() {
     let _lock = LOCK.lock().await;
-    let (a, first, first_task) = start(LynnServerConfigBuilder::new()).await;
+    // Keep the maximum-frame check independent of Linux's fixed small send-buffer throughput.
+    let (a, first, first_task) =
+        start(LynnServerConfigBuilder::new().with_send_buffer_size(&0)).await;
     assert_eq!(
         first.broadcast(42, Bytes::new()).unwrap(),
         BroadcastReport::default()
