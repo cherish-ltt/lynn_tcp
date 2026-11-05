@@ -236,6 +236,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `multi_route_service` | `cargo run --example multi_route_service` | **多路由分发与验证** |
 | `custom_protocol_full` | `cargo run --example custom_protocol_full` | 自定义协议客户端配套 |
 | `state_example` | `cargo run --example state_example` | **全局状态注入**（`AppState<T>`） |
+| `middleware_example` | `cargo run --example middleware_example` | 请求鉴权、上下文注入、超时与错误映射 |
 | `tls_example` | `cargo run --example tls_example --features tls` | **TLS 1.3 加密**服务器 ↔ 客户端 |
 | `metrics_example` | `cargo run --example metrics_example --features metrics` | Prometheus 指标集成演示 |
 
@@ -455,6 +456,25 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 
 ---
 
+### 请求中间件
+
+通过 `with_middleware` 注册全局异步函数，通过
+`add_router_with_middleware(method_id, handler, MiddlewareChain::new().with(m))` 注册路由层。
+注册顺序即进入顺序：`全局 -> 路由 -> Handler`，结果逆序返回。`Next` 消费一次，
+中间件可用业务响应或 no-send 短路。未处理错误只记录一次并丢弃，不暴露内部错误或关闭健康连接。
+
+`MiddlewareRequest` 提供只读路由、来源、payload 及请求级 `insert/get<T>`；Handler 可在
+旧参数之外提取 `RequestContext`，其身份/数据与共享 `AppState` 分开。
+`HandlerResult::response_view()` 只读检查响应，替换响应仍经过已有长度校验。
+
+仅命中路由的服务端业务请求进入链，空链保留原 Handler 路径。处理许可覆盖整链直至响应入队，
+`processing_duration_seconds` 仍只计 Handler 与参数解析。超时取消内层 Future，
+不回滚副作用，也不包含排队和发送。完整[执行及错误契约](docs/middleware.md)、
+[性能对照](docs/middleware-performance.md)见专题文档；运行
+`cargo run --example middleware_example` 验证鉴权、tracing、超时与安全错误映射。
+
+---
+
 #### 接收协议错误
 
 自定义帧头和帧尾标记属于各服务端实例，同时用于请求解析与响应编码；不同标记的服务端可在同一进程同时或先后运行，不共享协议配置。
@@ -512,16 +532,16 @@ if !client.is_connected() {
 - ✅ 异步任务路由服务
 - ✅ Prometheus + Grafana 监控集成（v1.2.5）
 - ✅ DDD + 洋葱架构重构（v2.0.0）
-- ✅ 7 个可运行示例覆盖所有场景
+- ✅ 传输、状态、指标及中间件的可运行示例
 - ✅ 服务端与客户端 TLS 1.3 传输加密（v2.0.0）
 - ✅ 客户端自动断线重连，尝试次数可配置（v2.0.0）
 - ✅ 全局状态注入（`AppState<T>`）+ 内置 SeaORM 支持（v2.0.0）
+- 全局及路由级异步请求中间件
 
 #### 🔜 计划中
 
 | 功能 | 目标版本 | 状态 |
 |------|---------|------|
-| 中间件支持 | 待定 | 📝 设计中 |
 | 定时任务 | 待定 | 💡 构思中 |
 
 ---

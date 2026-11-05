@@ -1,5 +1,6 @@
 use std::{future::Future, marker::PhantomData, net::SocketAddr, pin::Pin, sync::Arc};
 
+use super::request_context::RequestContext;
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::domain::model::lynn_user::ClientsStruct;
@@ -10,6 +11,7 @@ pub(crate) struct HandlerContext {
     pub(crate) input_buf_vo: InputBufVO,
     pub(crate) clients_context: ClientsContext,
     pub(crate) states: Arc<StateRegistry>,
+    pub(crate) request_context: RequestContext,
 }
 
 impl HandlerContext {
@@ -17,11 +19,13 @@ impl HandlerContext {
         input_buf_vo: InputBufVO,
         clients_context: ClientsContext,
         states: Arc<StateRegistry>,
+        request_context: RequestContext,
     ) -> Self {
         HandlerContext {
             input_buf_vo,
             clients_context,
             states,
+            request_context,
         }
     }
 }

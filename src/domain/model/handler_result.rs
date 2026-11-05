@@ -28,7 +28,41 @@ pub struct HandlerResult {
     message_tail_mark: Option<u16>,
 }
 
+/// A read-only business response before encoding or enqueueing.
+#[cfg(feature = "server")]
+pub struct ResponseView<'a> {
+    method_id: u16,
+    payload: &'a [u8],
+    target_addrs: &'a [SocketAddr],
+}
+
+#[cfg(feature = "server")]
+impl ResponseView<'_> {
+    pub fn method_id(&self) -> u16 {
+        self.method_id
+    }
+
+    pub fn payload(&self) -> &[u8] {
+        self.payload
+    }
+
+    pub fn target_addrs(&self) -> &[SocketAddr] {
+        self.target_addrs
+    }
+}
+
 impl HandlerResult {
+    /// Returns a borrowed targeted business response, or `None` when absent.
+    #[cfg(feature = "server")]
+    pub fn response_view(&self) -> Option<ResponseView<'_>> {
+        let (method_id, payload) = self.result_data.as_ref()?;
+        Some(ResponseView {
+            method_id: *method_id,
+            payload,
+            target_addrs: self.addrs.as_deref()?,
+        })
+    }
+
     /// Creates a new HandlerResult instance with send flag set to true, containing result data and addresses.
     ///
     /// # Parameters
@@ -235,6 +269,10 @@ mod tests {
 
         r.set_marks(0x1111, 0x2222);
         assert!(r.is_with_mark());
+        let view = r.response_view().unwrap();
+        assert_eq!(view.method_id(), 7);
+        assert_eq!(view.payload(), b"abc");
+        assert_eq!(view.target_addrs(), &["127.0.0.1:9177".parse().unwrap()]);
 
         let frame = r.get_response_data().unwrap();
         assert_eq!(frame[0..2].to_vec(), le(0x1111));

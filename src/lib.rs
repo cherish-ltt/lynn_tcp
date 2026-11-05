@@ -220,6 +220,14 @@ pub mod lynn_server {
     pub use super::domain::handler::handler_system::ClientsContext;
 }
 
+/// Asynchronous middleware for matched server business requests.
+#[cfg(feature = "server")]
+pub mod lynn_middleware {
+    pub use super::domain::handler::middleware::{MiddlewareChain, Next};
+    pub use super::domain::handler::request_context::{MiddlewareRequest, RequestContext};
+    pub use super::domain::model::handler_result::ResponseView;
+}
+
 /// The TCP dependents module, containing common types used by both the server and the client.
 #[cfg(any(feature = "server", feature = "client"))]
 pub mod lynn_tcp_dependents {

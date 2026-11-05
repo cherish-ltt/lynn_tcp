@@ -33,6 +33,10 @@ use crate::infrastructure::metrics::{metrics::METRICS, transport::ConnectionObse
 use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, StreamAcceptor};
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
+#[cfg(test)]
+#[path = "reactor_middleware_tests.rs"]
+mod middleware_tests;
+
 /// Reactor event type
 enum EventType {
     NewSocket((LynnStream, core::net::SocketAddr, ConnectionPermits)),
@@ -228,19 +232,21 @@ impl EventManager {
                                 // down this worker.
                                 match tasks
                                     .spawn(async move {
-                                        let timer = METRICS
-                                            .messages
-                                            .processing_duration_seconds
-                                            .start_timer();
-                                        let result = task.handler(context).await;
-                                        timer.observe_duration();
-                                        check_handler_result(
-                                            result,
-                                            clients,
-                                            message_header_mark,
-                                            message_tail_mark,
-                                        )
-                                        .await;
+                                        match task.run(context).await {
+                                            Ok(result) => {
+                                                check_handler_result(
+                                                    result,
+                                                    clients,
+                                                    message_header_mark,
+                                                    message_tail_mark,
+                                                )
+                                                .await;
+                                            },
+                                            Err(error) => {
+                                                METRICS.messages.dropped_total.inc();
+                                                error!("Request middleware failed: {error}");
+                                            },
+                                        }
                                         drop(permit);
                                     })
                                     .await
