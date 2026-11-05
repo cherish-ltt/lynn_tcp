@@ -4,6 +4,25 @@ use crate::domain::model::input_buf_vo::InputBufVO;
 use crate::domain::state::app_state::AppState;
 
 use super::handler_system::{ClientsContext, HandlerContext, SystemParam, SystemParamState};
+use super::request_context::RequestContext;
+
+impl SystemParam for RequestContext {
+    type State = RequestContextParamState;
+}
+
+pub(crate) struct RequestContextParamState;
+
+impl SystemParamState for RequestContextParamState {
+    type Item = RequestContext;
+
+    fn init() -> Self {
+        Self
+    }
+
+    fn get_param(_state: &Self, context: &HandlerContext) -> Self::Item {
+        context.request_context.clone()
+    }
+}
 
 impl SystemParam for InputBufVO {
     type State = InputBufVO;
@@ -85,7 +104,12 @@ mod tests {
         if let Some(repo) = repo {
             states.set(repo);
         }
-        HandlerContext::new(InputBufVO::new_none(), ClientsContext::new_none(), states)
+        HandlerContext::new(
+            InputBufVO::new_none(),
+            ClientsContext::new_none(),
+            states,
+            RequestContext::new(0, "127.0.0.1:0".parse().unwrap()),
+        )
     }
 
     fn extract(context: &HandlerContext) -> AppState<Repo> {

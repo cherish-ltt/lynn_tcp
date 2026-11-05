@@ -238,6 +238,7 @@ All examples are located in the [`examples/`](examples/) directory. Run them wit
 | `multi_route_service` | `cargo run --example multi_route_service` | **Multi-route dispatch and verification** |
 | `custom_protocol_full` | `cargo run --example custom_protocol_full` | Custom protocol with client support |
 | `state_example` | `cargo run --example state_example` | **Global state injection** (`AppState<T>`) |
+| `middleware_example` | `cargo run --example middleware_example` | Request authentication, context injection, timeout and error mapping |
 | `tls_example` | `cargo run --example tls_example --features tls` | **TLS 1.3 encrypted** server ↔ client |
 | `metrics_example` | `cargo run --example metrics_example --features metrics` | Prometheus metrics integration |
 
@@ -477,6 +478,30 @@ State is resolved per request, so `with_state` may be called before or after `ad
 
 ---
 
+### Request Middleware
+
+Register global async functions with `with_middleware` and route-specific functions with
+`add_router_with_middleware(method_id, handler, MiddlewareChain::new().with(m))`.
+Registration order is entry order: `global -> route -> Handler`, then reverse on return.
+The consumed `Next` continues at most once; a middleware may short-circuit with an application
+response or no-send. Unhandled errors are logged once and dropped without exposing internal
+errors or closing a healthy connection.
+
+`MiddlewareRequest` exposes read-only routing, peer and payload data and request-local
+`insert/get<T>`. Handlers can extract `RequestContext` alongside existing parameters; this
+identity/data is separate from shared `AppState`. `HandlerResult::response_view()` provides
+read-only response inspection; replacements retain the existing size checks.
+
+Only matched server business requests enter the chain. An empty chain keeps the existing
+Handler path. Processing permits cover the whole chain through reply enqueueing, while
+`processing_duration_seconds` still measures only the Handler and parameter extraction.
+Timeout cancels its inner future without rolling back side effects or covering queueing/sending.
+See the [execution and error contract](docs/middleware.md),
+[performance comparison](docs/middleware-performance.md), and run
+`cargo run --example middleware_example` for authentication, tracing, timeout and safe error mapping.
+
+---
+
 #### Receive protocol errors
 
 Custom header/tail marks belong to each server instance and apply to both requests and responses. Servers with different marks can run simultaneously or sequentially in the same process without sharing protocol configuration.
@@ -538,16 +563,16 @@ Dropping `LynnClient` cancels its connection, read/write, retry, and heartbeat w
 - ✅ Asynchronous task routing service
 - ✅ Prometheus + Grafana monitoring (v1.2.5)
 - ✅ DDD + Onion Architecture refactoring (v2.0.0)
-- ✅ 7 runnable examples covering all scenarios
+- ✅ Runnable examples for transport, state, metrics and middleware
 - ✅ TLS 1.3 transport encryption for server & client (v2.0.0)
 - ✅ Client automatic reconnection with configurable attempts (v2.0.0)
 - ✅ Global state injection (`AppState<T>`) + built-in SeaORM support (v2.0.0)
+- Global and route-specific asynchronous request middleware
 
 #### 🔜 Planned
 
 | Feature | Target Version | Status |
 |---------|---------------|--------|
-| Middleware support | TBD | 📝 Design |
 | Scheduled tasks | TBD | 💡 Idea |
 
 ---

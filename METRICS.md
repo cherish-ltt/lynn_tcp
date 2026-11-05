@@ -120,11 +120,13 @@ v2.4.0 起，启用 `server`（已包含 `metrics`）即自动接入真实传输
 - `connections.total/active` 在 TCP accept 或通过 KCP 首个会话握手包校验后立即增加，包含等待准入、握手和分派的连接；配额所有权释放时 `active` 恰好减一、`closed_total` 恰好加一。准入拒绝、握手失败/超时及初始化阶段取消计入 `failed_total`；已建立会话的后续 I/O 错误不计为初始化失败。
 - `messages.received_total` 在完整有界帧解析成功时增加，包含心跳、未知路由/构造类型；`size_bytes` 记录完整帧大小（含 10 字节头及 2 字节尾）。错误帧计入 `invalid_total`，不计入接收帧数；未完成帧 EOF 不算已解析错误帧。
 - `messages.sent_total` 仅在每个目标响应完整写入并刷新后增加；TCP/TLS 刷新不代表对端确认，KCP 刷新等待传输 ACK，但仍不代表业务处理成功。广播按实际目标分别计数。
-- `messages.dropped_total` 记录可观测到的处理许可拒绝、未知路由/构造类型、目标缺失、入队失败或响应写入失败。它不是所有丢弃帧的穷尽计数：owner 强制取消时尚在队列中的响应不逐项排空统计。
-- `processing_duration_seconds` 记录 handler 执行时间，不含等待 worker、响应入队与网络发送；panic 或取消也通过计时器释放记录截至终止时的耗时。
+- `messages.dropped_total` 记录可观测到的处理许可拒绝、未知路由/构造类型、目标缺失、入队失败、响应写入失败或中间件未处理错误；后者仅在链根部计一次。它不是所有丢弃帧的穷尽计数：owner 强制取消时尚在队列中的响应不逐项排空统计。
+- `processing_duration_seconds` 仅记录终端 Handler 与参数解析，不含中间件前后置、等待 worker、响应入队与网络发送；中间件短路不产生样本，Handler panic 或取消也通过计时器释放记录截至终止时的耗时。
 - `network.bytes_*` 在成功的传输读写返回时累计真实字节数，包含帧头尾、错误输入和部分写入；Pending、EOF、失败及取消不会把请求写入长度误计为成功长度。TLS 计量的是解密后/加密前框架字节；KCP 计量适配字节流读写（发送计数可能先于 ACK，消息 sent 仍等待 flush）。不包含握手、KCP 会话封装/ACK/重传、TLS 记录开销或 IP/TCP/UDP 头。
 - `tcp_retransmits_total`、`tcp_errors_total`、系统内存/线程/队列指标未自动采集，需调用方通过独立采集器赋值；不能用默认零值判断 OS 或进程健康。本文中的额外错误/限流指标名称是自定义采集约定，框架不会自动注册它们。
 - exporter 首次调用即初始化内置指标；未产生流量时正常导出零值。
+
+中间件返回 `Ok`、合法业务拒绝或 no-send 不直接增加 sent 或 dropped。`middleware_example` 用 tracing 另计包裹链的返回耗时，不能当作端到端交付或可靠审计记录，也不覆盖 panic/取消的 async 返回阶段；见[中间件契约](docs/middleware.md)。
 
 ### 从手工统计迁移
 

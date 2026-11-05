@@ -57,18 +57,57 @@ async fn benchmark_counts_missing_replies_and_rejects_corrupt_payloads() {
                 model1::model1_client(client, request, 1, now, now + Duration::from_millis(20))
                     .await
             })
-            .await;
-            if reply == Some(b'b') {
-                assert!(result.unwrap_err().is_panic());
-            } else {
-                let (requests, responses, samples) = result.unwrap();
-                assert_eq!(requests, 1);
-                assert_eq!(responses, u64::from(reply.is_some()));
-                assert_eq!(samples.len(), responses as usize);
-            }
+            .await
+            .unwrap();
+            assert_eq!(result.requests, 1);
+            assert_eq!(result.responses, u64::from(reply == Some(b'a')));
+            assert_eq!(result.rtts_ns.len(), result.responses as usize);
+            assert!(!result.failure_in_warmup);
+            assert_eq!(
+                result.exit,
+                match reply {
+                    None => "receive_timeout",
+                    Some(b'a') => "window_complete",
+                    _ => "payload_mismatch",
+                }
+            );
             server.await.unwrap();
         })
         .await
         .unwrap();
     }
+}
+
+#[tokio::test]
+async fn benchmark_warmup_disconnect_is_failure_even_with_zero_measured_counts() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = LynnClientConfigBuilder::new()
+        .with_server_addr(listener.local_addr().unwrap())
+        .unwrap()
+        .with_reconnect_max_attempts(&1)
+        .build();
+    let client = LynnClient::new_with_config(config).await.start().await;
+    assert!(client.is_connected());
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.read_u8().await.unwrap();
+    });
+    let now = Instant::now();
+    let result = timeout(
+        Duration::from_secs(3),
+        model1::model1_client(
+            client,
+            HandlerResult::new_with_send_to_server(1, vec![b'a'].into()).unwrap(),
+            1,
+            now + Duration::from_secs(1),
+            now + Duration::from_millis(1020),
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!((result.requests, result.responses), (0, 0));
+    assert!(result.failure_in_warmup);
+    assert_ne!(result.exit, "window_complete");
+    assert!(result.rtts_ns.is_empty());
+    server.await.unwrap();
 }

@@ -43,7 +43,7 @@ use lynn_tcp::{
 
 #[path = "support/model1.rs"]
 mod model1;
-use model1::{DRAIN, model1_client};
+use model1::{ClientResult, DRAIN, model1_client};
 
 const METHOD_ID: u16 = 1;
 /// Per-connection write channel capacity (bounds in-flight pipelined requests).
@@ -161,9 +161,22 @@ struct CellResult {
     responses: u64,
     /// Round-trip latencies in nanoseconds (model 1 only).
     rtts_ns: Vec<u64>,
+    client_results: Vec<ClientResult>,
+    server_stop_succeeded: bool,
 }
 
 impl CellResult {
+    fn succeeded(&self) -> bool {
+        self.server_stop_succeeded
+            && (self.model != 1
+                || (self.client_results.len() == self.clients
+                    && self.client_results.iter().all(|client| {
+                        client.exit == "window_complete"
+                            && client.requests > 0
+                            && client.requests == client.responses
+                    })))
+    }
+
     fn throughput_rps(&self, duration: Duration) -> f64 {
         self.responses as f64 / duration.as_secs_f64()
     }
@@ -219,6 +232,32 @@ impl Drop for BenchServer {
     }
 }
 
+impl BenchServer {
+    fn stop(&mut self) -> std::io::Result<()> {
+        if std::env::var_os("LYNN_BENCH_SERVER_STATS").is_none() {
+            return Ok(());
+        }
+        use std::io::Write as _;
+        self.child
+            .stdin
+            .take()
+            .ok_or_else(|| std::io::Error::other("missing server control pipe"))?
+            .write_all(b"STOP\n")?;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if let Some(status) = self.child.try_wait()? {
+                return if status.success() {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::other(format!("server exited: {status}")))
+                };
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        Err(std::io::Error::other("server shutdown deadline exceeded"))
+    }
+}
+
 /// Polls until the server accepts TCP connections.
 async fn wait_server(addr: SocketAddr) {
     #[cfg(feature = "kcp")]
@@ -239,9 +278,11 @@ async fn wait_server(addr: SocketAddr) {
 /// process and waits for its `READY <port>` announcement.
 fn spawn_echo_server(max_connections: usize) -> Result<BenchServer, String> {
     let _ = max_connections; // the server binary owns its capacity settings
-    let exe = env!("CARGO_BIN_EXE_bench_echo_server");
+    let exe = std::env::var_os("LYNN_BENCH_SERVER")
+        .unwrap_or_else(|| env!("CARGO_BIN_EXE_bench_echo_server").into());
     let mut child = std::process::Command::new(exe)
         .stdout(std::process::Stdio::piped())
+        .stdin(std::process::Stdio::piped())
         .spawn()
         .map_err(|error| format!("spawn bench_echo_server failed: {error}"))?;
     let Some(stdout) = child.stdout.take() else {
@@ -348,12 +389,27 @@ async fn run_model1_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
         requests: 0,
         responses: 0,
         rtts_ns: Vec::new(),
+        client_results: Vec::with_capacity(clients),
+        server_stop_succeeded: true,
     };
     for handle in handles {
-        let (requests, responses, rtts) = handle.await.expect("model1 client panicked");
-        result.responses += responses;
-        result.requests += requests;
-        result.rtts_ns.extend(rtts);
+        let mut client = match handle.await {
+            Ok(client) => client,
+            Err(error) => {
+                eprintln!("model1 client task failed: {error}");
+                ClientResult {
+                    requests: 0,
+                    responses: 0,
+                    rtts_ns: Vec::new(),
+                    exit: "task_failed",
+                    failure_in_warmup: false,
+                }
+            },
+        };
+        result.responses += client.responses;
+        result.requests += client.requests;
+        result.rtts_ns.append(&mut client.rtts_ns);
+        result.client_results.push(client);
     }
     result
 }
@@ -443,6 +499,8 @@ async fn run_model2_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
         requests: 0,
         responses: 0,
         rtts_ns: Vec::new(),
+        client_results: Vec::new(),
+        server_stop_succeeded: true,
     };
     for handle in sender_handles {
         result.requests += handle.await.expect("model2 sender panicked");
@@ -509,6 +567,17 @@ fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Resul
             .unwrap_or(0),
     );
     for (index, r) in results.iter().enumerate() {
+        let client_outcomes = r
+            .client_results
+            .iter()
+            .map(|client| {
+                format!(
+                    "{{\"requests\":{},\"responses\":{},\"exit\":\"{}\",\"failure_in_warmup\":{}}}",
+                    client.requests, client.responses, client.exit, client.failure_in_warmup
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
         let (avg, p50, p95, p99) = r.latency_ms_report();
         let latency_json = match (avg, p50, p95, p99) {
             (Some(avg), Some(p50), Some(p95), Some(p99)) => {
@@ -523,13 +592,16 @@ fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Resul
         };
         let _ = writeln!(
             out,
-            "    {{\"model\": {}, \"clients\": {}, \"requests\": {}, \"responses\": {}, \"throughput_rps\": {:.1}, \"latency\": {}}}{}",
+            "    {{\"model\": {}, \"clients\": {}, \"requests\": {}, \"responses\": {}, \"throughput_rps\": {:.1}, \"latency\": {}, \"success\": {}, \"server_stop_succeeded\": {}, \"client_outcomes\": [{}]}}{}",
             r.model,
             r.clients,
             r.requests,
             r.responses,
             r.throughput_rps(args.duration),
             latency_json,
+            r.succeeded(),
+            r.server_stop_succeeded,
+            client_outcomes,
             if index + 1 == results.len() { "" } else { "," },
         );
     }
@@ -586,17 +658,21 @@ async fn main() {
                 args.duration.as_secs()
             );
             let started = Instant::now();
-            let Ok(server) = spawn_echo_server(server_capacity) else {
+            let Ok(mut server) = spawn_echo_server(server_capacity) else {
                 eprintln!("benchmark setup failed");
                 std::process::exit(1);
             };
             let addr = server.addr;
             wait_server(addr).await;
-            let result = if model == 1 {
+            let mut result = if model == 1 {
                 run_model1_cell(addr, clients, &args).await
             } else {
                 run_model2_cell(addr, clients, &args).await
             };
+            if let Err(error) = server.stop() {
+                result.server_stop_succeeded = false;
+                eprintln!("benchmark server shutdown failed: {error}");
+            }
             // Dropping the handle kills the server child process, giving
             // every cell a pristine server.
             drop(server);
@@ -608,15 +684,21 @@ async fn main() {
                 started.elapsed().as_secs_f64()
             );
             results.push(result);
+            if let Some(path) = &args.json
+                && let Err(error) = write_json(path, &results, &args)
+            {
+                eprintln!("failed to write JSON to {path}: {error}");
+                std::process::exit(1);
+            }
         }
     }
 
     print_markdown(&results, &args);
     if let Some(path) = &args.json {
-        if let Err(err) = write_json(path, &results, &args) {
-            eprintln!("failed to write JSON to {path}: {err}");
-            std::process::exit(1);
-        }
         println!("JSON results written to {path}");
+    }
+    if results.iter().any(|result| !result.succeeded()) {
+        eprintln!("benchmark failed: incomplete client window or server shutdown failure");
+        std::process::exit(1);
     }
 }

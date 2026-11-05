@@ -15,13 +15,14 @@ use tracing::{error, info, warn};
 use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::ReactorEventSender;
 use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
-use crate::domain::handler::handler_system::AsyncFunc;
 use crate::domain::handler::handler_system::{ClientsContext, HandlerContext};
+use crate::domain::handler::request_context::RequestContext;
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::{InputBufVO, InputBufVOTrait};
 use crate::domain::model::lynn_user::LynnUser;
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
 use crate::domain::routing::router::LynnRouter;
+use crate::domain::routing::router::Route;
 use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::connection::connection_limiter::ConnectionPermits;
 use crate::infrastructure::metrics::metrics::METRICS;
@@ -155,10 +156,11 @@ async fn send_response(
 #[inline(always)]
 pub(crate) async fn input_dto_build(
     addr: SocketAddr,
+    method_id: u16,
     input_buf_vo: InputBufVO,
     process_permit: Arc<Semaphore>,
     clients: ClientsStructType,
-    handler_method: Arc<AsyncFunc>,
+    handler_method: Arc<Route>,
     reactor_event_sender: ReactorEventSender,
     states: Arc<StateRegistry>,
 ) {
@@ -171,6 +173,7 @@ pub(crate) async fn input_dto_build(
                     input_buf_vo,
                     ClientsContext::new(ClientsStruct(clients.clone())),
                     states,
+                    RequestContext::new(method_id, addr),
                 ),
                 clients,
                 permit,
@@ -277,6 +280,7 @@ pub(crate) async fn read_connection(
                                         {
                                             input_dto_build(
                                                 addr,
+                                                method_id,
                                                 input_buf_vo,
                                                 process_permit.clone(),
                                                 clients.clone(),

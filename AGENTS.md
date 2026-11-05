@@ -290,6 +290,8 @@ docs/
 ├── kcp-performance.md  # KCP 参数及同条件性能研究
 ├── kcp-v0.6.0-validation.md # kcp-ovo 0.5.2/0.6.0 配对复测
 ├── kcp-v0.8.0-validation.md # kcp-ovo 0.8.0 API 迁移与升级验证
+├── middleware.md       # 请求中间件 API、顺序、错误与生命周期契约
+├── middleware-performance.md # 中间件独立进程性能对照与复测方法
 ├── benchmark/          # 基准测试结果存档（JSON，按版本与机型命名）
 ├── FlowChart.png       # v1.x 架构流程图
 ├── FlowChart-v2.png    # v2.x（DDD + 洋葱架构）流程图
@@ -441,3 +443,12 @@ docs/
 - 广播句柄不持有 server owner 或强引用在线表；启动前及停止后显式报错，不得保活 I/O、后台任务或 AppState。
 - 每次记录目标连接的 sender 快照，对有界写队列非等待入队并报告 enqueued/full/closed；不持 DashMap guard 跨等待，不重定向至同地址的新连接，不改变 Handler 的等待背压。
 - 广播复用长度校验、实例帧标记和共用 writer；入队不代表交付。回归覆盖满队列隔离、关闭/取消、双实例、空/超限 payload、实际 TCP/TLS/KCP 和发送指标。
+
+### 10.23 请求中间件
+
+- `server` 提供全局及路由级异步链，注册顺序即进入顺序，全局始终包住路由；启动前冻结，重复路由覆盖 Handler 与本地链。
+- `Next` 与请求单次消费，不允许重试/重新分派；请求身份与 payload 只读，请求类型表首次插入才分配，`RequestContext` 冻结只读且缺失返回 None，与全局 AppState 分开。
+- 空链保留原 Handler 快路径；非空链复用冻结计划，不每层 spawn，不提前释放处理许可；正常 EOF 等待整链与最终响应入队。
+- 未处理错误在根部记录一次并计一次 dropped，不回发内部错误、不关闭健康连接；响应替换须走现有长度校验，主动广播不经过入站链。
+- Handler 耗时只包含终端调用/参数解析，短路无样本；timeout 不回滚副作用，panic/取消不保证 async 返回阶段运行。
+- 示例不得记录凭据/payload 或默认放行身份；性能比较保留基线/空链/透传/组合链的独立进程原始数据与失败轮次，不将全进程分配当作纯 Handler 分配。

@@ -1,4 +1,5 @@
 use std::{
+    future::Future,
     net::{SocketAddr, ToSocketAddrs},
     sync::{
         Arc,
@@ -16,9 +17,12 @@ use crate::application::server::broadcast::BroadcastHandle;
 use crate::application::server::server_common::spawn_check_heart;
 use crate::application::server::server_config::LynnServerConfig;
 use crate::application::server::server_tasks::ServerTasks;
-use crate::domain::handler::handler_system::{AsyncFunc, HandlerContext, IHandler, IntoSystem};
+use crate::domain::handler::handler_system::{HandlerContext, IntoSystem};
+use crate::domain::handler::middleware::{MiddlewareChain, Next};
+use crate::domain::handler::request_context::MiddlewareRequest;
+use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType, LynnUser};
-use crate::domain::routing::router::LynnRouter;
+use crate::domain::routing::router::{LynnRouter, Route};
 use crate::domain::state::state_registry::StateRegistry;
 use crate::infrastructure::connection::connection_limiter::ConnectionLimiter;
 use crate::infrastructure::tcp::reactor::{ReactorEvent, TcpReactor};
@@ -27,7 +31,7 @@ use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
 /// Task body sent through the channel: (handler, context, clients, processing permit).
 pub(crate) type TaskBodyOutChannel = (
-    Arc<AsyncFunc>,
+    Arc<Route>,
     HandlerContext,
     ClientsStructType,
     OwnedSemaphorePermit,
@@ -121,6 +125,7 @@ pub struct LynnServer<'a> {
     clients: ClientsStruct,
     /// A map of routes, where the key is a method ID and the value is a service handler.
     lynn_router: Arc<LynnRouter>,
+    middleware: MiddlewareChain,
     /// The configuration for the server.
     lynn_config: LynnServerConfig<'a>,
     /// reactor
@@ -146,6 +151,7 @@ impl<'a> LynnServer<'a> {
         Self {
             clients: ClientsStruct(Arc::new(DashMap::new())),
             lynn_router: Arc::new(LynnRouter::new()),
+            middleware: MiddlewareChain::new(),
             lynn_config,
             reactor: TcpReactor::new(state_registry.clone(), tasks.clone()),
             state_registry,
@@ -259,6 +265,28 @@ impl<'a> LynnServer<'a> {
         )
     }
 
+    /// Appends a global middleware, wrapping every route regardless of registration order.
+    pub fn with_middleware<F, Fut>(mut self, middleware: F) -> Self
+    where
+        F: Fn(MiddlewareRequest, Next) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = crate::Result<HandlerResult>> + Send + 'static,
+    {
+        self.middleware = self.middleware.with(middleware);
+        self
+    }
+
+    /// Registers a handler and its local chain together, replacing both on duplicate IDs.
+    pub fn add_router_with_middleware<Param>(
+        self,
+        method_id: u16,
+        handler: impl IntoSystem<Param>,
+        chain: MiddlewareChain,
+    ) -> Self {
+        self.lynn_router
+            .add_router_with_middleware(method_id, handler, chain);
+        self
+    }
+
     /// Registers a shared state value that handlers can extract through
     /// `AppState<T>` parameters (like axum's `State<T>`).
     ///
@@ -325,12 +353,14 @@ impl<'a> LynnServer<'a> {
     }
 
     /// Runs the server until cancelled, returning initialization or transport errors.
-    pub async fn start(self) -> crate::Result<()> {
+    pub async fn start(mut self) -> crate::Result<()> {
         if *self.lynn_config.get_server_max_reactor_taskpool_size() == 0 {
             return Err(crate::LynnError::config(
                 "server taskpool size must be greater than zero",
             ));
         }
+        self.lynn_router
+            .freeze(std::mem::take(&mut self.middleware));
         let server_arc = Arc::new(self);
         server_arc.run().await
     }

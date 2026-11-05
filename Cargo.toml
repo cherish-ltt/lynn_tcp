@@ -107,6 +107,14 @@ name = "state_example"
 required-features = ["server", "client"]
 
 [[example]]
+name = "middleware_example"
+required-features = ["server", "client"]
+
+[[example]]
+name = "middleware_bench_server"
+required-features = ["server"]
+
+[[example]]
 name = "tls_example"
 required-features = ["server", "client", "tls"]
 
@@ -125,6 +133,22 @@ required-features = ["server", "client"]
 
 [[test]]
 name = "state_injection"
+required-features = ["server"]
+
+[[test]]
+name = "middleware_core"
+required-features = ["server"]
+
+[[test]]
+name = "middleware_lifecycle"
+required-features = ["server"]
+
+[[test]]
+name = "middleware_metrics"
+required-features = ["server"]
+
+[[test]]
+name = "middleware_transport"
 required-features = ["server"]
 
 [[test]]

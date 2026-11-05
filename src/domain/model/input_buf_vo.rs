@@ -37,6 +37,11 @@ pub trait InputBufVOTrait {
 /// This implementation provides methods to create a new `InputBufVO` instance,
 /// retrieve the input address, and read various data types from the buffer.
 impl InputBufVO {
+    #[cfg(feature = "server")]
+    pub(crate) fn payload(&self) -> &[u8] {
+        &self.data[3..]
+    }
+
     /// Creates a new `InputBufVO` instance.
     ///
     /// This function takes a byte vector and an input address and returns a new
