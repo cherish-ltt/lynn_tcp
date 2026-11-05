@@ -289,6 +289,7 @@ docs/
 ├── kcp.md              # KCP 配置、迁移、建议场景与验证契约
 ├── kcp-performance.md  # KCP 参数及同条件性能研究
 ├── kcp-v0.6.0-validation.md # kcp-ovo 0.5.2/0.6.0 配对复测
+├── kcp-v0.8.0-validation.md # kcp-ovo 0.8.0 API 迁移与升级验证
 ├── benchmark/          # 基准测试结果存档（JSON，按版本与机型命名）
 ├── FlowChart.png       # v1.x 架构流程图
 ├── FlowChart-v2.png    # v2.x（DDD + 洋葱架构）流程图
@@ -421,7 +422,7 @@ docs/
 ### 10.21 可选 KCP 传输
 
 - `kcp` 默认关闭，双端使用 `with_kcp` 显式选择；单实例不自动回退或同时监听。TLS+KCP 必须显式拒绝。
-- 使用 kcp-ovo 0.6.0 底层控制块及有界适配，保持现有帧/业务层不变；KCP 会话没有加密认证，不兼容标准 KCP 或上游高层 API。
+- 使用 kcp-ovo 0.8.0 底层控制块及有界适配，保持现有帧/业务层不变；KCP 会话没有加密认证，不兼容标准 KCP 或上游高层 API。
 - 会话先取得总数/每 IP 配额再分派，地址与 conv 同时区分报文；活跃旧会话不被不同 conv 抢占，失效后清理；owner 持有 driver，Drop 必须取消。
 - KCP flush 等待已写字节的传输 ACK，shutdown 等待有序 EOF 确认；均不代表业务交付，强制释放不承诺排空。
 - KCP 保持 10 MiB 帧 body 上限；适配发送分片、接收队列及逐会话报文队列均有界。
@@ -430,6 +431,7 @@ docs/
 - KCP 默认采用自定义 fast（nodelay/10ms/fastresend=2/nocwnd），新数据及 ACK 立即驱动；normal 保留周期输出。底层参数必须验证，不得启用破坏 HELLO/DATA/EOF 边界的原生 stream_mode。
 - 性能测试须独立统计请求和响应、校验内容；不得用响应数反填请求数证明无丢失。TCP/KCP 丢包比较须使用同条件包级网络仿真，不能以 TCP 应用代理替代。
 - 高丢包研究保留每轮退出码、请求/响应差值及 qdisc 统计，不删除失败轮次；有限接收期限内的缺失回复不能直接认定为协议永久丢失。
-- 依赖复测说明存放于 `docs/kcp-v0.5.2-validation.md` 和 `docs/kcp-v0.6.0-validation.md`，原始数据存放于 `docs/benchmark/`；新旧依赖版本结果分开存档，不覆盖历史数据。性能升级须同源码配对复跑，使用独立 target 并记录二进制哈希；所有构建完成后串行测量，不能把上游微基准收益直接当作本项目端到端收益。
+- 依赖复测说明存放于 `docs/kcp-v0.5.2-validation.md`、`docs/kcp-v0.6.0-validation.md` 和 `docs/kcp-v0.8.0-validation.md`，原始数据存放于 `docs/benchmark/`；新旧依赖版本结果分开存档，不覆盖历史数据。性能升级须同源码配对复跑，使用独立 target 并记录二进制哈希；所有构建完成后串行测量，不能把上游微基准收益直接当作本项目端到端收益。
 - KCP 发布说明须链接 `docs/kcp.md` 的双端配置、迁移和建议场景，区分发布前实测与发布验证；版本更新不得重命名旧性能样本或承诺普遍快于 TCP。
-- v2.4.1 起锁定 kcp-ovo 0.6.0；即使是补丁发布，也须说明公开的 `KcpConfig.protocol` 存在上游版本类型边界，直接传入旧版上游配置的应用需同步升级或使用 `lynn_kcp::KcpOptions` 重导出。
+- v2.4.2 起锁定 kcp-ovo 0.8.0；即使是补丁发布，也须说明公开的 `KcpConfig.protocol` 存在上游版本类型边界，直接传入旧版上游配置的应用需同步升级或使用 `lynn_kcp::KcpOptions` 重导出。
+- 上游切片头部解析仅推进头部游标，不保证剩余切片等于声明 payload；必须保留声明长度相等检查及完整报文输入，回归覆盖 HELLO 声明长度偏短/偏长、尾随字节和合法握手。

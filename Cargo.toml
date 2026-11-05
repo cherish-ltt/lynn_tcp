@@ -1,6 +1,6 @@
 [package]
 name = "lynn_tcp"
-version = "2.4.1"
+version = "2.4.2"
 edition = "2024"
 rust-version = "1.99.1"
 authors = ["lynn_tcp Contributors"]
@@ -16,7 +16,7 @@ keywords = ["tcp" , "tcp-server" , "tcp-client" , "network" , "lynn"]
 tokio = { version = "=1.52.3", features = ["macros","net","sync","rt-multi-thread","time","io-util"] }
 
 # 可选：KCP 传输（使用底层控制块，不使用高层消息监听器）
-kcp-ovo = { version = "=0.6.0", default-features = false, optional = true }
+kcp-ovo = { version = "=0.8.0", default-features = false, optional = true }
 
 # 数据结构与并发容器
 bytes = "=1.11.1"

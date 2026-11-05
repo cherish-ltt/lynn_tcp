@@ -43,7 +43,7 @@ async fn normal_timeouts_double_and_use_the_new_deadline() {
 
 fn push_packet(sn: u32, frg: u8, payload: &[u8]) -> Vec<u8> {
     let header = KcpPacketHeader::new(1, KcpCmd::Push, frg, 128, 0, sn, 0, payload.len() as u32);
-    let mut packet = header.to_bytes().unwrap().to_vec();
+    let mut packet = header.to_bytes().unwrap();
     packet.extend_from_slice(payload);
     packet
 }
@@ -62,7 +62,7 @@ fn received_messages_survive_reuse_of_single_and_fragmented_input_buffers() {
                 packet.fill(0);
                 drop(packet);
             }
-            assert_eq!(kcp.recv().unwrap().as_ref(), payload);
+            assert_eq!(kcp.recv().unwrap(), payload);
             assert_eq!(kcp.recv().unwrap_err(), KcpError::QueueEmpty);
         }
     }
@@ -78,7 +78,7 @@ fn reordered_duplicate_messages_preserve_order_and_recover_a_full_receive_window
         }
         assert_eq!((kcp.nrcv_que, kcp.nrcv_buf), (12, 1));
         for sn in 0..13_u32 {
-            assert_eq!(kcp.recv().unwrap().as_ref(), sn.to_be_bytes());
+            assert_eq!(kcp.recv().unwrap(), sn.to_be_bytes());
             if sn == 0 {
                 assert_eq!((kcp.nrcv_que, kcp.nrcv_buf), (12, 0));
             }
@@ -86,6 +86,6 @@ fn reordered_duplicate_messages_preserve_order_and_recover_a_full_receive_window
         assert_eq!((kcp.nrcv_que, kcp.nrcv_buf), (0, 0));
         assert_eq!(kcp.recv().unwrap_err(), KcpError::QueueEmpty);
         kcp.input(&push_packet(13, 0, b"next")).unwrap();
-        assert_eq!(kcp.recv().unwrap().as_ref(), b"next");
+        assert_eq!(kcp.recv().unwrap(), b"next");
     }
 }

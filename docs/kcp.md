@@ -1,10 +1,10 @@
 # KCP 配置、迁移与场景指南
 
-适用 lynn_tcp **v2.4.1**、kcp-ovo **0.6.0**；v2.4.0 使用 0.5.2。配置和安全边界以本页为准；当前依赖对照见 [0.5.2/0.6.0 配对复测](kcp-v0.6.0-validation.md)，历史证据见 [0.5.2 复测](kcp-v0.5.2-validation.md)，不保证其他网络或负载复现同样收益。
+适用 lynn_tcp **v2.4.2**、kcp-ovo **0.8.0**；v2.4.1 使用 0.6.0，v2.4.0 使用 0.5.2。配置和安全边界以本页为准；本次升级证据见 [0.8.0 验证](kcp-v0.8.0-validation.md)。[0.5.2/0.6.0 配对复测](kcp-v0.6.0-validation.md) 与 [0.5.2 复测](kcp-v0.5.2-validation.md) 保留为历史证据，本次没有 0.8.0 性能测量。
 
 ## 从 TCP 或早期 PR 迁移
 
-1. 使用 Rust 1.99.1，更新依赖与 lock；本版本将 Tokio/bytes 精确统一为 `=1.52.3` / `=1.11.1`，即使保持 TCP 也需验证下游依赖解析。应用若直接依赖 Tokio/bytes，可使用兼容约束或这一实测精确组合，不能同时要求另一个兼容系列的精确版本。
+1. 使用 Rust 1.99.1，更新依赖与 lock；本项目继续精确锁定 Tokio/bytes 为 `=1.52.3` / `=1.11.1`，即使保持 TCP 也需验证下游依赖解析。kcp-ovo 0.8.0 已放宽为兼容版本范围，但本项目的精确约束仍有效；应用直接依赖 Tokio/bytes 时须与此组合兼容。
 2. 双端显式启用 `kcp`，通过公开 builder 选择同一适配；只启用 feature 不会把默认 TCP 自动改成 KCP。无需直接依赖 kcp-ovo 或替换业务 handler。
 3. 对应地址须允许 UDP 流量；TCP 端口可达不代表 UDP 可达，框架不会穿透 NAT 或自动回退 TCP。生产灰度保留独立 TCP/TCP+TLS 实例和部署配置，客户端明确选择目标传输；不要把敏感数据从 TLS 迁移为明文 KCP。
 4. 从默认 fast 和窗口 32/128 开始，保留既有协议标记、心跳及应用层回复检查，再按下文逐项测量调整。旧 PR 中 `KcpConfig { idle_timeout_secs: n }` 字面量补 `..KcpConfig::default()`；不继续使用旧 tick-only 性能结果或 kcp-ovo 0.5.0。
@@ -15,7 +15,7 @@
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.1", features = ["kcp"] }
+lynn_tcp = { version = "=2.4.2", features = ["kcp"] }
 tokio = { version = "=1.52.3", features = ["macros", "rt-multi-thread"] }
 ```
 
@@ -44,7 +44,7 @@ fn main() -> lynn_tcp::Result<()> {
 
 ## 建议场景与调整顺序
 
-下表数值来自 [历史 0.5.2 复测](kcp-v0.5.2-validation.md)，不是 0.6.0 测量值；新版配对结果见 [0.6.0 复测](kcp-v0.6.0-validation.md)。
+下表数值来自 [历史 0.5.2 复测](kcp-v0.5.2-validation.md)，不是 0.8.0 测量值；历史新旧配对结果见 [0.6.0 复测](kcp-v0.6.0-validation.md)。这些结果不能直接用作本版本的性能验收。
 
 | 场景 | 建议 | 依据与限制 |
 |---|---|---|
@@ -65,9 +65,10 @@ fn main() -> lynn_tcp::Result<()> {
 - TCP 默认不变；feature `kcp` 默认关闭，双端 builder 的 `with_kcp(KcpConfig)` 显式选择 UDP/KCP；不自动回退、不同时监听。
 - TCP 专用的 nodelay、keepalive 和 socket buffer 配置不作用于 KCP；KCP 通过 `KcpConfig::protocol` 设置底层参数，框架读写超时继续生效。
 - 业务 handler、AppState、多路由、广播和既有帧格式复用；只改变传输接入。独立角色关闭默认 feature 后使用 `client,kcp` 或 `server,kcp`。
-- 固定 kcp-ovo `=0.6.0`，直接使用 `core::kcp::Kcp`，不使用消息式高层 KcpStream/KcpListener。上游消息 API 缺少独立 accept/关闭会话及框架所需的所有权控制。
-- `KcpConfig.protocol` 暴露上游配置类型；应用若另外依赖 `kcp-ovo =0.5.2` 并直接传入配置，需同步升级，或改用本库的 `lynn_kcp::KcpOptions` 重导出，避免两个版本的 Rust 类型不匹配。普通 builder/默认配置与线路格式不变。
-- Rust 1.99.1；上游精确锁定使 Tokio/bytes 必须与本仓库一致，采用 `=1.52.3` / `=1.11.1`，不能把不同 semver-compatible 精确版本当成可以重复安装。
+- 固定 kcp-ovo `=0.8.0`，直接使用 `core::kcp::Kcp`；继续由本适配管理 accept、会话及 driver 所有权，不接入上游高层 KcpStream/KcpListener 或 drain API。
+- `KcpConfig.protocol` 暴露上游配置类型；应用若另外依赖 kcp-ovo 0.6.0 或更早版本并直接传入配置，需同步升级至 0.8.0，或改用本库的 `lynn_kcp::KcpOptions` 重导出，避免两个版本的 Rust 类型不匹配。普通 builder/默认配置与线路格式不变。
+- 上游字节 API 改用标准库类型：头部解析接收 `&mut &[u8]`，接收及编码/输出返回 `Vec<u8>`；本适配保留完整数据报供 `Kcp::input` 使用，并严格校验声明长度与实际 payload，继续维护 HELLO/DATA/EOF 消息边界。
+- Rust 1.99.1；本项目保留 Tokio/bytes 的 `=1.52.3` / `=1.11.1` 精确约束。上游 0.8.0 使用兼容版本范围，本项目并未随之放宽自身依赖。
 - 上游 [#36](https://github.com/cherish-ltt/kcp-ovo/issues/36) 已修复；0.5.2 起不再强制全局 mimalloc，下游自定义全局分配器可与 `kcp` 共存，已有实际编译/运行回归。上游仍启用 Tokio `full`。没有修改、fork 或发布上游。
 
 ## Fast、Normal 与流模式
@@ -104,7 +105,7 @@ let custom = KcpConfig {
 
 本适配必须 `stream_mode=false`：HELLO、DATA、EOF 是 KCP 消息封装；直接打开上游流模式会合并/拆分这些边界。因此两端均在启动前**拒绝** stream_mode=true，而非静默忽略。应用仍获得 AsyncRead/AsyncWrite 字节流；将来若采用原生 KCP 流模式，需要单独版本化并实现有界会话封装解析，不能仅翻转 bool。
 
-历史性能根因见 [KCP 性能研究](kcp-performance.md)，当前验收见 [0.5.2/0.6.0 配对复测](kcp-v0.6.0-validation.md)。已报告的 [kcp-ovo #38](https://github.com/cherish-ltt/kcp-ovo/issues/38) 在 0.5.2 修复并关闭，0.6.0 保留该策略；本项目验证 normal 累加 max、fast 累加半个 RTO，以及使用新 RTO 安排下次重传。未在下游私改算法；不能把上游微基准或旧版数据当本适配端到端性能保证。
+历史性能根因见 [KCP 性能研究](kcp-performance.md)，当前依赖兼容验收见 [0.8.0 验证](kcp-v0.8.0-validation.md)，历史配对测量见 [0.5.2/0.6.0 复测](kcp-v0.6.0-validation.md)。已报告的 [kcp-ovo #38](https://github.com/cherish-ltt/kcp-ovo/issues/38) 在 0.5.2 修复并关闭，0.8.0 保留该策略；本项目验证 normal 累加 max、fast 累加半个 RTO，以及使用新 RTO 安排下次重传。未在下游私改算法；不能把上游微基准或旧版数据当本适配端到端性能保证。
 
 ## 安全及互操作
 

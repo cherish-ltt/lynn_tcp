@@ -55,9 +55,8 @@ impl KcpListener {
                 },
             };
             let packet = &buffer[..n];
-            let Ok((header, payload)) =
-                KcpPacketHeader::from_bytes(&mut bytes::Bytes::copy_from_slice(packet))
-            else {
+            let mut cursor = packet;
+            let Ok((header, payload)) = KcpPacketHeader::from_bytes(&mut cursor) else {
                 continue;
             };
             if header.conv == 0 || n > 1400 || header.len as usize != payload.len() {
@@ -73,11 +72,7 @@ impl KcpListener {
                 }
                 continue;
             }
-            if header.cmd != KcpCmd::Push
-                || header.sn != 0
-                || header.frg != 0
-                || payload.as_ref() != HELLO
-            {
+            if header.cmd != KcpCmd::Push || header.sn != 0 || header.frg != 0 || payload != HELLO {
                 continue;
             }
             let mut permit = ConnectionPermits {
