@@ -487,6 +487,29 @@ Custom header/tail marks belong to each server instance and apply to both reques
 
 Both client and server reject malformed frame headers, lengths, and trailers and close the affected transport, including TLS. Valid fragmented/coalesced frames remain supported. The receive parser retains at most the 10 MiB frame limit plus the 10-byte header and one 1 KiB socket read; a terminal parse error releases its buffer and rejects further input. This is a per-parser bound, not a process-wide memory quota. Clients retain their configured reconnect policy after a protocol error.
 
+### Background Broadcast
+
+Obtain `let broadcast = server.broadcast_handle()` before `server.start()` consumes the server.
+Application-owned background work can call `broadcast.broadcast(method_id, payload: Bytes)`
+without receiving a client request. The clonable handle uses that server's frame markers and
+works over TCP, TLS or KCP. See [`background_broadcast`](examples/background_broadcast.rs)
+(`cargo run --example background_broadcast`) for an application-owned periodic task.
+
+Each call snapshots online connections and makes one non-waiting attempt per bounded write
+queue, returning `BroadcastReport { enqueued, full, closed }`. Empty snapshots return zeros;
+full or closed queues do not delay healthy targets. Connections changing during the snapshot
+may be included or omitted. Counts mean queue acceptance, not socket write completion,
+transport acknowledgement or business delivery. Partial success is explicit; the application
+decides whether to drop or retry, and retrying the whole broadcast can duplicate delivery.
+
+Calls before startup or after owner cancellation return `LynnError::Server`. The handle does
+not retain the server, its tasks or application state. A call racing with shutdown can accept
+frames that shutdown later discards. Payloads above 10 MiB minus 5 bytes return
+`LynnError::Protocol` before encoding or queueing; empty payloads are valid. Existing Handler
+responses retain their waiting backpressure. Automatic sent/byte metrics still count actual
+writes; rejected target queues increment dropped messages. The application owns scheduling
+and cancellation; the library provides no timer, retry policy or delivery guarantee.
+
 ### Client Automatic Reconnection
 
 Server connection quotas are returned after disconnect, transport errors, heartbeat eviction, or failed TLS handshakes. Read EOF drains already accepted handlers and their replies before closing the write half; heartbeat eviction still bounds unresponsive sessions. Processing permits cover queued handlers through reply enqueueing, and excess requests are rejected with a warning rather than queued without a limit.

@@ -13,6 +13,10 @@ impl ServerTasks {
         (owner, Self { cancelled })
     }
 
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.cancelled.has_changed().is_err()
+    }
+
     pub(crate) fn spawn(&self, task: impl Future<Output = ()> + Send + 'static) -> JoinHandle<()> {
         let mut cancelled = self.cancelled.clone();
         tokio::spawn(async move {
