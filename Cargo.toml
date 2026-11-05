@@ -1,6 +1,6 @@
 [package]
 name = "lynn_tcp"
-version = "2.4.2"
+version = "2.5.0"
 edition = "2024"
 rust-version = "1.99.1"
 authors = ["lynn_tcp Contributors"]

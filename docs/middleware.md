@@ -1,6 +1,6 @@
 # 异步请求中间件
 
-`server` feature 提供 `lynn_middleware`。中间件可以用于鉴权、请求数据注入、超时及响应处理；旧 `add_router` 和 Handler 签名无需迁移，不注册中间件时仍走原 Handler 快路径。
+v2.5.0 起，`server` feature 提供 `lynn_middleware`。中间件可以用于鉴权、请求数据注入、超时及响应处理；旧 `add_router` 和 Handler 签名无需迁移，不注册中间件时仍走原 Handler 快路径。
 
 ## 注册与顺序
 

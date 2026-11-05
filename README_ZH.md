@@ -26,17 +26,21 @@
 
 采用 **DDD（领域驱动设计）+ 洋葱架构**，将核心领域逻辑与基础设施实现分离，提升可维护性和可扩展性。
 
-### v2.4.2 - KCP 依赖与字节 API 升级
+### v2.5.0 - 后台主动广播与请求中间件
 
-[Issue #97](https://github.com/cherish-ltt/lynn_tcp/issues/97) 将 kcp-ovo 从 **0.6.0 升级至 0.8.0**，
-并将底层传输适配到借用切片/`Vec<u8>` 字节 API。
-TCP 保持默认，KCP 仍需显式启用且无加密，自定义 fast 配置、消息边界和 ACK 语义不变。
-本次不引入上游高层 drain API，不宣称性能提升；历史性能数据保持不变。
-尽管是补丁版本，直接传入另行导入的上游配置类型的应用仍须同步升级该依赖至 0.8.0，
-或使用 `lynn_kcp::KcpOptions` 重导出。
-Rust **1.99.1** 与 Tokio/bytes **1.52.3/1.11.1** 不变，包括默认 TCP 构建。
-详见 [v2.4.2 变更日志](docs/update_logs/v2.4.2.md)、[升级验证](docs/kcp-v0.8.0-validation.md)
-和 [KCP 迁移与建议场景](docs/kcp.md)。
+[Issue #91](https://github.com/cherish-ltt/lynn_tcp/issues/91) 新增实例级 `BroadcastHandle`，
+供后台任务主动广播，逐类报告成功入队、满队列和已关闭目标，不等待慢连接。
+句柄不保活服务端，成功入队不代表交付。
+[Issue #95](https://github.com/cherish-ltt/lynn_tcp/issues/95) 新增全局与路由级异步中间件，
+提供单次 `Next`、隔离的请求数据和 `RequestContext`。
+现有 Handler 继续可用；超时不回滚副作用。
+详见 [v2.5.0 变更日志](docs/update_logs/v2.5.0.md)、[中间件指南](docs/middleware.md)
+和 [开销实测](docs/middleware-performance.md)。性能存档保留发布前版本与哈希；
+空链不代表零内存成本，现有测量不能证明稳定的吞吐变化。
+
+Rust **1.99.1**、Tokio/bytes **1.52.3/1.11.1** 与可选 kcp-ovo **0.8.0** 不变。
+TCP 保持默认，KCP 仍不认证、不加密。直接传入旧上游配置类型的应用须同步升级该依赖至 0.8.0，
+或使用 `lynn_kcp::KcpOptions`，详见 [KCP 迁移与建议场景](docs/kcp.md)。
 从 v2.4.0 之前升级时仍须删除重复的内置 [指标累加](METRICS.md)，更早版本用户还须适配
 [v2.3.0 返回类型变更](docs/update_logs/v2.3.0.md)。
 
@@ -94,7 +98,7 @@ TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配
 
 ```toml
 [dependencies]
-lynn_tcp = "=2.4.2"
+lynn_tcp = "=2.5.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -103,7 +107,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.2", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.5.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -112,7 +116,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.2", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.5.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -376,9 +380,9 @@ TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
 （[#36](https://github.com/cherish-ltt/kcp-ovo/issues/36)）与超时退避/重传期限
 （[#38](https://github.com/cherish-ltt/kcp-ovo/issues/38)）修复，支持应用自选全局分配器。
 上游仍启用 Tokio `full`；适配层在上游字节 API 边界改用借用切片与 `Vec<u8>`，自定义 fast 配置不变。
-本次结果见 [0.8.0 升级验证](docs/kcp-v0.8.0-validation.md)。
+0.8.0 迁移结果见 [v2.4.2 升级验证](docs/kcp-v0.8.0-validation.md)。
 [0.5.2/0.6.0 配对复测](docs/kcp-v0.6.0-validation.md) 与更早数据仍是历史证据，保留其中的改善与下降。
-本次未测量 0.8.0 性能，KCP 仍默认关闭且不承诺更快。
+本版本未新增 KCP 性能测量，KCP 仍默认关闭且不承诺更快。
 应用若直接传入另行依赖的上游配置类型，须同步升级该依赖至 0.8.0，或使用
 `lynn_kcp::KcpOptions` 重导出，避免不同版本的 Rust 类型不匹配。
 生命周期、内存边界、指标、安全、互操作与测试见 [KCP 传输契约](docs/kcp.md)。
@@ -389,7 +393,7 @@ TLS **默认关闭**。启用 `tls` feature 并配置证书即手动开启 —�
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.4.2", features = ["tls"] }
+lynn_tcp = { version = "=2.5.0", features = ["tls"] }
 ```
 
 ```rust
