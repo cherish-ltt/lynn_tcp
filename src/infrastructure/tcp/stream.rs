@@ -109,6 +109,7 @@ impl AsyncWrite for LynnStream {
 #[cfg(feature = "server")]
 pub(crate) fn split_transport(
     stream: LynnStream,
+    active: crate::application::server::server_shutdown::ActivityGuard,
 ) -> (
     BoxedReadHalf,
     BoxedWriteHalf,
@@ -123,7 +124,7 @@ pub(crate) fn split_transport(
         _ => observer,
     };
     let stream = crate::infrastructure::metrics::transport::MeasuredIo::new(stream);
-    let stream = super::session_io::SessionIo::new(stream, completion);
+    let stream = super::session_io::SessionIo::new(stream, completion, active);
     let (read_half, write_half) = tokio::io::split(stream);
     (Box::new(read_half), Box::new(write_half), observer)
 }

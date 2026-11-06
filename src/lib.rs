@@ -217,6 +217,7 @@ pub mod lynn_server {
     /// The server configuration builder, providing a fluent interface to build server configurations.
     pub use super::application::server::server_config::LynnServerConfigBuilder;
     pub use super::application::server::server_ready::{ServerReady, ServerStartupError};
+    pub use super::application::server::server_shutdown::ShutdownOutcome;
     /// The `ClientsContext` struct is used to manage the state and context of connected clients.
     pub use super::domain::handler::handler_system::ClientsContext;
     pub use super::domain::model::session::{

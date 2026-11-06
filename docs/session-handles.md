@@ -11,7 +11,8 @@ it is process-local and is not a user identity or a serializable credential.
 Call `try_send(method_id, Bytes)` after registration has returned. `Enqueued` means one
 non-waiting enqueue to that connection's bounded writer queue; `Full` and `Closed`
 explicitly reject the push. No retry or offline storage is provided. A concurrent close
-can discard an accepted frame. Payload validation happens first: empty payloads are legal,
+can discard an accepted frame. Server draining rejects new pushes as `Closed` while keeping
+earlier enqueues in the drain. Payload validation happens first: empty payloads are legal,
 and payloads above 10 MiB minus 5 bytes return `LynnError::Protocol` without harming the
 connection. The normal writer applies instance frame markers and handles TCP, TLS, KCP and
 KCP+TLS; sent counters advance after write and flush, not when the frame is queued. Rejected
@@ -62,7 +63,8 @@ are disabled.
 
 Handler 注册并返回后，后台调用 `try_send(method_id, Bytes)`。`Enqueued` 仅表示向原会话有界
 队列非等待入队，`Full` 和 `Closed` 明确拒绝；没有重试、离线存储或交付保证。并发关闭可能
-丢弃已入队消息。长度先校验：空 payload 合法，超过 10 MiB 减 5 字节返回 `LynnError::Protocol`，
+丢弃已入队消息。服务端排空边界后的推送返回 `Closed`，边界前已入队消息仍参与排空。
+长度先校验：空 payload 合法，超过 10 MiB 减 5 字节返回 `LynnError::Protocol`，
 不关闭健康连接。复用实例帧标记及 TCP/TLS/KCP/KCP+TLS 共用 writer，发送指标在写完并 flush 后增加，
 队列拒绝计入 dropped；普通 Handler 响应仍等待背压。主动发送不经过入站中间件，应用必须先
 完成授权再授予或保存私人推送能力。

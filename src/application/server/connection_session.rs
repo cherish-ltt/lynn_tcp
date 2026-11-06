@@ -1,23 +1,95 @@
 use std::{net::SocketAddr, sync::Arc, time::SystemTime};
 
 use tokio::{
-    sync::{RwLock, watch},
+    sync::{RwLock, Semaphore, mpsc::Sender, watch},
     task::JoinHandle,
 };
 
 use crate::{
-    domain::model::lynn_user::ClientsStructType,
+    application::server::server_tasks::ServerTasks,
+    domain::model::lynn_user::{ClientsStructType, LynnUserSignal},
     infrastructure::connection::connection_limiter::ConnectionPermits,
 };
 
+#[cfg(test)]
+#[path = "connection_lifetime_tests.rs"]
+mod lifetime_tests;
+
 pub(crate) struct ConnectionSession {
     pub(crate) handle: crate::domain::model::session::SessionHandle,
-    pub(crate) writer: JoinHandle<()>,
+    pub(crate) writer: JoinHandle<std::io::Result<()>>,
     pub(crate) closed: watch::Receiver<bool>,
     pub(crate) clients: ClientsStructType,
     pub(crate) addr: SocketAddr,
     pub(crate) last_communicate_time: Arc<RwLock<SystemTime>>,
     pub(crate) permit: ConnectionPermits,
+    pub(crate) tasks: ServerTasks,
+}
+
+impl ConnectionSession {
+    pub(crate) async fn finish_requests(permits: Arc<Semaphore>, mut remaining: usize) {
+        // A peer's EOF drains only its requests; the server boundary drains all requests.
+        while remaining > 0 {
+            let batch = remaining.min(u32::MAX as usize) as u32;
+            let Ok(permit) = permits.acquire_many(batch).await else {
+                return;
+            };
+            permit.forget();
+            remaining -= batch as usize;
+        }
+    }
+
+    pub(crate) async fn close_writer(&mut self) {
+        let sender = self
+            .clients
+            .get(&self.addr)
+            .filter(|user| {
+                Arc::ptr_eq(
+                    &user.get_last_communicate_time(),
+                    &self.last_communicate_time,
+                )
+            })
+            .map(|user| user.response_sender());
+        let tasks = &self.tasks;
+        tokio::select! {
+            _ = async {
+                if let Some(sender) = sender {
+                    queue_shutdown(sender, tasks).await;
+                } else {
+                    tasks.record_failure();
+                }
+                if !matches!((&mut self.writer).await, Ok(Ok(()))) {
+                    tasks.record_failure();
+                }
+            } => {},
+            _ = self.closed.changed() => tasks.record_failure(),
+        }
+    }
+}
+
+async fn queue_shutdown(sender: Sender<LynnUserSignal>, tasks: &ServerTasks) {
+    loop {
+        if tasks.is_draining() {
+            tasks.requests_finished().await;
+            if sender.send(LynnUserSignal::Shutdown).await.is_err() {
+                tasks.record_failure();
+            }
+            return;
+        }
+        let permit = tokio::select! {
+            biased;
+            _ = tasks.draining() => continue,
+            permit = sender.reserve() => permit,
+        };
+        let Ok(permit) = permit else {
+            tasks.record_failure();
+            return;
+        };
+        if let Some(_admission) = tasks.try_admit() {
+            permit.send(LynnUserSignal::Shutdown);
+            return;
+        }
+    }
 }
 
 impl Drop for ConnectionSession {
@@ -51,7 +123,7 @@ mod tests {
         io,
         pin::Pin,
         sync::atomic::{AtomicUsize, Ordering},
-        task::{Context, Poll},
+        task::{Context, Poll, Waker},
         time::Duration,
     };
     use tokio::{
@@ -59,6 +131,62 @@ mod tests {
         sync::Semaphore,
         time::{sleep, timeout},
     };
+
+    #[tokio::test]
+    async fn eof_waiting_for_queue_capacity_obeys_the_later_global_barrier() {
+        let (_owner, tasks) = ServerTasks::new();
+        let request = tasks.request();
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(1);
+        assert!(
+            sender
+                .try_send(LynnUserSignal::SendResponse(BytesMut::from(&b"queued"[..])))
+                .is_ok()
+        );
+        let mut shutdown = std::pin::pin!(queue_shutdown(sender.clone(), &tasks));
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(shutdown.as_mut().poll(&mut context).is_pending());
+        tasks.begin_draining();
+        assert!(matches!(
+            receiver.recv().await,
+            Some(LynnUserSignal::SendResponse(_))
+        ));
+        assert!(shutdown.as_mut().poll(&mut context).is_pending());
+        assert!(receiver.try_recv().is_err());
+        assert!(
+            sender
+                .try_send(LynnUserSignal::SendResponse(BytesMut::from(
+                    &b"accepted"[..]
+                )))
+                .is_ok()
+        );
+        request.complete();
+        assert!(shutdown.as_mut().poll(&mut context).is_pending());
+        assert!(matches!(
+            receiver.recv().await,
+            Some(LynnUserSignal::SendResponse(response)) if response == b"accepted"[..]
+        ));
+        timeout(Duration::from_secs(1), shutdown).await.unwrap();
+        assert!(matches!(
+            receiver.recv().await,
+            Some(LynnUserSignal::Shutdown)
+        ));
+        assert!(!tasks.has_failed());
+    }
+
+    #[tokio::test]
+    async fn closing_the_queue_while_waiting_for_accepted_requests_records_failure() {
+        let (_owner, tasks) = ServerTasks::new();
+        let request = tasks.request();
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        tasks.begin_draining();
+        let mut shutdown = std::pin::pin!(queue_shutdown(sender, &tasks));
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(shutdown.as_mut().poll(&mut context).is_pending());
+        drop(receiver);
+        request.complete();
+        timeout(Duration::from_secs(1), shutdown).await.unwrap();
+        assert!(tasks.has_failed());
+    }
 
     struct BrokenWriter;
 
@@ -92,13 +220,15 @@ mod tests {
     }
 
     async fn assert_writer_cleanup(write_half: BoxedWriteHalf, write_timeout_secs: u64) {
+        let (_owner, tasks) = ServerTasks::new();
         let addr: SocketAddr = "127.0.0.1:9177".parse().unwrap();
         let clients = Arc::new(DashMap::new());
         let time = Arc::new(RwLock::new(SystemTime::now()));
         let limiter = Arc::new(ConnectionLimiter::new(0, 1));
         let permit = limiter.acquire(addr.ip()).await;
         let global = Arc::new(AtomicUsize::new(1));
-        let (user, writer, closed) = LynnUser::new(write_half, time.clone(), write_timeout_secs);
+        let (user, writer, closed) =
+            LynnUser::new(write_half, time.clone(), write_timeout_secs, tasks.clone());
         let send = user.send_response(&BytesMut::from(&b"response"[..]));
         clients.insert(addr, user);
         let session = ConnectionSession {
@@ -113,6 +243,7 @@ mod tests {
                 global: Some(global.clone()),
                 observation: None,
             },
+            tasks,
         };
         let (read, mut peer) = tokio::io::duplex(64);
         tokio::spawn(read_connection(
@@ -145,12 +276,17 @@ mod tests {
 
     #[tokio::test]
     async fn stale_cleanup_does_not_remove_replacement_connection() {
+        let (_owner, tasks) = ServerTasks::new();
         let addr: SocketAddr = "127.0.0.1:9177".parse().unwrap();
         let clients = Arc::new(DashMap::new());
         let limiter = Arc::new(ConnectionLimiter::new(0, 2));
         let old_time = Arc::new(RwLock::new(SystemTime::now()));
-        let (old_user, writer, closed) =
-            LynnUser::new(Box::new(tokio::io::sink()), old_time.clone(), 0);
+        let (old_user, writer, closed) = LynnUser::new(
+            Box::new(tokio::io::sink()),
+            old_time.clone(),
+            0,
+            tasks.clone(),
+        );
         clients.insert(addr, old_user);
         let session = ConnectionSession {
             handle: crate::domain::model::session::SessionHandle::closed_for_test(),
@@ -164,12 +300,14 @@ mod tests {
                 global: None,
                 observation: None,
             },
+            tasks: tasks.clone(),
         };
         let new_permit = limiter.acquire(addr.ip()).await;
         let (new_user, new_writer, _) = LynnUser::new(
             Box::new(tokio::io::sink()),
             Arc::new(RwLock::new(SystemTime::now())),
             0,
+            tasks,
         );
         clients.insert(addr, new_user);
         drop(session);
@@ -184,6 +322,7 @@ mod tests {
 
     #[tokio::test]
     async fn backpressured_response_does_not_hold_clients_map_lock() {
+        let (_owner, tasks) = ServerTasks::new();
         let addr: SocketAddr = "127.0.0.1:9177".parse().unwrap();
         let clients = Arc::new(DashMap::new());
         let (transport, _peer) = tokio::io::duplex(1);
@@ -191,6 +330,7 @@ mod tests {
             Box::new(transport),
             Arc::new(RwLock::new(SystemTime::now())),
             0,
+            tasks,
         );
         let response = BytesMut::from(&b"pending"[..]);
         user.send_response(&response).await;

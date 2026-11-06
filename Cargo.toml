@@ -80,6 +80,10 @@ name = "client_connection_state"
 required-features = ["client"]
 
 [[example]]
+name = "graceful_shutdown"
+required-features = ["server"]
+
+[[example]]
 name = "background_broadcast"
 required-features = ["server"]
 

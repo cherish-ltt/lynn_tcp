@@ -24,6 +24,7 @@ async fn blocked_response_keeps_permit(cancel_owner: bool) {
         Box::new(transport),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        manager.tasks.clone(),
     );
     timeout(Duration::from_secs(3), async {
         for _ in 0..=DEFAULT_SYSTEM_CHANNEL_SIZE {
@@ -81,6 +82,7 @@ async fn blocked_response_keeps_permit(cancel_owner: bool) {
             ),
             clients.clone(),
             permits.clone().acquire_owned().await.unwrap(),
+            manager.tasks.request(),
         )));
     timeout(Duration::from_secs(3), after.acquire())
         .await
@@ -139,6 +141,7 @@ async fn delayed_request_keeps_original_session_after_same_address_replacement()
         Box::new(tokio::io::sink()),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        tasks.clone(),
     );
     let old_handle = SessionHandle::new(
         &old_user,
@@ -175,6 +178,7 @@ async fn delayed_request_keeps_original_session_after_same_address_replacement()
         router.get_handler_by_method_id(&1).unwrap(),
         queue.clone(),
         Arc::new(StateRegistry::new()),
+        &tasks,
         old_handle.clone(),
     )
     .await;
@@ -185,17 +189,19 @@ async fn delayed_request_keeps_original_session_after_same_address_replacement()
         Box::new(transport),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        tasks.clone(),
     );
     let new_handle = SessionHandle::new(&new_user, new_observer, new_removed, tasks, (9177, 7719));
     clients.insert(addr, new_user);
     drop(old_completion);
-    old_writer.await.unwrap();
+    old_writer.await.unwrap().unwrap();
 
     let event = queue.steal().success().unwrap();
-    let EventType::ExecuteTask((route, context, _, permit)) = event.event_type else {
+    let EventType::ExecuteTask((route, context, _, permit, work)) = event.event_type else {
         return Err("expected the queued original request");
     };
     route.run(context).await.unwrap();
+    work.complete();
     drop(permit);
     let late = observed.recv().await.unwrap();
     assert_eq!(late.id(), old_handle.id());
@@ -218,6 +224,6 @@ async fn delayed_request_keeps_original_session_after_same_address_replacement()
     assert_eq!(&frame[11..13], &3_u16.to_le_bytes());
     assert_eq!(&frame[13..16], b"new");
     clients.clear();
-    new_writer.await.unwrap();
+    new_writer.await.unwrap().unwrap();
     Ok(())
 }

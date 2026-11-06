@@ -12,9 +12,9 @@ use tokio::{
 };
 use tracing::{error, info, warn};
 
-use super::server_tasks::ServerTasks;
 use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::ReactorEventSender;
+use crate::application::server::server_tasks::ServerTasks;
 use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
 use crate::domain::handler::handler_system::{ClientsContext, HandlerContext};
 use crate::domain::handler::request_context::RequestContext;
@@ -31,9 +31,7 @@ use crate::infrastructure::metrics::metrics::METRICS;
 use crate::infrastructure::protocol::big_buf_reader::BigBufReader;
 use crate::infrastructure::tcp::io_timeout::with_io_timeout;
 use crate::infrastructure::tcp::reactor::ReactorEvent;
-use crate::infrastructure::tcp::stream::{
-    BoxedReadHalf, BoxedWriteHalf, LynnStream, split_transport,
-};
+use crate::infrastructure::tcp::stream::{BoxedReadHalf, LynnStream, split_transport};
 
 #[inline(always)]
 pub(super) async fn spawn_check_heart(
@@ -100,6 +98,7 @@ pub(crate) async fn check_handler_result(
     clients: ClientsStructType,
     message_header_mark: u16,
     message_tail_mark: u16,
+    tasks: &ServerTasks,
 ) {
     // If the send flag of the HandlerResult instance is set to true, send the instance through the channel.
     if handler_result.get_is_send() {
@@ -114,6 +113,7 @@ pub(crate) async fn check_handler_result(
             if let Some(addrs) = handler_result.get_addrs() {
                 if let Some(delay_socket) = send_response(&response, &addrs, &clients).await {
                     if !delay_socket.is_empty() {
+                        tasks.record_failure();
                         delay_socket.iter().for_each(|addr|{
                             warn!("Failed to find the client correctly, message sending is invalid , target-addr:{}",addr);
                         });
@@ -165,8 +165,12 @@ pub(crate) async fn input_dto_build(
     handler_method: Arc<Route>,
     reactor_event_sender: ReactorEventSender,
     states: Arc<StateRegistry>,
+    tasks: &ServerTasks,
     session: SessionHandle,
 ) {
+    let Some(_admission) = tasks.try_admit() else {
+        return;
+    };
     // Attempt to acquire a permit from the semaphore.
     match process_permit.try_acquire_owned() {
         Ok(permit) => {
@@ -180,6 +184,7 @@ pub(crate) async fn input_dto_build(
                 ),
                 clients,
                 permit,
+                tasks.request(),
             )));
         },
         Err(_) => {
@@ -200,19 +205,22 @@ pub(crate) async fn add_client(
     write_timeout_secs: u64,
     tasks: ServerTasks,
     marks: (u16, u16),
-) -> (BoxedReadHalf, ConnectionSession) {
+) -> Option<(BoxedReadHalf, ConnectionSession)> {
+    let admission = tasks.try_admit()?;
     if let Some(observation) = &mut permit.observation {
         observation.established = true;
     }
-    let (read_half, write_half, observer) = split_transport(stream);
+    let (read_half, write_half, observer) = split_transport(stream, tasks.connection());
     let (lynn_user, writer, closed) = LynnUser::new(
         write_half,
         last_communicate_time.clone(),
         write_timeout_secs,
+        tasks.clone(),
     );
-    let handle = SessionHandle::new(&lynn_user, observer, closed.clone(), tasks, marks);
+    let handle = SessionHandle::new(&lynn_user, observer, closed.clone(), tasks.clone(), marks);
     clients.insert(addr, lynn_user);
-    (
+    drop(admission);
+    Some((
         read_half,
         ConnectionSession {
             handle,
@@ -222,8 +230,9 @@ pub(crate) async fn add_client(
             addr,
             last_communicate_time,
             permit,
+            tasks,
         },
-    )
+    ))
 }
 
 #[inline(always)]
@@ -242,6 +251,7 @@ pub(crate) async fn read_connection(
     process_limit: usize,
     read_timeout_secs: u64,
 ) {
+    let tasks = session.tasks.clone();
     let read = async {
         let mut buf = [0; DEFAULT_MAX_RECEIVE_BYTES_SIZE];
         let mut big_buf = BigBufReader::new(message_header_mark, message_tail_mark);
@@ -254,6 +264,7 @@ pub(crate) async fn read_connection(
                     if let Err(error) = big_buf.extend_from_slice(&buf[..n]) {
                         METRICS.messages.invalid_total.inc();
                         warn!("Invalid frame from {addr}: {error}");
+                        tasks.record_failure();
                         break false;
                     }
                     loop {
@@ -263,6 +274,7 @@ pub(crate) async fn read_connection(
                             Err(error) => {
                                 METRICS.messages.invalid_total.inc();
                                 warn!("Invalid frame from {addr}: {error}");
+                                tasks.record_failure();
                                 break 'read_loop false;
                             },
                         };
@@ -294,6 +306,7 @@ pub(crate) async fn read_connection(
                                                 handler_method.clone(),
                                                 reactor_event_sender.clone(),
                                                 states.clone(),
+                                                &tasks,
                                                 session.handle.clone(),
                                             )
                                             .await;
@@ -316,48 +329,31 @@ pub(crate) async fn read_connection(
                 },
                 Err(e) => {
                     error!("Failed to read from socket: {}", e.to_string());
+                    tasks.record_failure();
                     break false;
                 },
             }
         }
     };
     let graceful = tokio::select! {
+        biased;
+        _ = tasks.draining() => true,
         graceful = read => graceful,
-        _ = &mut session.writer => false,
-        _ = session.closed.changed() => false,
+        _ = &mut session.writer => { tasks.record_failure(); false },
+        _ = session.closed.changed() => { tasks.record_failure(); false },
     };
     if !graceful {
         return;
     }
-    let drain = async {
-        // Keep accepted handlers and their queued replies alive after a peer's write EOF.
-        let mut remaining = process_limit;
-        while remaining > 0 {
-            let batch = remaining.min(u32::MAX as usize) as u32;
-            let Ok(permit) = process_permit.acquire_many(batch).await else {
-                return;
-            };
-            permit.forget();
-            remaining -= batch as usize;
-        }
-    };
+    let drain = ConnectionSession::finish_requests(process_permit, process_limit);
     let drained = tokio::select! {
+        biased;
+        _ = tasks.draining() => true,
         _ = drain => true,
-        _ = &mut session.writer => false,
-        _ = session.closed.changed() => false,
+        _ = &mut session.writer => { tasks.record_failure(); false },
+        _ = session.closed.changed() => { tasks.record_failure(); false },
     };
     if drained {
-        tokio::select! {
-            _ = async {
-                let shutdown = clients.get(&addr).filter(|user| {
-                    Arc::ptr_eq(&user.get_last_communicate_time(), &last_communicate_time)
-                }).map(|user| user.shutdown());
-                if let Some(shutdown) = shutdown {
-                    shutdown.await;
-                }
-                let _ = (&mut session.writer).await;
-            } => {},
-            _ = session.closed.changed() => {},
-        }
+        session.close_writer().await;
     }
 }

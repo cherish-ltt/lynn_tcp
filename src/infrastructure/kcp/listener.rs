@@ -5,6 +5,7 @@ use tokio::{net::UdpSocket, sync::mpsc, time::interval};
 
 use crate::{
     application::server::lynn_server::ReactorEventSender,
+    application::server::server_tasks::ServerTasks,
     infrastructure::{
         connection::connection_limiter::{ConnectionLimiter, ConnectionPermits},
         tcp::{reactor::ReactorEvent, stream::LynnStream},
@@ -50,7 +51,7 @@ impl KcpListener {
         #[cfg(feature = "kcp-tls")] acceptor: Arc<
             crate::infrastructure::tcp::stream::StreamAcceptor,
         >,
-        #[cfg(feature = "kcp-tls")] tasks: crate::application::server::server_tasks::ServerTasks,
+        tasks: ServerTasks,
         #[cfg(feature = "kcp-tls")] max_handshakes: usize,
     ) {
         use crate::infrastructure::metrics::transport::ConnectionObservation;
@@ -98,6 +99,9 @@ impl KcpListener {
             {
                 continue;
             }
+            if tasks.is_draining() {
+                continue;
+            }
             #[cfg(feature = "kcp-tls")]
             let admission = tokio::time::Instant::now();
             #[cfg(feature = "kcp-tls")]
@@ -126,13 +130,20 @@ impl KcpListener {
                 permit.global = Some(count.clone());
             }
             if let Some(limiter) = &limiter {
-                permit.per_ip = limiter.acquire(addr.ip()).await;
+                permit.per_ip = tokio::select! {
+                    biased;
+                    _ = tasks.draining() => continue,
+                    permit = limiter.acquire(addr.ip()) => permit,
+                };
                 if permit.per_ip.is_none() {
                     continue;
                 }
             }
+            let Some(_admission) = tasks.try_admit() else {
+                continue;
+            };
             let (tx, rx) = mpsc::channel(PACKETS);
-            let stream = match KcpStream::start(
+            let mut stream = match KcpStream::start(
                 self.socket.clone(),
                 addr,
                 header.conv,
@@ -146,6 +157,7 @@ impl KcpListener {
                     continue;
                 },
             };
+            stream.track_server_worker(&tasks);
             if tx.try_send(packet.to_vec()).is_err() {
                 continue;
             }
@@ -154,17 +166,24 @@ impl KcpListener {
             if let Some(handshake_permit) = handshake_permit {
                 let acceptor = acceptor.clone();
                 let queue = queue.clone();
+                let setup_tasks = tasks.clone();
                 tasks.spawn(async move {
                     let _handshake_permit = handshake_permit;
                     let deadline = admission
                         + Duration::from_secs(crate::const_config::TLS_HANDSHAKE_TIMEOUT_SECS);
-                    match tokio::time::timeout_at(
-                        deadline,
-                        acceptor.accept(LynnStream::Kcp(stream), addr),
-                    )
-                    .await
-                    {
+                    let handshake = tokio::select! {
+                        biased;
+                        _ = setup_tasks.draining() => return,
+                        handshake = tokio::time::timeout_at(
+                            deadline,
+                            acceptor.accept(LynnStream::Kcp(stream), addr),
+                        ) => handshake,
+                    };
+                    match handshake {
                         Ok(Some(stream)) => {
+                            let Some(_admission) = setup_tasks.try_admit() else {
+                                return;
+                            };
                             queue.push(ReactorEvent::crate_new_socket_event(stream, addr, permit))
                         },
                         Ok(None) => {},

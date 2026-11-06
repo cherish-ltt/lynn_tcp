@@ -14,6 +14,7 @@ use tokio::{
 };
 use tracing::error;
 
+use crate::application::server::server_tasks::ServerTasks;
 use crate::infrastructure::metrics::metrics::METRICS;
 use crate::infrastructure::tcp::io_timeout::with_io_timeout;
 use crate::{
@@ -35,6 +36,7 @@ pub(crate) struct LynnUser {
     sender: Sender<LynnUserSignal>,
 
     close: watch::Sender<bool>,
+    tasks: ServerTasks,
 }
 
 /// Implementation of methods for the LynnUser struct.
@@ -54,13 +56,20 @@ impl LynnUser {
         write_half: BoxedWriteHalf,
         last_communicate_time: Arc<RwLock<SystemTime>>,
         write_timeout_secs: u64,
-    ) -> (Self, JoinHandle<()>, watch::Receiver<bool>) {
+        tasks: ServerTasks,
+    ) -> (Self, JoinHandle<std::io::Result<()>>, watch::Receiver<bool>) {
         let (tx, mut rx) = channel(DEFAULT_SYSTEM_CHANNEL_SIZE);
         let (close, closed) = watch::channel(false);
-        let main_join_handle = tokio::spawn(async move {
+        let writer_tasks = tasks.clone();
+        let main_join_handle = tasks.track(async move {
             let mut write_half = write_half;
 
-            while let Some(LynnUserSignal::SendResponse(response)) = rx.recv().await {
+            while let Some(signal) = rx.recv().await {
+                let LynnUserSignal::SendResponse(response) = signal else {
+                    // Seal the queue, then retain responses accepted concurrently with peer EOF.
+                    rx.close();
+                    continue;
+                };
                 let write = async {
                     write_half.write_all(&response).await?;
                     write_half.flush().await
@@ -68,19 +77,24 @@ impl LynnUser {
                 if let Err(e) = with_io_timeout(write_timeout_secs, write).await {
                     METRICS.messages.dropped_total.inc();
                     error!("Failed to write to socket: {}", e);
-                    return;
+                    writer_tasks.record_failure();
+                    return Err(e);
                 }
                 METRICS.messages.sent_total.inc();
             }
             if let Err(e) = with_io_timeout(write_timeout_secs, write_half.shutdown()).await {
                 error!("Failed to shut down socket: {}", e);
+                writer_tasks.record_failure();
+                return Err(e);
             }
+            Ok(())
         });
         (
             Self {
                 last_communicate_time,
                 sender: tx,
                 close,
+                tasks,
             },
             main_join_handle,
             closed,
@@ -108,19 +122,23 @@ impl LynnUser {
     ) -> impl Future<Output = ()> + Send + use<> {
         let sender = self.sender.clone();
         let response = response.clone();
+        let tasks = self.tasks.clone();
         async move {
             if let Err(e) = sender.send(LynnUserSignal::SendResponse(response)).await {
                 METRICS.messages.dropped_total.inc();
                 error!("Send response error:{}", e);
+                tasks.record_failure();
             }
         }
     }
 
     pub(crate) fn shutdown(&self) -> impl Future<Output = ()> + Send + use<> {
         let sender = self.sender.clone();
+        let tasks = self.tasks.clone();
         async move {
             if let Err(e) = sender.send(LynnUserSignal::Shutdown).await {
                 error!("Send shutdown error:{}", e);
+                tasks.record_failure();
             }
         }
     }
@@ -212,6 +230,7 @@ mod tests {
         response_len: usize,
         expected_written: usize,
     ) {
+        let (_owner, tasks) = ServerTasks::new();
         let written = Arc::new(AtomicUsize::new(0));
         let transport = BlockedWriter {
             operation,
@@ -221,6 +240,7 @@ mod tests {
             Box::new(transport),
             Arc::new(RwLock::new(SystemTime::now())),
             1,
+            tasks,
         );
         user.send_response(&BytesMut::from(vec![1; response_len].as_slice()))
             .await;
@@ -230,10 +250,12 @@ mod tests {
             user.send_response(&BytesMut::from(&b"never sent"[..]))
                 .await;
         }
-        timeout(Duration::from_secs(2), writer)
+        let error = timeout(Duration::from_secs(2), writer)
             .await
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
         assert_eq!(written.load(Ordering::SeqCst), expected_written);
     }
 
@@ -259,11 +281,13 @@ mod tests {
 
     #[tokio::test]
     async fn zero_write_timeout_preserves_backpressured_response() {
+        let (_owner, tasks) = ServerTasks::new();
         let (transport, mut peer) = tokio::io::duplex(1);
         let (user, writer, _) = LynnUser::new(
             Box::new(transport),
             Arc::new(RwLock::new(SystemTime::now())),
             0,
+            tasks,
         );
         user.send_response(&BytesMut::from(&b"response"[..])).await;
         user.shutdown().await;
@@ -274,7 +298,30 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        writer.await.unwrap();
+        writer.await.unwrap().unwrap();
         assert_eq!(received, b"response");
+    }
+
+    #[tokio::test]
+    async fn shutdown_seals_and_drains_messages_already_queued_after_the_marker() {
+        let (_owner, tasks) = ServerTasks::new();
+        let (transport, mut peer) = tokio::io::duplex(64);
+        let (user, writer, _) = LynnUser::new(
+            Box::new(transport),
+            Arc::new(RwLock::new(SystemTime::now())),
+            0,
+            tasks,
+        );
+        user.shutdown().await;
+        user.send_response(&BytesMut::from(&b"accepted-before-seal"[..]))
+            .await;
+        let mut received = Vec::new();
+        timeout(Duration::from_secs(1), peer.read_to_end(&mut received))
+            .await
+            .unwrap()
+            .unwrap();
+        writer.await.unwrap().unwrap();
+        assert_eq!(received, b"accepted-before-seal");
+        assert!(user.response_sender().is_closed());
     }
 }

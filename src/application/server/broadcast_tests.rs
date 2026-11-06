@@ -14,7 +14,7 @@ async fn full_and_closed_targets_do_not_block_healthy_target() {
     let handle = BroadcastHandle::new(
         &clients,
         Arc::new(std::sync::atomic::AtomicBool::new(true)),
-        tasks,
+        tasks.clone(),
         (0x1234, 0x5678),
     );
     let (blocked, _blocked_peer) = tokio::io::duplex(1);
@@ -22,6 +22,7 @@ async fn full_and_closed_targets_do_not_block_healthy_target() {
         Box::new(blocked),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        tasks.clone(),
     );
     full.send_response(&BytesMut::from(&b"blocked"[..])).await;
     tokio::task::yield_now().await;
@@ -32,6 +33,7 @@ async fn full_and_closed_targets_do_not_block_healthy_target() {
         Box::new(tokio::io::sink()),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        tasks.clone(),
     );
     closed_writer.abort();
     assert!(closed_writer.await.unwrap_err().is_cancelled());
@@ -40,6 +42,7 @@ async fn full_and_closed_targets_do_not_block_healthy_target() {
         Box::new(healthy),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        tasks,
     );
     clients.insert("127.0.0.1:1".parse().unwrap(), full);
     clients.insert("127.0.0.1:2".parse().unwrap(), closed);
@@ -74,12 +77,14 @@ async fn full_and_closed_targets_do_not_block_healthy_target() {
 
 #[tokio::test]
 async fn snapshot_sender_cannot_redirect_to_replacement_at_same_address() {
+    let (_owner, tasks) = ServerTasks::new();
     let clients = Arc::new(DashMap::new());
     let addr: std::net::SocketAddr = "127.0.0.1:1".parse().unwrap();
     let (old, old_writer, _) = LynnUser::new(
         Box::new(tokio::io::sink()),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        tasks.clone(),
     );
     clients.insert(addr, old);
     let snapshot = clients.get(&addr).unwrap().response_sender();
@@ -87,6 +92,7 @@ async fn snapshot_sender_cannot_redirect_to_replacement_at_same_address() {
         Box::new(tokio::io::sink()),
         Arc::new(RwLock::new(SystemTime::now())),
         0,
+        tasks,
     );
     clients.insert(addr, new);
     old_writer.abort();

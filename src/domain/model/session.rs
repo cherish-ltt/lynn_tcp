@@ -160,13 +160,14 @@ impl SessionHandle {
     ///
     /// Concurrent closure may discard an accepted frame. Once closure has been
     /// observed, a valid-size send returns `Closed`. Normal handler replies retain
-    /// their existing waiting backpressure.
+    /// their existing waiting backpressure. Server draining also returns `Closed`.
     ///
     /// # Errors
     /// Returns `LynnError::Protocol` for payloads exceeding 10 MiB minus 5 bytes.
     pub fn try_send(&self, method_id: u16, payload: Bytes) -> Result<SessionSendOutcome> {
         let mut result = HandlerResult::new_with_send(method_id, payload, vec![])?;
-        let outcome = if !self.tasks.allows_background_send()
+        let admission = self.tasks.try_admit();
+        let outcome = if admission.is_none()
             || self.observer.is_closed()
             || *self.removed.borrow()
             || self.removed.has_changed().is_err()
@@ -187,6 +188,7 @@ impl SessionHandle {
         } else {
             SessionSendOutcome::Closed
         };
+        drop(admission);
         if outcome != SessionSendOutcome::Enqueued {
             METRICS.messages.dropped_total.inc();
         }
