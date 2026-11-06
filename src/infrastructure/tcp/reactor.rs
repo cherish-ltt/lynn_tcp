@@ -160,6 +160,9 @@ impl EventManager {
                         idle_count = 0;
                         match event.event_type {
                             EventType::NewSocket((socket, addr, permit)) => {
+                                if tasks.is_draining() {
+                                    continue;
+                                }
                                 #[cfg(feature = "tls")]
                                 let isolate_handshake =
                                     matches!(stream_acceptor.as_ref(), StreamAcceptor::Tls(_));
@@ -183,26 +186,33 @@ impl EventManager {
                                 let tx = tx.clone();
                                 let lynn_router = lynn_router.clone();
                                 let reactor_event_sender = reactor_event_sender.clone();
-                                let session_tasks = tasks.clone();
+                                let setup_tasks = tasks.clone();
                                 let setup = async move {
                                     let _setup_permit = setup_permit;
-                                    let Some(stream) = stream_acceptor.accept(socket, addr).await
-                                    else {
+                                    let stream = tokio::select! {
+                                        biased;
+                                        _ = setup_tasks.draining() => return,
+                                        stream = stream_acceptor.accept(socket, addr) => stream,
+                                    };
+                                    let Some(stream) = stream else {
                                         return;
                                     };
                                     let last_communicate_time =
                                         Arc::new(RwLock::new(SystemTime::now()));
-                                    let (read_half, session) = add_client(
+                                    let Some((read_half, session)) = add_client(
                                         clients.clone(),
                                         stream,
                                         addr,
                                         last_communicate_time.clone(),
                                         permit,
                                         write_timeout_secs,
-                                        session_tasks,
+                                        setup_tasks,
                                         (message_header_mark, message_tail_mark),
                                     )
-                                    .await;
+                                    .await
+                                    else {
+                                        return;
+                                    };
                                     let process_permit =
                                         Arc::new(Semaphore::new(server_single_process_permit));
                                     let _ = tx
@@ -229,7 +239,8 @@ impl EventManager {
                                 }
                             },
                             EventType::ExecuteTask(task_body) => {
-                                let (task, context, clients, permit) = task_body;
+                                let (task, context, clients, permit, work) = task_body;
+                                let request_tasks = tasks.clone();
                                 // Run the handler in a nested task so a panicking
                                 // handler (e.g. a missing AppState) cannot take
                                 // down this worker.
@@ -242,15 +253,18 @@ impl EventManager {
                                                     clients,
                                                     message_header_mark,
                                                     message_tail_mark,
+                                                    &request_tasks,
                                                 )
                                                 .await;
                                             },
                                             Err(error) => {
                                                 METRICS.messages.dropped_total.inc();
                                                 error!("Request middleware failed: {error}");
+                                                request_tasks.record_failure();
                                             },
                                         }
                                         drop(permit);
+                                        work.complete();
                                     })
                                     .await
                                 {
@@ -336,6 +350,7 @@ fn get_event(
 /// Core reactor - handles TCP connections
 pub(crate) struct CoreReactor {
     pub(crate) tx: NewSocketEventSender,
+    tasks: ServerTasks,
 }
 
 impl CoreReactor {
@@ -362,7 +377,7 @@ impl CoreReactor {
             }
         });
 
-        Self { tx }
+        Self { tx, tasks }
     }
 
     pub(crate) async fn run(
@@ -509,6 +524,9 @@ impl CoreReactor {
 
                 if socket_permit {
                     if let Some(s) = socket {
+                        let Some(_admission) = self.tasks.try_admit() else {
+                            continue;
+                        };
                         info!("Accepted connection from: {}", addr);
                         global_queue.push(ReactorEvent::crate_new_socket_event(
                             LynnStream::Plain(s),
@@ -606,7 +624,6 @@ impl TcpReactor {
                         self.event_manager.get_global_queue(),
                         #[cfg(feature = "kcp-tls")]
                         stream_acceptor,
-                        #[cfg(feature = "kcp-tls")]
                         self.event_manager.tasks.clone(),
                         #[cfg(feature = "kcp-tls")]
                         *server_max_reactor_taskpool_size,
@@ -615,14 +632,17 @@ impl TcpReactor {
                 return;
             },
         };
-        self.core_reactor
-            .run(
+        tokio::select! {
+            biased;
+            _ = self.event_manager.tasks.draining() => {},
+            _ = self.core_reactor.run(
                 tcp_listener,
                 allow_max_connections,
                 self.event_manager.get_global_queue(),
                 connection_limiter,
                 tcp_config,
-            )
-            .await;
+            ) => {},
+        }
+        std::future::pending().await
     }
 }

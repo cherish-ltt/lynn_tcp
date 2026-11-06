@@ -31,6 +31,10 @@ mod frames;
 #[path = "tls_session_tests.rs"]
 mod sessions;
 
+#[cfg(feature = "server")]
+#[path = "tls_draining_tests.rs"]
+mod draining;
+
 struct RecordingIo {
     inner: KcpStream,
     written: Arc<Mutex<Vec<u8>>>,

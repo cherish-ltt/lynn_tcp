@@ -9,15 +9,13 @@ async fn invalid_handshake_conv_isolation_and_per_ip_permits_follow_session_owne
     let addr = listener.socket.local_addr().unwrap();
     let queue = Arc::new(crossbeam_deque::Injector::new());
     let limiter = Arc::new(ConnectionLimiter::new(0, 1));
-    #[cfg(feature = "kcp-tls")]
-    let (_owner, tasks) = crate::application::server::server_tasks::ServerTasks::new();
+    let (_owner, tasks) = ServerTasks::new();
     let task = tokio::spawn(listener.run(
         Some(2),
         Some(limiter),
         queue.clone(),
         #[cfg(feature = "kcp-tls")]
         Arc::new(crate::infrastructure::tcp::stream::StreamAcceptor::Plain),
-        #[cfg(feature = "kcp-tls")]
         tasks,
         #[cfg(feature = "kcp-tls")]
         2,

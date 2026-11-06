@@ -17,9 +17,13 @@ async fn full_queue_is_nonblocking_and_isolated_from_another_session() {
     let (_owner, tasks) = ServerTasks::new();
     let (completion, observer) = SessionObserver::new();
     let (transport, _blocked_peer) = tokio::io::duplex(1);
-    let (read, write) = tokio::io::split(SessionIo::new(transport, completion));
-    let (user, writer, removed) =
-        LynnUser::new(Box::new(write), Arc::new(RwLock::new(SystemTime::now())), 0);
+    let (read, write) = tokio::io::split(SessionIo::new(transport, completion, tasks.connection()));
+    let (user, writer, removed) = LynnUser::new(
+        Box::new(write),
+        Arc::new(RwLock::new(SystemTime::now())),
+        0,
+        tasks.clone(),
+    );
     let handle = SessionHandle::new(&user, observer, removed, tasks.clone(), (9177, 7719));
     assert_eq!(
         handle.try_send(1, "blocked".into()).unwrap(),
@@ -39,10 +43,16 @@ async fn full_queue_is_nonblocking_and_isolated_from_another_session() {
 
     let (completion, observer) = SessionObserver::new();
     let (transport, mut healthy_peer) = tokio::io::duplex(64);
-    let (healthy_read, write) = tokio::io::split(SessionIo::new(transport, completion));
-    let (healthy, healthy_writer, removed) =
-        LynnUser::new(Box::new(write), Arc::new(RwLock::new(SystemTime::now())), 0);
-    let healthy_handle = SessionHandle::new(&healthy, observer, removed, tasks, (0xABCD, 0x1234));
+    let (healthy_read, write) =
+        tokio::io::split(SessionIo::new(transport, completion, tasks.connection()));
+    let (healthy, healthy_writer, removed) = LynnUser::new(
+        Box::new(write),
+        Arc::new(RwLock::new(SystemTime::now())),
+        0,
+        tasks.clone(),
+    );
+    let healthy_handle =
+        SessionHandle::new(&healthy, observer, removed, tasks.clone(), (0xABCD, 0x1234));
     assert_eq!(
         healthy_handle.try_send(2, "ok".into()).unwrap(),
         SessionSendOutcome::Enqueued
@@ -68,6 +78,18 @@ async fn full_queue_is_nonblocking_and_isolated_from_another_session() {
         .len(),
         2
     );
+    tasks.begin_draining();
+    for session in [&handle, &healthy_handle] {
+        assert_eq!(
+            session.try_send(1, Bytes::new()).unwrap(),
+            SessionSendOutcome::Closed
+        );
+        assert!(!session.observer().is_closed());
+    }
+    assert!(matches!(
+        handle.try_send(1, Bytes::from(vec![0; 10 * 1024 * 1024 - 4])),
+        Err(crate::LynnError::Protocol(_))
+    ));
     drop(user);
     assert_eq!(
         handle.try_send(1, Bytes::new()).unwrap(),
@@ -81,7 +103,7 @@ async fn full_queue_is_nonblocking_and_isolated_from_another_session() {
         .await
         .unwrap();
     drop(healthy);
-    healthy_writer.await.unwrap();
+    healthy_writer.await.unwrap().unwrap();
     drop(healthy_read);
     timeout(Duration::from_secs(1), healthy_handle.observer().closed())
         .await
@@ -93,9 +115,13 @@ async fn owner_cancellation_rejects_enqueue_before_transport_teardown() {
     let (owner, tasks) = ServerTasks::new();
     let (completion, observer) = SessionObserver::new();
     let (transport, _peer) = tokio::io::duplex(64);
-    let (read, write) = tokio::io::split(SessionIo::new(transport, completion));
-    let (user, writer, removed) =
-        LynnUser::new(Box::new(write), Arc::new(RwLock::new(SystemTime::now())), 0);
+    let (read, write) = tokio::io::split(SessionIo::new(transport, completion, tasks.connection()));
+    let (user, writer, removed) = LynnUser::new(
+        Box::new(write),
+        Arc::new(RwLock::new(SystemTime::now())),
+        0,
+        tasks.clone(),
+    );
     let handle = SessionHandle::new(&user, observer, removed, tasks, (9177, 7719));
     drop(owner);
     assert_eq!(
@@ -105,7 +131,7 @@ async fn owner_cancellation_rejects_enqueue_before_transport_teardown() {
     assert!(!handle.observer().is_closed());
     drop(user);
     drop(read);
-    writer.await.unwrap();
+    writer.await.unwrap().unwrap();
     timeout(Duration::from_secs(1), handle.observer().closed())
         .await
         .unwrap();
@@ -120,14 +146,16 @@ async fn kcp_observer_waits_for_the_aborted_driver_to_release_its_socket() {
     };
 
     for poll_driver in [false, true] {
+        let (_owner, tasks) = ServerTasks::new();
         let peer = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let addr = peer.local_addr().unwrap();
         let socket = Arc::new(tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap());
         socket.connect(addr).await.unwrap();
         let weak_socket = Arc::downgrade(&socket);
-        let (stream, _ready) =
+        let (mut stream, _ready) =
             KcpStream::start(socket, addr, 123, KcpConfig::default(), Mode::Plain, None).unwrap();
-        let (read, write, observer) = split_transport(LynnStream::Kcp(stream));
+        stream.track_server_worker(&tasks);
+        let (read, write, observer) = split_transport(LynnStream::Kcp(stream), tasks.connection());
         if poll_driver {
             tokio::task::yield_now().await;
         }
@@ -139,6 +167,9 @@ async fn kcp_observer_waits_for_the_aborted_driver_to_release_its_socket() {
             .unwrap();
         assert!(observer.is_closed());
         assert!(weak_socket.upgrade().is_none());
+        timeout(Duration::from_secs(1), tasks.finished())
+            .await
+            .unwrap();
     }
 }
 

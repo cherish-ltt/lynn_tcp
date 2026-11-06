@@ -9,16 +9,23 @@ use tokio::{
     sync::watch,
 };
 
+use crate::application::server::server_shutdown::ActivityGuard;
+
 /// The shared transport outlives both split halves. Field order ensures transport
-/// destruction happens before observers receive the final close notification.
+/// destruction happens before observers or the server's drain barrier are notified.
 pub(crate) struct SessionIo<T> {
     inner: T,
     completion: watch::Sender<()>,
+    _active: ActivityGuard,
 }
 
 impl<T> SessionIo<T> {
-    pub(crate) fn new(inner: T, completion: watch::Sender<()>) -> Self {
-        Self { inner, completion }
+    pub(crate) fn new(inner: T, completion: watch::Sender<()>, active: ActivityGuard) -> Self {
+        Self {
+            inner,
+            completion,
+            _active: active,
+        }
     }
 }
 
@@ -53,21 +60,32 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for SessionIo<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::model::session::SessionObserver;
+    use crate::{
+        application::server::server_tasks::ServerTasks, domain::model::session::SessionObserver,
+    };
     use std::sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     };
+    use std::{future::Future, task::Waker};
     use tokio::io::AsyncWriteExt;
 
     struct PendingShutdown {
         observer: SessionObserver,
         destroyed: Arc<AtomicBool>,
+        tasks: ServerTasks,
     }
 
     impl Drop for PendingShutdown {
         fn drop(&mut self) {
             assert!(!self.observer.is_closed());
+            let mut drained = std::pin::pin!(self.tasks.drained());
+            assert!(
+                drained
+                    .as_mut()
+                    .poll(&mut Context::from_waker(Waker::noop()))
+                    .is_pending()
+            );
             self.destroyed.store(true, Ordering::Release);
         }
     }
@@ -101,14 +119,17 @@ mod tests {
     #[tokio::test]
     async fn notice_waits_for_both_halves_and_transport_destruction() {
         for poll_writer in [false, true] {
+            let (_owner, tasks) = ServerTasks::new();
             let (completion, observer) = SessionObserver::new();
             let destroyed = Arc::new(AtomicBool::new(false));
             let stream = SessionIo::new(
                 PendingShutdown {
                     observer: observer.clone(),
                     destroyed: destroyed.clone(),
+                    tasks: tasks.clone(),
                 },
                 completion,
+                tasks.connection(),
             );
             let (read, mut write) = tokio::io::split(stream);
             let writer = tokio::spawn(async move { write.shutdown().await.unwrap() });
@@ -123,6 +144,7 @@ mod tests {
             observer.closed().await;
             assert!(observer.is_closed());
             assert!(destroyed.load(Ordering::Acquire));
+            tasks.drained().await;
         }
     }
 }

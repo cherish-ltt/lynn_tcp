@@ -4,6 +4,7 @@ use super::{
     tls_configs, tls_pair,
 };
 use crate::{
+    application::server::server_tasks::ServerTasks,
     infrastructure::{
         tcp::stream::{LynnStream, split_transport},
         tls::tls_provider::build_client_tls_mode,
@@ -38,9 +39,14 @@ async fn receive(peer: &mut (impl AsyncRead + Unpin), payload: &[u8]) {
 async fn secure_observer_waits_for_both_tls_halves_and_driver_destruction() {
     let certs = Certificates::new();
     let (connector, acceptor) = tls_configs(&certs);
-    let (client, server, sockets) = tls_pair(&connector, &acceptor).await;
+    let (_owner, tasks) = ServerTasks::new();
+    let (client, mut server, sockets) = tls_pair(&connector, &acceptor).await;
+    server.get_mut().0.track_server_worker(&tasks);
     let driver = server.get_ref().0.completion();
-    let (read, write, observer) = split_transport(LynnStream::KcpTls(Box::new(server.into())));
+    let (read, write, observer) = split_transport(
+        LynnStream::KcpTls(Box::new(server.into())),
+        tasks.connection(),
+    );
     drop(read);
     assert!(!observer.is_closed());
     drop(write);
@@ -50,6 +56,8 @@ async fn secure_observer_waits_for_both_tls_halves_and_driver_destruction() {
     timeout(LIMIT, observer.closed()).await.unwrap();
     assert!(observer.is_closed());
     assert!(driver.has_changed().is_err());
+    timeout(LIMIT, tasks.drained()).await.unwrap();
+    timeout(LIMIT, tasks.finished()).await.unwrap();
     drop(client);
     timeout(LIMIT, async {
         while sockets.iter().any(|socket| socket.upgrade().is_some()) {

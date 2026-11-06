@@ -58,13 +58,14 @@ impl BroadcastHandle {
     /// call can race with server cancellation; accepted frames may then be discarded.
     ///
     /// # Errors
-    /// Returns `LynnError::Server` before startup or after cancellation, and
+    /// Returns `LynnError::Server` before startup, during draining or after cancellation, and
     /// `LynnError::Protocol` for payloads exceeding 10 MiB minus 5 bytes.
     pub fn broadcast(&self, method_id: u16, payload: Bytes) -> Result<BroadcastReport> {
         let mut result = HandlerResult::new_with_send(method_id, payload, vec![])?;
-        if self.tasks.is_cancelled() {
-            return Err(LynnError::server("broadcast server is closed"));
-        }
+        let _admission = self
+            .tasks
+            .try_admit()
+            .ok_or_else(|| LynnError::server("broadcast server is draining or closed"))?;
         if !self.started.load(Ordering::Acquire) {
             return Err(LynnError::server("broadcast server has not started"));
         }

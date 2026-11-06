@@ -108,7 +108,19 @@ task.await??;
 # }
 ```
 
-Dropping a server or cancelling `LynnServer::start()` cancels its workers, handlers, heartbeat, pending handshakes and active connections. Cancellation is asynchronous and does not drain queued requests/responses or guarantee a graceful TLS shutdown; complete required exchanges before cancelling.
+For planned shutdown, use `start_with_shutdown(signal, grace).await`. After initialization,
+the application signal starts one total grace period and stops new sessions, requests and
+background broadcasts and session pushes. Accepted handlers and middleware, including replies to other connections,
+finish before writers drain and close TCP/TLS/KCP/KCP+TLS. The result distinguishes `Drained`, `Incomplete`
+(a handler/enqueue/transport failure) and `TimedOut`; zero grace forces cancellation. It waits for
+cooperative tasks and KCP drivers to release their resources, but cannot preempt synchronous code
+that never yields. KCP keeps its listener until both transport halves and the driver are released.
+KCP+TLS sends `close_notify` before acknowledged KCP EOF; pending authentication is cancelled at the boundary.
+`Drained` is transport completion, not a business delivery acknowledgement.
+See the [shutdown contract](docs/graceful-shutdown.md) and run
+`cargo run --example graceful_shutdown --no-default-features --features server`.
+
+Dropping a server or cancelling `LynnServer::start()` / `start_with_shutdown()` cancels its workers, handlers, heartbeat, pending handshakes and active connections. Cancellation is asynchronous and does not drain queued requests/responses or guarantee a graceful TLS shutdown; complete required exchanges before cancelling.
 
 TLS connection setup runs outside business workers, with at most the configured worker count in flight. Excess handshakes are rejected immediately; each retains its global/per-IP connection permits and the existing 10-second handshake timeout. Plain TCP setup is unchanged.
 
@@ -617,7 +629,8 @@ and cancellation; the library provides no timer, retry policy or delivery guaran
 work can call `try_send(method_id, Bytes)` for `Enqueued`, `Full` or `Closed` without waiting
 for queue capacity. Identity never follows address reuse or another server instance.
 Payload limits, instance frame markers, TCP/TLS/KCP/KCP+TLS writers and send metrics are shared
-with ordinary responses; incoming middleware does not run for outgoing pushes.
+with ordinary responses; incoming middleware does not run for outgoing pushes. Once server
+draining begins, valid-size session pushes return `Closed`; earlier enqueues remain in the drain.
 
 `handle.observer()` provides `SessionId` comparison, `is_closed()` and cancellation-safe,
 repeatable `closed().await` without granting send capability. Normal EOF waits for accepted

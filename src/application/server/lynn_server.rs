@@ -5,6 +5,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration,
 };
 
 use crossbeam_deque::Injector;
@@ -17,7 +18,8 @@ use crate::application::server::broadcast::BroadcastHandle;
 use crate::application::server::server_common::spawn_check_heart;
 use crate::application::server::server_config::LynnServerConfig;
 use crate::application::server::server_ready::{ServerReady, ServerStartupError, StartupResult};
-use crate::application::server::server_tasks::ServerTasks;
+use crate::application::server::server_shutdown::ShutdownOutcome;
+use crate::application::server::server_tasks::{RequestWork, ServerTasks};
 use crate::domain::handler::handler_system::{HandlerContext, IntoSystem};
 use crate::domain::handler::middleware::{MiddlewareChain, Next};
 use crate::domain::handler::request_context::MiddlewareRequest;
@@ -30,12 +32,20 @@ use crate::infrastructure::tcp::reactor::{ReactorEvent, TcpReactor};
 use crate::infrastructure::tcp::stream::StreamAcceptor;
 use crate::infrastructure::tcp::tcp_socket_config::TcpSocketConfig;
 
-/// Task body sent through the channel: (handler, context, clients, processing permit).
+#[cfg(all(test, feature = "kcp"))]
+#[path = "server_shutdown_kcp_tests.rs"]
+mod shutdown_kcp_tests;
+#[cfg(test)]
+#[path = "server_shutdown_tests.rs"]
+mod shutdown_tests;
+
+/// Queued handler, context, clients, processing permit and drain accounting.
 pub(crate) type TaskBodyOutChannel = (
     Arc<Route>,
     HandlerContext,
     ClientsStructType,
     OwnedSemaphorePermit,
+    RequestWork,
 );
 
 /// Event sender for the reactor, backed by a crossbeam injector.
@@ -361,15 +371,80 @@ impl<'a> LynnServer<'a> {
     }
 
     /// Runs the server until cancelled, returning initialization or transport errors.
-    pub async fn start(mut self) -> crate::Result<()> {
+    pub async fn start(self) -> crate::Result<()> {
+        self.start_with_shutdown(std::future::pending(), Duration::ZERO)
+            .await
+            .map(|_| ())
+    }
+
+    /// Runs until the application signal resolves, then drains within one total grace period.
+    ///
+    /// Initialization finishes before observing the signal; startup errors retain their
+    /// original type. The boundary stops new sessions, requests and background sends.
+    /// Accepted handlers (including middleware) finish before any draining writer closes.
+    /// Zero grace forces cancellation. Cancelling this future keeps `start()`'s immediate
+    /// cancellation behavior. Synchronous code that never yields cannot be preempted.
+    pub async fn start_with_shutdown(
+        mut self,
+        signal: impl Future<Output = ()>,
+        grace: Duration,
+    ) -> crate::Result<ShutdownOutcome> {
         self.lynn_router
             .freeze(std::mem::take(&mut self.middleware));
-        let result = self.run().await;
+        let tasks = self.tasks.clone();
+        let ready = self.startup_handle();
+        let mut deadline = None;
+        let result = {
+            let run = self.run();
+            tokio::pin!(run);
+            tokio::select! {
+                biased;
+                result = &mut run => result.map(|()| ShutdownOutcome::Drained),
+                _ = async { let _ = ready.wait().await; signal.await } => {
+                    let end = tokio::time::Instant::now() + grace;
+                    deadline = Some(end);
+                    tasks.begin_draining();
+                    tokio::select! {
+                        biased;
+                        result = &mut run => result.map(|()| ShutdownOutcome::Drained),
+                        result = tokio::time::timeout_at(end, tasks.drained()) => {
+                            Ok(if result.is_err() || tokio::time::Instant::now() >= end {
+                                ShutdownOutcome::TimedOut
+                            } else {
+                                ShutdownOutcome::Drained
+                            })
+                        },
+                    }
+                },
+            }
+        };
         if result.is_err() && self.startup.borrow().is_none() {
             self.startup
                 .send_replace(Some(Err(ServerStartupError::Failed)));
         }
-        result
+        // Notify first so workers cannot accept more work while owner fields are dropped.
+        self._task_owner.send_replace(());
+        drop(self);
+        let mut result = result;
+        if let Some(end) = deadline
+            && result
+                .as_ref()
+                .is_ok_and(|outcome| *outcome != ShutdownOutcome::TimedOut)
+            && (tokio::time::timeout_at(end, tasks.finished())
+                .await
+                .is_err()
+                || tokio::time::Instant::now() >= end)
+        {
+            result = Ok(ShutdownOutcome::TimedOut);
+        }
+        tasks.finished().await;
+        result.map(|outcome| {
+            if outcome == ShutdownOutcome::Drained && tasks.has_failed() {
+                ShutdownOutcome::Incomplete
+            } else {
+                outcome
+            }
+        })
     }
 
     /// Starts the server and begins listening for client connections.

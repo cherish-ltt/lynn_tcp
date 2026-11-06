@@ -103,7 +103,17 @@ task.await??;
 # }
 ```
 
-释放服务端或取消 `LynnServer::start()` 会取消其 worker、handler、心跳、待决握手及活跃连接。取消为异步过程，不保证请求/响应队列排空或 TLS 优雅关闭；需要确认交付的交互应在取消前完成。
+计划停机可使用 `start_with_shutdown(signal, grace).await`。初始化完成后，应用信号启动一次
+总期限，并停止新会话、请求、后台广播及会话推送。已接收的 Handler、中间件及跨连接响应先完成，再排空
+各 writer 并关闭 TCP/TLS/KCP/KCP+TLS。返回值区分 `Drained`、`Incomplete`（Handler、入队或传输失败）
+和 `TimedOut`；零期限强制取消。返回前等待协作式任务及 KCP driver 释放资源，但无法抢占
+永不让出执行权的同步代码。KCP 在传输两半及 driver 实际释放前保留监听器。
+KCP+TLS 先发送 `close_notify` 再等待 KCP EOF 确认；待决认证在边界处取消。
+`Drained` 表示传输完成，不代表业务确认交付。详见
+[停机契约](docs/graceful-shutdown.md)，运行示例：
+`cargo run --example graceful_shutdown --no-default-features --features server`。
+
+释放服务端或取消 `LynnServer::start()` / `start_with_shutdown()` 会取消其 worker、handler、心跳、待决握手及活跃连接。取消为异步过程，不保证请求/响应队列排空或 TLS 优雅关闭；需要确认交付的交互应在取消前完成。
 
 TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配置的 worker 数。超出握手并发限制时立即拒绝；每个握手仍持有全局/每 IP 连接许可，并保留原有 10 秒握手超时。明文 TCP 初始化路径不变。
 
@@ -578,6 +588,7 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 `SessionHandle`。Handler 返回后，后台调用 `try_send(method_id, Bytes)`，非等待得到
 `Enqueued`、`Full` 或 `Closed`。身份不会跟随地址复用或其他服务端实例，复用普通响应的
 长度上限、实例帧标记、TCP/TLS/KCP/KCP+TLS writer 和发送指标；主动推送不执行入站中间件。
+服务端开始排空后，合法长度的会话推送返回 `Closed`；边界前已入队的消息仍参与排空。
 
 `handle.observer()` 单独提供 `SessionId` 比较、`is_closed()` 及可取消、可重复的
 `closed().await`，不授予发送权限。正常 EOF 先排空已接受的请求链与响应，再完成 writer

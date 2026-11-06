@@ -11,7 +11,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite, DuplexStream, ReadBuf},
     net::UdpSocket,
     sync::{mpsc, oneshot, watch},
-    task::JoinHandle,
+    task::{AbortHandle, JoinHandle},
 };
 
 use super::{BUFFER, KcpConfig, Mode, driver};
@@ -20,7 +20,8 @@ type Flush = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
 
 pub(crate) struct KcpStream {
     io: DuplexStream,
-    worker: JoinHandle<()>,
+    worker: Option<JoinHandle<()>>,
+    abort: AbortHandle,
     acknowledged: watch::Receiver<(u64, bool)>,
     error: watch::Receiver<Option<String>>,
     written: u64,
@@ -62,7 +63,8 @@ impl KcpStream {
         Ok((
             Self {
                 io,
-                worker,
+                abort: worker.abort_handle(),
+                worker: Some(worker),
                 acknowledged,
                 error,
                 written: 0,
@@ -71,6 +73,33 @@ impl KcpStream {
             },
             ready,
         ))
+    }
+
+    #[cfg(feature = "server")]
+    pub(crate) fn track_server_worker(
+        &mut self,
+        tasks: &crate::application::server::server_tasks::ServerTasks,
+    ) {
+        let Some(worker) = self.worker.take() else {
+            return;
+        };
+        let server_tasks = tasks.clone();
+        let failure = self.error.clone();
+        // Keep the listener alive until an already-running driver has actually stopped.
+        let worker_and_guard = (worker, tasks.connection());
+        tasks.track(async move {
+            let tracked = worker_and_guard;
+            let (worker, _connection) = tracked;
+            if let Err(error) = worker.await
+                && !error.is_cancelled()
+            {
+                tracing::error!("KCP driver failed: {error}");
+                server_tasks.record_failure();
+            }
+            if failure.borrow().is_some() {
+                server_tasks.record_failure();
+            }
+        });
     }
 
     #[cfg(feature = "server")]
@@ -105,7 +134,7 @@ impl KcpStream {
 
 impl Drop for KcpStream {
     fn drop(&mut self) {
-        self.worker.abort();
+        self.abort.abort();
     }
 }
 
