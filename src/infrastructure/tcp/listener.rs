@@ -7,6 +7,14 @@ pub(crate) enum TransportListener {
 }
 
 impl TransportListener {
+    pub(crate) fn local_addr(&self) -> std::io::Result<std::net::SocketAddr> {
+        match self {
+            Self::Tcp(listener) => listener.local_addr(),
+            #[cfg(feature = "kcp")]
+            Self::Kcp(listener) => listener.local_addr(),
+        }
+    }
+
     pub(crate) async fn bind(config: &LynnServerConfig<'_>) -> crate::Result<Self> {
         #[cfg(feature = "kcp")]
         if let Some(kcp) = &config.kcp {

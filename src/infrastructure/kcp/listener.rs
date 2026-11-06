@@ -23,6 +23,10 @@ pub(crate) struct KcpListener {
 }
 
 impl KcpListener {
+    pub(crate) fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.socket.local_addr()
+    }
+
     pub(crate) async fn bind(addr: &str, config: KcpConfig) -> io::Result<Self> {
         Ok(Self {
             socket: Arc::new(UdpSocket::bind(addr).await?),

@@ -16,6 +16,7 @@ use tracing_subscriber::fmt;
 use crate::application::server::broadcast::BroadcastHandle;
 use crate::application::server::server_common::spawn_check_heart;
 use crate::application::server::server_config::LynnServerConfig;
+use crate::application::server::server_ready::{ServerReady, ServerStartupError, StartupResult};
 use crate::application::server::server_tasks::ServerTasks;
 use crate::domain::handler::handler_system::{HandlerContext, IntoSystem};
 use crate::domain::handler::middleware::{MiddlewareChain, Next};
@@ -135,6 +136,7 @@ pub struct LynnServer<'a> {
     _task_owner: tokio::sync::watch::Sender<()>,
     tasks: ServerTasks,
     started: Arc<AtomicBool>,
+    startup: tokio::sync::watch::Sender<StartupResult>,
 }
 
 /// Implementation of methods for the LynnServer struct.
@@ -158,6 +160,7 @@ impl<'a> LynnServer<'a> {
             _task_owner: task_owner,
             tasks,
             started: Arc::new(AtomicBool::new(false)),
+            startup: tokio::sync::watch::channel(None).0,
         }
     }
 
@@ -265,6 +268,11 @@ impl<'a> LynnServer<'a> {
         )
     }
 
+    /// Observes initialization and the actual bound address without owning the server.
+    pub fn startup_handle(&self) -> ServerReady {
+        ServerReady(self.startup.subscribe())
+    }
+
     /// Appends a global middleware, wrapping every route regardless of registration order.
     pub fn with_middleware<F, Fut>(mut self, middleware: F) -> Self
     where
@@ -354,15 +362,14 @@ impl<'a> LynnServer<'a> {
 
     /// Runs the server until cancelled, returning initialization or transport errors.
     pub async fn start(mut self) -> crate::Result<()> {
-        if *self.lynn_config.get_server_max_reactor_taskpool_size() == 0 {
-            return Err(crate::LynnError::config(
-                "server taskpool size must be greater than zero",
-            ));
-        }
         self.lynn_router
             .freeze(std::mem::take(&mut self.middleware));
-        let server_arc = Arc::new(self);
-        server_arc.run().await
+        let result = self.run().await;
+        if result.is_err() && self.startup.borrow().is_none() {
+            self.startup
+                .send_replace(Some(Err(ServerStartupError::Failed)));
+        }
+        result
     }
 
     /// Starts the server and begins listening for client connections.
@@ -370,16 +377,17 @@ impl<'a> LynnServer<'a> {
     /// # Returns
     ///
     /// Returns `Ok(())` if the server starts successfully, otherwise returns an error.
-    async fn run(self: Arc<Self>) -> crate::Result<()> {
+    async fn run(&self) -> crate::Result<()> {
+        if *self.lynn_config.get_server_max_reactor_taskpool_size() == 0 {
+            return Err(crate::LynnError::config(
+                "server taskpool size must be greater than zero",
+            ));
+        }
         // Binds the selected transport to the local address.
         let listener =
             crate::infrastructure::tcp::listener::TransportListener::bind(&self.lynn_config)
                 .await?;
-        info!(
-            "Server - [Main-LynnServer] start success!!! with [server_addr:{}]{}",
-            self.lynn_config.get_server_addr(),
-            tls_state_note(&self.lynn_config)
-        );
+        let local_addr = listener.local_addr()?;
 
         // Create connection limiter if rate limiting or per-IP limiting is enabled
         let rate_limit = *self.lynn_config.get_server_connection_rate_limit();
@@ -417,7 +425,6 @@ impl<'a> LynnServer<'a> {
         let stream_acceptor = Arc::new(StreamAcceptor::Plain);
 
         self.check_heart().await;
-        self.started.store(true, Ordering::Release);
 
         self.reactor
             .start(
@@ -438,6 +445,15 @@ impl<'a> LynnServer<'a> {
                 }),
                 tcp_config,
                 stream_acceptor,
+                || {
+                    self.started.store(true, Ordering::Release);
+                    self.startup.send_replace(Some(Ok(local_addr)));
+                    info!(
+                        "Server - [Main-LynnServer] start success!!! with [server_addr:{}]{}",
+                        local_addr,
+                        tls_state_note(&self.lynn_config)
+                    );
+                },
             )
             .await;
         Ok(())

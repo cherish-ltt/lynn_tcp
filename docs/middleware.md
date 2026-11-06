@@ -67,6 +67,8 @@ async fn passthrough(
 cargo run --example middleware_example
 ```
 
+示例直接绑定 `127.0.0.1:0`，等待 `startup_handle().wait()` 返回实际地址后再连接，不预选端口或建立探活连接。
+
 示例注册全局观测/错误映射与路由超时/鉴权，读取共享策略，将 `Principal` 注入 `RequestContext`，依次验证成功、鉴权拒绝、超时和同一连接后续成功；结束时取消并等待服务端任务。`public-demo:` 是公开演示标记，明文 loopback 不承载秘密；实际凭据应使用校验证书的加密传输，参见 `cargo run --example tls_example --features tls`。KCP 本身不提供加密认证。
 
 迁移时保留业务 Handler，将重复校验移入路由层；只在通过验证后 `insert(Principal)` 并调用 Next。Handler 用 `RequestContext::get` 读取，缺失显式拒绝，不授予默认身份。无需修改其他 Handler 的返回类型或最多 15 个参数的现有支持。
