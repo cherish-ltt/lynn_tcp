@@ -48,7 +48,7 @@ impl Driver {
     }
 
     pub(crate) async fn run(
-        mut self,
+        &mut self,
         io: &mut DuplexStream,
         acknowledged: watch::Sender<(u64, bool)>,
         ready: oneshot::Sender<io::Result<()>>,

@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use crate::domain::model::session::SessionHandle;
 use crate::domain::state::app_state::AppState;
 
 use super::handler_system::HandlerContext;
@@ -18,14 +19,16 @@ type RequestData = HashMap<TypeId, Arc<dyn Any + Send + Sync>>;
 pub struct RequestContext {
     method_id: u16,
     peer_addr: SocketAddr,
+    session: SessionHandle,
     data: Option<Arc<RequestData>>,
 }
 
 impl RequestContext {
-    pub(crate) fn new(method_id: u16, peer_addr: SocketAddr) -> Self {
+    pub(crate) fn new(method_id: u16, peer_addr: SocketAddr, session: SessionHandle) -> Self {
         Self {
             method_id,
             peer_addr,
+            session,
             data: None,
         }
     }
@@ -37,6 +40,11 @@ impl RequestContext {
     /// The transport peer address, not an authenticated user identity.
     pub fn peer_addr(&self) -> SocketAddr {
         self.peer_addr
+    }
+
+    /// The original connection captured before this request was queued.
+    pub fn session(&self) -> &SessionHandle {
+        &self.session
     }
 
     pub fn get<T: Send + Sync + 'static>(&self) -> Option<Arc<T>> {
@@ -69,6 +77,10 @@ impl MiddlewareRequest {
 
     pub fn peer_addr(&self) -> SocketAddr {
         self.context.request_context.peer_addr()
+    }
+
+    pub fn session(&self) -> &SessionHandle {
+        self.context.request_context.session()
     }
 
     /// Borrows the original business payload without advancing the handler's cursor.
@@ -118,7 +130,7 @@ mod tests {
             InputBufVO::new([1, 7, 0, 42].as_slice().into(), addr),
             ClientsContext::new_none(),
             Arc::new(StateRegistry::new()),
-            RequestContext::new(7, addr),
+            RequestContext::new(7, addr, SessionHandle::closed_for_test()),
         )
     }
 

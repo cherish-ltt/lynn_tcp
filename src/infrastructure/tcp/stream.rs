@@ -96,11 +96,24 @@ impl AsyncWrite for LynnStream {
 
 /// Splits a transport into a boxed read half (for the per-connection read
 /// loop) and a boxed write half (for the clients-map writer task).
-pub(crate) fn split_transport(stream: LynnStream) -> (BoxedReadHalf, BoxedWriteHalf) {
-    #[cfg(feature = "server")]
+#[cfg(feature = "server")]
+pub(crate) fn split_transport(
+    stream: LynnStream,
+) -> (
+    BoxedReadHalf,
+    BoxedWriteHalf,
+    crate::domain::model::session::SessionObserver,
+) {
+    let (completion, observer) = crate::domain::model::session::SessionObserver::new();
+    #[cfg(feature = "kcp")]
+    let observer = match &stream {
+        LynnStream::Kcp(stream) => observer.with_driver(stream.completion()),
+        _ => observer,
+    };
     let stream = crate::infrastructure::metrics::transport::MeasuredIo::new(stream);
+    let stream = super::session_io::SessionIo::new(stream, completion);
     let (read_half, write_half) = tokio::io::split(stream);
-    (Box::new(read_half), Box::new(write_half))
+    (Box::new(read_half), Box::new(write_half), observer)
 }
 
 /// Wraps a freshly accepted TCP stream into a [`LynnStream`], performing the

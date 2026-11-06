@@ -219,6 +219,9 @@ pub mod lynn_server {
     pub use super::application::server::server_ready::{ServerReady, ServerStartupError};
     /// The `ClientsContext` struct is used to manage the state and context of connected clients.
     pub use super::domain::handler::handler_system::ClientsContext;
+    pub use super::domain::model::session::{
+        SessionHandle, SessionId, SessionObserver, SessionSendOutcome,
+    };
 }
 
 /// Asynchronous middleware for matched server business requests.

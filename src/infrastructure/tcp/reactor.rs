@@ -183,6 +183,7 @@ impl EventManager {
                                 let tx = tx.clone();
                                 let lynn_router = lynn_router.clone();
                                 let reactor_event_sender = reactor_event_sender.clone();
+                                let session_tasks = tasks.clone();
                                 let setup = async move {
                                     let _setup_permit = setup_permit;
                                     let Some(stream) = stream_acceptor.accept(socket, addr).await
@@ -198,6 +199,8 @@ impl EventManager {
                                         last_communicate_time.clone(),
                                         permit,
                                         write_timeout_secs,
+                                        session_tasks,
+                                        (message_header_mark, message_tail_mark),
                                     )
                                     .await;
                                     let process_permit =
