@@ -53,6 +53,7 @@ client=[]
 
 metrics=[]
 kcp=["dep:kcp-ovo"]
+kcp-tls=["kcp", "tls"]
 
 # TLS 1.3 传输加密（默认关闭，需配置证书并手动开启）
 tls=["dep:tokio-rustls","dep:rustls","dep:rustls-pemfile"]
@@ -166,6 +167,14 @@ required-features = ["server"]
 [[test]]
 name = "tls_integration"
 required-features = ["server", "client", "tls"]
+
+[[test]]
+name = "kcp_tls_transport"
+required-features = ["server", "client", "kcp-tls"]
+
+[[test]]
+name = "readme_kcp_tls_config"
+required-features = ["server", "client", "kcp-tls"]
 
 [[bin]]
 name = "bench_echo_server"

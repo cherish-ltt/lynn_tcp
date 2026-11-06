@@ -8,7 +8,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 
-use super::{HELLO, KcpConfig, PACKETS, stream::KcpStream};
+use super::{HELLO, KcpConfig, Mode, PACKETS, stream::KcpStream};
 
 async fn pair() -> (KcpStream, KcpStream) {
     pair_with_config(KcpConfig::default()).await
@@ -21,9 +21,17 @@ async fn pair_with_config(config: KcpConfig) -> (KcpStream, KcpStream) {
     let source = a.local_addr().unwrap();
     let conv = 42;
     a.connect(b.local_addr().unwrap()).await.unwrap();
-    let (left, ready) =
-        KcpStream::start(a, b.local_addr().unwrap(), conv, config.clone(), None).unwrap();
-    let (right, other) = KcpStream::start(b.clone(), source, conv, config, Some(rx)).unwrap();
+    let (left, ready) = KcpStream::start(
+        a,
+        b.local_addr().unwrap(),
+        conv,
+        config.clone(),
+        Mode::Plain,
+        None,
+    )
+    .unwrap();
+    let (right, other) =
+        KcpStream::start(b.clone(), source, conv, config, Mode::Plain, Some(rx)).unwrap();
     tokio::spawn(async move {
         let mut bytes = [0; 65536];
         loop {
@@ -77,6 +85,7 @@ async fn client_state_waits_for_kcp_handshake_and_ends_on_owner_drop() {
         addr,
         header.conv,
         KcpConfig::default(),
+        Mode::Plain,
         Some(rx),
     )
     .unwrap();
@@ -232,6 +241,7 @@ async fn handshake_and_invalid_datagram_errors_terminate_worker() {
             peer.local_addr().unwrap(),
             5,
             KcpConfig::default(),
+            Mode::Plain,
             Some(rx),
         )
         .unwrap();
@@ -252,6 +262,7 @@ async fn wrong_conversation_is_ignored_but_invalid_session_message_closes() {
         peer.local_addr().unwrap(),
         5,
         KcpConfig::default(),
+        Mode::Plain,
         Some(rx),
     )
     .unwrap();
@@ -291,6 +302,7 @@ async fn idle_timeout_and_cancelled_connect_release_socket() {
             idle_timeout_secs: 1,
             ..KcpConfig::default()
         },
+        Mode::Plain,
         None,
     )
     .unwrap();

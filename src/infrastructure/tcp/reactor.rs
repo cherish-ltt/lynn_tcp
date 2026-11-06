@@ -579,7 +579,7 @@ impl TcpReactor {
             self.event_manager.get_global_queue(),
             self.core_reactor.tx.clone(),
             server_max_reactor_taskpool_size,
-            stream_acceptor,
+            stream_acceptor.clone(),
             tcp_config.read_timeout_secs,
             tcp_config.write_timeout_secs,
         );
@@ -604,6 +604,12 @@ impl TcpReactor {
                         allow_max_connections.copied(),
                         connection_limiter.map(|(_, _, limiter)| limiter),
                         self.event_manager.get_global_queue(),
+                        #[cfg(feature = "kcp-tls")]
+                        stream_acceptor,
+                        #[cfg(feature = "kcp-tls")]
+                        self.event_manager.tasks.clone(),
+                        #[cfg(feature = "kcp-tls")]
+                        *server_max_reactor_taskpool_size,
                     )
                     .await;
                 return;

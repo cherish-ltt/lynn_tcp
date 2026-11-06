@@ -19,14 +19,22 @@ impl TransportListener {
         #[cfg(feature = "kcp")]
         if let Some(kcp) = &config.kcp {
             kcp.validate()?;
-            #[cfg(feature = "tls")]
+            #[cfg(all(feature = "tls", not(feature = "kcp-tls")))]
             if config.get_tls().is_some() {
                 return Err(crate::LynnError::config("TLS over KCP is not supported"));
             }
+            let mode = crate::infrastructure::kcp::Mode::Plain;
+            #[cfg(feature = "kcp-tls")]
+            let mode = if config.get_tls().is_some() {
+                crate::infrastructure::kcp::Mode::Tls
+            } else {
+                mode
+            };
             return Ok(Self::Kcp(
                 crate::infrastructure::kcp::listener::KcpListener::bind(
                     &config.get_server_addr(),
                     kcp.clone(),
+                    mode,
                 )
                 .await?,
             ));

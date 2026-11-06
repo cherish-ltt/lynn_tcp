@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "crate_version": "2.5.0",
+    "os": "macos",
+    "arch": "aarch64",
+    "transport": "kcp",
+    "kcp_mode": "fast",
+    "request_counter": "successful local enqueue counted by send start time; model-1 replies payload-checked",
+    "logical_cores": 8,
+    "topology": "loopback, echo server in an independent process (bench_echo_server binary)",
+    "payload_bytes": 128,
+    "warmup_secs": 1,
+    "duration_secs": 5,
+    "client_channel_size": 8,
+    "unix_timestamp": 1793969005
+  },
+  "results": [
+    {"model": 1, "clients": 1, "tls": false, "connection_setup_ms": 0.43195799999999995, "requests": 3933, "responses": 3933, "throughput_rps": 786.6, "latency": {"avg_ms": 1.271, "p50_ms": 1.372, "p95_ms": 2.807, "p99_ms": 4.35}, "success": true, "server_stop_succeeded": true, "client_outcomes": [{"requests":3933,"responses":3933,"exit":"window_complete","failure_in_warmup":false}]}
+  ]
+}

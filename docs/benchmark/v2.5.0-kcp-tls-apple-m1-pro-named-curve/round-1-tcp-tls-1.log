@@ -1,0 +1,10 @@
+transport: tcp
+lynn_tcp benchmark v2.5.0
+models [1] | clients [1] | payload 128 B | warmup 1s | duration 5s
+running model 1 with 1 clients (warmup 1s + measured 5s)... 1317 resp/s (6586 responses in 5s, cell took 6.0s)
+
+| Model | Clients | Payload (B) | Requests | Responses | Throughput (resp/s) | Avg RTT (ms) | p50 (ms) | p95 (ms) | p99 (ms) |
+|:------|--------:|------------:|---------:|----------:|--------------------:|-------------:|---------:|---------:|---------:|
+| 1 (ping-pong) | 1 | 128 | 6586 | 6586 | 1317 | 0.759 | 0.194 | 2.691 | 4.542 |
+
+JSON results written to /private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-1-tcp-tls-1.json

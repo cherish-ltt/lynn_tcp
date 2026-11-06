@@ -230,7 +230,7 @@ async fn invalid_config_and_udp_bind_errors_are_explicit() {
             .await
             .is_connected()
     );
-    #[cfg(feature = "tls")]
+    #[cfg(all(feature = "tls", not(feature = "kcp-tls")))]
     {
         let config = LynnServerConfigBuilder::new()
             .with_kcp(KcpConfig::default())

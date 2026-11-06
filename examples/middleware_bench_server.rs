@@ -1,4 +1,4 @@
-//! Independent TCP server for `benches/middleware_compare.py`.
+//! Independent instrumented server for the comparison benchmarks.
 //! Counts whole-process allocations; no tracing subscriber is installed.
 
 #[path = "support/allocation_counter.rs"]
@@ -93,7 +93,14 @@ mod middleware {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = std::env::var("LYNN_BENCH_SERVER_STATS")?;
     let mode = std::env::var("LYNN_MIDDLEWARE_MODE")?;
-    let addr = std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?;
+    let kcp = std::env::var("LYNN_BENCH_TRANSPORT").as_deref() == Ok("kcp");
+    #[cfg(not(feature = "kcp"))]
+    assert!(!kcp, "rebuild with --features kcp");
+    let tls_cert = std::env::var("LYNN_BENCH_TLS_CERT").ok();
+    let tls_key = std::env::var("LYNN_BENCH_TLS_KEY").ok();
+    assert_eq!(tls_cert.is_some(), tls_key.is_some(), "TLS identity pair");
+    #[cfg(not(feature = "tls"))]
+    assert!(tls_cert.is_none(), "rebuild with --features tls");
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_all()
@@ -112,24 +119,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     });
     let result = runtime.block_on(async {
-        let address = addr.to_string();
         let config = LynnServerConfigBuilder::new()
-            .with_addr(&address)?
+            .with_addr("127.0.0.1:0")?
             .with_server_max_connections(Some(&MAX_CONNECTIONS))
             .with_server_max_taskpool_size(&TASKPOOL)
             .with_max_connections_per_ip(&UNLIMITED_PER_IP)
-            .with_connection_rate_limit(&UNLIMITED_RATE)
-            .build();
+            .with_connection_rate_limit(&UNLIMITED_RATE);
+        #[cfg(feature = "kcp")]
+        let config = if kcp {
+            config.with_kcp(lynn_tcp::lynn_kcp::KcpConfig::default())
+        } else {
+            config
+        };
+        #[cfg(feature = "tls")]
+        let config = match (tls_cert, tls_key) {
+            (Some(cert), Some(key)) => config.with_tls_cert_paths(cert, key),
+            _ => config,
+        };
         let server = middleware::configure(
-            LynnServer::new_with_config(config)
+            LynnServer::new_with_config(config.build())
                 .await
                 .add_router(1, echo),
             &mode,
         );
+        let ready = server.startup_handle();
+        let mut server = Box::pin(server.start());
+        let addr = tokio::select! {
+            result = &mut server => return result,
+            result = ready.wait() => result.map_err(|error| lynn_tcp::LynnError::config(error.to_string()))?,
+        };
         println!("READY {}", addr.port());
         std::io::stdout().flush()?;
         tokio::select! {
-            result = server.start() => result,
+            result = &mut server => result,
             _ = stopped => Ok(()),
         }
     });

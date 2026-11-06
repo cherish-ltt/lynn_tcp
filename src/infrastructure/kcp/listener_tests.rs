@@ -3,13 +3,25 @@ use tokio::time::{sleep, timeout};
 
 #[tokio::test]
 async fn invalid_handshake_conv_isolation_and_per_ip_permits_follow_session_owner() {
-    let listener = KcpListener::bind("127.0.0.1:0", KcpConfig::default())
+    let listener = KcpListener::bind("127.0.0.1:0", KcpConfig::default(), Mode::Plain)
         .await
         .unwrap();
     let addr = listener.socket.local_addr().unwrap();
     let queue = Arc::new(crossbeam_deque::Injector::new());
     let limiter = Arc::new(ConnectionLimiter::new(0, 1));
-    let task = tokio::spawn(listener.run(Some(2), Some(limiter), queue.clone()));
+    #[cfg(feature = "kcp-tls")]
+    let (_owner, tasks) = crate::application::server::server_tasks::ServerTasks::new();
+    let task = tokio::spawn(listener.run(
+        Some(2),
+        Some(limiter),
+        queue.clone(),
+        #[cfg(feature = "kcp-tls")]
+        Arc::new(crate::infrastructure::tcp::stream::StreamAcceptor::Plain),
+        #[cfg(feature = "kcp-tls")]
+        tasks,
+        #[cfg(feature = "kcp-tls")]
+        2,
+    ));
     let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
     socket.connect(addr).await.unwrap();
     socket.send(&[0; 27]).await.unwrap();
@@ -33,8 +45,15 @@ async fn invalid_handshake_conv_isolation_and_per_ip_permits_follow_session_owne
     sleep(Duration::from_millis(30)).await;
     assert!(queue.is_empty());
 
-    let (first, ready) =
-        KcpStream::start(socket.clone(), addr, 42, KcpConfig::default(), None).unwrap();
+    let (first, ready) = KcpStream::start(
+        socket.clone(),
+        addr,
+        42,
+        KcpConfig::default(),
+        Mode::Plain,
+        None,
+    )
+    .unwrap();
     timeout(Duration::from_secs(3), ready)
         .await
         .unwrap()
@@ -60,7 +79,7 @@ async fn invalid_handshake_conv_isolation_and_per_ip_permits_follow_session_owne
     drop(first);
     drop(queue.steal().success().unwrap());
     let (replacement, ready) =
-        KcpStream::start(socket, addr, 43, KcpConfig::default(), None).unwrap();
+        KcpStream::start(socket, addr, 43, KcpConfig::default(), Mode::Plain, None).unwrap();
     timeout(Duration::from_secs(3), ready)
         .await
         .unwrap()

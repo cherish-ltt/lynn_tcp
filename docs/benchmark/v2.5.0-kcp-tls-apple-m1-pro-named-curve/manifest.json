@@ -1,0 +1,2889 @@
+{
+  "platform": "macOS-27.2-arm64-arm-64bit",
+  "logical_cores": 8,
+  "revision": "ecfdac20b36cb905a99f1bc14effe5039627efb0 + uncommitted #94; full source SHA256 4acb446f534348c0496fa8e7d51574a8e0f6f32d6b4eb325937067fa065bce5f",
+  "source_sha256": "5dee7b95ae47fa62f23cdcece6226cee658ba38aa0d7eac9850bfd40d0bb57e5",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "binaries": {
+    "benchmark": {
+      "path": "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+      "sha256": "b979014e0411da066149d375dbe03472954d7cd788f373b861c85b4b78ff28f8"
+    },
+    "server": {
+      "path": "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/examples/middleware_bench_server",
+      "sha256": "75362613b6897449bc4fbf0aadb7abcf015324d2f6d57198945b8bf4c38d7971"
+    }
+  },
+  "tool_sources_sha256": {
+    "benches/kcp_tls_compare.py": "94f99dc69c6c0df93bda06ff355b5de8af91eed6f40d63fb33c16faea46c5df1",
+    "benches/benchmark.rs": "28e0b40bbd9df2c2d339a2ae3ef1f4ae9547c08b21058dfb5c4b7aec20803062",
+    "benches/support/model1.rs": "d42e360735ad115d69e42e513b242ced56a4bd93a33cfcdf455697719752519a",
+    "examples/middleware_bench_server.rs": "367b816232779f67713868c191ad2909f8a6c72d2939ef6cfd1fce49ba7575e4",
+    "examples/support/allocation_counter.rs": "79714bd84a7844817c2c4dafa0aa4dc7506e5304e392a515b63d587dd32a080a"
+  },
+  "conditions": {
+    "model": 1,
+    "network": "loopback, no injected impairment",
+    "clients": [
+      1,
+      32
+    ],
+    "payload_bytes": 128,
+    "warmup_secs": 1,
+    "duration_secs": 5,
+    "rounds": 3,
+    "server_runtime_workers": 4,
+    "kcp": "fast, default parameters",
+    "tls": "TLS 1.3; KCP+TLS disables resumption/0-RTT; fresh configs for TCP+TLS clients",
+    "connection_setup": "whole connect_clients batch including any retries; before traffic window",
+    "resources": "whole server lifetime, including startup/warmup/teardown; allocation requests, CPU, peak RSS",
+    "logging": "no subscriber",
+    "order": "rotated modes, serial cells, no builds"
+  },
+  "runs": [
+    {
+      "round": 1,
+      "mode": "kcp",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-1-kcp-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.0449139590000005,
+      "log_file": "round-1-kcp-1.log",
+      "loadavg_after": [
+        6.03466796875,
+        6.662109375,
+        13.06201171875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": false,
+        "connection_setup_ms": 0.5332089999999999,
+        "requests": 3506,
+        "responses": 3506,
+        "throughput_rps": 701.2,
+        "latency": {
+          "avg_ms": 1.426,
+          "p50_ms": 1.363,
+          "p95_ms": 3.438,
+          "p99_ms": 7.868
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3506,
+            "responses": 3506,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 110195,
+        "requested_bytes": 30867335,
+        "handled_requests": 4361,
+        "resources": {
+          "user_cpu_secs": 1.740632,
+          "system_cpu_secs": 1.067287,
+          "peak_rss_bytes": 6864896
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 1,
+      "mode": "kcp",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-1-kcp-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.064607165999999,
+      "log_file": "round-1-kcp-32.log",
+      "loadavg_after": [
+        6.27197265625,
+        6.70068359375,
+        13.0380859375
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": false,
+        "connection_setup_ms": 4.250249999999999,
+        "requests": 106926,
+        "responses": 106926,
+        "throughput_rps": 21385.2,
+        "latency": {
+          "avg_ms": 1.496,
+          "p50_ms": 1.333,
+          "p95_ms": 2.328,
+          "p99_ms": 3.068
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3346,
+            "responses": 3346,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3320,
+            "responses": 3320,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3369,
+            "responses": 3369,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3328,
+            "responses": 3328,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3357,
+            "responses": 3357,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3352,
+            "responses": 3352,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3325,
+            "responses": 3325,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3338,
+            "responses": 3338,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3372,
+            "responses": 3372,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3311,
+            "responses": 3311,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3337,
+            "responses": 3337,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3369,
+            "responses": 3369,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3354,
+            "responses": 3354,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3344,
+            "responses": 3344,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3334,
+            "responses": 3334,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3373,
+            "responses": 3373,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3386,
+            "responses": 3386,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3312,
+            "responses": 3312,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3342,
+            "responses": 3342,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3352,
+            "responses": 3352,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3378,
+            "responses": 3378,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3357,
+            "responses": 3357,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3338,
+            "responses": 3338,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3300,
+            "responses": 3300,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3323,
+            "responses": 3323,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3359,
+            "responses": 3359,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3336,
+            "responses": 3336,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3317,
+            "responses": 3317,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3295,
+            "responses": 3295,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3346,
+            "responses": 3346,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3332,
+            "responses": 3332,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3324,
+            "responses": 3324,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3211916,
+        "requested_bytes": 819273958,
+        "handled_requests": 128248,
+        "resources": {
+          "user_cpu_secs": 3.493983,
+          "system_cpu_secs": 12.335548,
+          "peak_rss_bytes": 8110080
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 1,
+      "mode": "kcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-1-kcp-tls-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.054489374999999,
+      "log_file": "round-1-kcp-tls-1.log",
+      "loadavg_after": [
+        6.169921875,
+        6.67236328125,
+        12.99072265625
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": true,
+        "connection_setup_ms": 0.829209,
+        "requests": 3491,
+        "responses": 3491,
+        "throughput_rps": 698.2,
+        "latency": {
+          "avg_ms": 1.432,
+          "p50_ms": 1.386,
+          "p95_ms": 3.524,
+          "p99_ms": 7.72
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3491,
+            "responses": 3491,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 115623,
+        "requested_bytes": 31916285,
+        "handled_requests": 4230,
+        "resources": {
+          "user_cpu_secs": 1.642523,
+          "system_cpu_secs": 1.025967,
+          "peak_rss_bytes": 7815168
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 1,
+      "mode": "kcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-1-kcp-tls-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.081166958000001,
+      "log_file": "round-1-kcp-tls-32.log",
+      "loadavg_after": [
+        13.923828125,
+        8.271484375,
+        13.51806640625
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": true,
+        "connection_setup_ms": 14.786041999999998,
+        "requests": 114474,
+        "responses": 114474,
+        "throughput_rps": 22894.8,
+        "latency": {
+          "avg_ms": 1.397,
+          "p50_ms": 1.322,
+          "p95_ms": 2.286,
+          "p99_ms": 2.884
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3583,
+            "responses": 3583,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3569,
+            "responses": 3569,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3583,
+            "responses": 3583,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3580,
+            "responses": 3580,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3578,
+            "responses": 3578,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3565,
+            "responses": 3565,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3560,
+            "responses": 3560,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3586,
+            "responses": 3586,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3548,
+            "responses": 3548,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3546,
+            "responses": 3546,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3588,
+            "responses": 3588,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3525,
+            "responses": 3525,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3603,
+            "responses": 3603,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3556,
+            "responses": 3556,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3602,
+            "responses": 3602,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3606,
+            "responses": 3606,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3584,
+            "responses": 3584,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3560,
+            "responses": 3560,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3549,
+            "responses": 3549,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3568,
+            "responses": 3568,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3592,
+            "responses": 3592,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3615,
+            "responses": 3615,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3609,
+            "responses": 3609,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3588,
+            "responses": 3588,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3604,
+            "responses": 3604,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3536,
+            "responses": 3536,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3576,
+            "responses": 3576,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3592,
+            "responses": 3592,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3578,
+            "responses": 3578,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3555,
+            "responses": 3555,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3598,
+            "responses": 3598,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3592,
+            "responses": 3592,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3606559,
+        "requested_bytes": 907651865,
+        "handled_requests": 133246,
+        "resources": {
+          "user_cpu_secs": 3.72696,
+          "system_cpu_secs": 11.860536,
+          "peak_rss_bytes": 9666560
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 1,
+      "mode": "tcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-1-tcp-tls-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.092443375000002,
+      "log_file": "round-1-tcp-tls-1.log",
+      "loadavg_after": [
+        12.5322265625,
+        8.162109375,
+        13.41796875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": true,
+        "connection_setup_ms": 1.097541,
+        "requests": 6586,
+        "responses": 6586,
+        "throughput_rps": 1317.2,
+        "latency": {
+          "avg_ms": 0.759,
+          "p50_ms": 0.194,
+          "p95_ms": 2.691,
+          "p99_ms": 4.542
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 6586,
+            "responses": 6586,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 113424,
+        "requested_bytes": 35453457,
+        "handled_requests": 8010,
+        "resources": {
+          "user_cpu_secs": 1.646449,
+          "system_cpu_secs": 0.848163,
+          "peak_rss_bytes": 7618560
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 1,
+      "mode": "tcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-1-tcp-tls-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.0868332920000014,
+      "log_file": "round-1-tcp-tls-32.log",
+      "loadavg_after": [
+        12.0888671875,
+        8.142578125,
+        13.3798828125
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": true,
+        "connection_setup_ms": 8.785,
+        "requests": 356752,
+        "responses": 356752,
+        "throughput_rps": 71350.4,
+        "latency": {
+          "avg_ms": 0.448,
+          "p50_ms": 0.409,
+          "p95_ms": 0.675,
+          "p99_ms": 1.441
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 11161,
+            "responses": 11161,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11177,
+            "responses": 11177,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11163,
+            "responses": 11163,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11121,
+            "responses": 11121,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11141,
+            "responses": 11141,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11143,
+            "responses": 11143,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11126,
+            "responses": 11126,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11182,
+            "responses": 11182,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11167,
+            "responses": 11167,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11157,
+            "responses": 11157,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11133,
+            "responses": 11133,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11157,
+            "responses": 11157,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11112,
+            "responses": 11112,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11134,
+            "responses": 11134,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11128,
+            "responses": 11128,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11132,
+            "responses": 11132,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11173,
+            "responses": 11173,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11093,
+            "responses": 11093,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11113,
+            "responses": 11113,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11139,
+            "responses": 11139,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11160,
+            "responses": 11160,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11195,
+            "responses": 11195,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11137,
+            "responses": 11137,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11159,
+            "responses": 11159,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11195,
+            "responses": 11195,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11145,
+            "responses": 11145,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11127,
+            "responses": 11127,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11147,
+            "responses": 11147,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11174,
+            "responses": 11174,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11141,
+            "responses": 11141,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11149,
+            "responses": 11149,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 11171,
+            "responses": 11171,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 6006166,
+        "requested_bytes": 1751722647,
+        "handled_requests": 428094,
+        "resources": {
+          "user_cpu_secs": 8.923974,
+          "system_cpu_secs": 7.502091,
+          "peak_rss_bytes": 8634368
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 2,
+      "mode": "kcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-2-kcp-tls-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.029363917000005,
+      "log_file": "round-2-kcp-tls-1.log",
+      "loadavg_after": [
+        12.32177734375,
+        8.25634765625,
+        13.38916015625
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": true,
+        "connection_setup_ms": 0.799334,
+        "requests": 4086,
+        "responses": 4086,
+        "throughput_rps": 817.2,
+        "latency": {
+          "avg_ms": 1.223,
+          "p50_ms": 1.313,
+          "p95_ms": 2.704,
+          "p99_ms": 4.044
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 4086,
+            "responses": 4086,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 131782,
+        "requested_bytes": 35948185,
+        "handled_requests": 4828,
+        "resources": {
+          "user_cpu_secs": 1.3832200000000001,
+          "system_cpu_secs": 0.937749,
+          "peak_rss_bytes": 7815168
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 2,
+      "mode": "kcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-2-kcp-tls-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.069171959000002,
+      "log_file": "round-2-kcp-tls-32.log",
+      "loadavg_after": [
+        12.2958984375,
+        8.318359375,
+        13.380859375
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": true,
+        "connection_setup_ms": 11.654084000000001,
+        "requests": 104002,
+        "responses": 104002,
+        "throughput_rps": 20800.4,
+        "latency": {
+          "avg_ms": 1.538,
+          "p50_ms": 1.393,
+          "p95_ms": 2.852,
+          "p99_ms": 4.009
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3271,
+            "responses": 3271,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3220,
+            "responses": 3220,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3224,
+            "responses": 3224,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3267,
+            "responses": 3267,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3248,
+            "responses": 3248,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3278,
+            "responses": 3278,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3212,
+            "responses": 3212,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3255,
+            "responses": 3255,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3274,
+            "responses": 3274,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3259,
+            "responses": 3259,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3239,
+            "responses": 3239,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3215,
+            "responses": 3215,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3228,
+            "responses": 3228,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3251,
+            "responses": 3251,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3249,
+            "responses": 3249,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3293,
+            "responses": 3293,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3249,
+            "responses": 3249,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3236,
+            "responses": 3236,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3272,
+            "responses": 3272,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3289,
+            "responses": 3289,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3222,
+            "responses": 3222,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3234,
+            "responses": 3234,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3286,
+            "responses": 3286,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3277,
+            "responses": 3277,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3239,
+            "responses": 3239,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3238,
+            "responses": 3238,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3278,
+            "responses": 3278,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3270,
+            "responses": 3270,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3231,
+            "responses": 3231,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3267,
+            "responses": 3267,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3245,
+            "responses": 3245,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3186,
+            "responses": 3186,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3394286,
+        "requested_bytes": 854857429,
+        "handled_requests": 125393,
+        "resources": {
+          "user_cpu_secs": 3.7821350000000002,
+          "system_cpu_secs": 9.419024,
+          "peak_rss_bytes": 9437184
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 2,
+      "mode": "tcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-2-tcp-tls-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.100624625000002,
+      "log_file": "round-2-tcp-tls-1.log",
+      "loadavg_after": [
+        13.31298828125,
+        8.59521484375,
+        13.44873046875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": true,
+        "connection_setup_ms": 3.120958,
+        "requests": 6292,
+        "responses": 6292,
+        "throughput_rps": 1258.4,
+        "latency": {
+          "avg_ms": 0.794,
+          "p50_ms": 0.184,
+          "p95_ms": 2.937,
+          "p99_ms": 7.999
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 6292,
+            "responses": 6292,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 114743,
+        "requested_bytes": 35826379,
+        "handled_requests": 8104,
+        "resources": {
+          "user_cpu_secs": 1.034746,
+          "system_cpu_secs": 0.574272,
+          "peak_rss_bytes": 7585792
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 2,
+      "mode": "tcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-2-tcp-tls-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.101774249999998,
+      "log_file": "round-2-tcp-tls-32.log",
+      "loadavg_after": [
+        14.77294921875,
+        9.0546875,
+        13.55419921875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": true,
+        "connection_setup_ms": 24.791542,
+        "requests": 252047,
+        "responses": 252047,
+        "throughput_rps": 50409.4,
+        "latency": {
+          "avg_ms": 0.634,
+          "p50_ms": 0.483,
+          "p95_ms": 1.37,
+          "p99_ms": 3.148
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 7895,
+            "responses": 7895,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7854,
+            "responses": 7854,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7875,
+            "responses": 7875,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7766,
+            "responses": 7766,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7950,
+            "responses": 7950,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7862,
+            "responses": 7862,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7846,
+            "responses": 7846,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7974,
+            "responses": 7974,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7923,
+            "responses": 7923,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7814,
+            "responses": 7814,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7797,
+            "responses": 7797,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7963,
+            "responses": 7963,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7915,
+            "responses": 7915,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7941,
+            "responses": 7941,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7894,
+            "responses": 7894,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7953,
+            "responses": 7953,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7828,
+            "responses": 7828,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7840,
+            "responses": 7840,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7910,
+            "responses": 7910,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7914,
+            "responses": 7914,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7738,
+            "responses": 7738,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7947,
+            "responses": 7947,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7913,
+            "responses": 7913,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7852,
+            "responses": 7852,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7822,
+            "responses": 7822,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7886,
+            "responses": 7886,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7865,
+            "responses": 7865,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7835,
+            "responses": 7835,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7838,
+            "responses": 7838,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7845,
+            "responses": 7845,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7902,
+            "responses": 7902,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 7890,
+            "responses": 7890,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 4041353,
+        "requested_bytes": 1173926865,
+        "handled_requests": 287958,
+        "resources": {
+          "user_cpu_secs": 5.490796,
+          "system_cpu_secs": 4.395814,
+          "peak_rss_bytes": 8552448
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 2,
+      "mode": "kcp",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-2-kcp-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.056879791999997,
+      "log_file": "round-2-kcp-1.log",
+      "loadavg_after": [
+        14.310546875,
+        9.0537109375,
+        13.52734375
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": false,
+        "connection_setup_ms": 1.1882080000000002,
+        "requests": 4112,
+        "responses": 4112,
+        "throughput_rps": 822.4,
+        "latency": {
+          "avg_ms": 1.215,
+          "p50_ms": 1.323,
+          "p95_ms": 2.801,
+          "p99_ms": 5.545
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 4112,
+            "responses": 4112,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 123658,
+        "requested_bytes": 34264762,
+        "handled_requests": 4899,
+        "resources": {
+          "user_cpu_secs": 1.377306,
+          "system_cpu_secs": 0.924318,
+          "peak_rss_bytes": 6914048
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 2,
+      "mode": "kcp",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-2-kcp-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.059375165999995,
+      "log_file": "round-2-kcp-32.log",
+      "loadavg_after": [
+        13.64501953125,
+        9.0029296875,
+        13.48291015625
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": false,
+        "connection_setup_ms": 4.272958,
+        "requests": 108392,
+        "responses": 108392,
+        "throughput_rps": 21678.4,
+        "latency": {
+          "avg_ms": 1.476,
+          "p50_ms": 1.381,
+          "p95_ms": 2.474,
+          "p99_ms": 3.229
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3377,
+            "responses": 3377,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3357,
+            "responses": 3357,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3369,
+            "responses": 3369,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3386,
+            "responses": 3386,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3412,
+            "responses": 3412,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3381,
+            "responses": 3381,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3379,
+            "responses": 3379,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3429,
+            "responses": 3429,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3415,
+            "responses": 3415,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3371,
+            "responses": 3371,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3404,
+            "responses": 3404,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3385,
+            "responses": 3385,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3416,
+            "responses": 3416,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3371,
+            "responses": 3371,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3364,
+            "responses": 3364,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3394,
+            "responses": 3394,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3379,
+            "responses": 3379,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3374,
+            "responses": 3374,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3383,
+            "responses": 3383,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3400,
+            "responses": 3400,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3382,
+            "responses": 3382,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3416,
+            "responses": 3416,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3384,
+            "responses": 3384,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3408,
+            "responses": 3408,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3378,
+            "responses": 3378,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3392,
+            "responses": 3392,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3392,
+            "responses": 3392,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3386,
+            "responses": 3386,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3379,
+            "responses": 3379,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3381,
+            "responses": 3381,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3392,
+            "responses": 3392,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3356,
+            "responses": 3356,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3278307,
+        "requested_bytes": 836053825,
+        "handled_requests": 130917,
+        "resources": {
+          "user_cpu_secs": 3.500567,
+          "system_cpu_secs": 12.425189,
+          "peak_rss_bytes": 8192000
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "tcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-3-tcp-tls-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.058652459000001,
+      "log_file": "round-3-tcp-tls-1.log",
+      "loadavg_after": [
+        12.95263671875,
+        8.93603515625,
+        13.43310546875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": true,
+        "connection_setup_ms": 0.852625,
+        "requests": 6572,
+        "responses": 6572,
+        "throughput_rps": 1314.4,
+        "latency": {
+          "avg_ms": 0.761,
+          "p50_ms": 0.205,
+          "p95_ms": 2.76,
+          "p99_ms": 4.9
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 6572,
+            "responses": 6572,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 118555,
+        "requested_bytes": 36920824,
+        "handled_requests": 8376,
+        "resources": {
+          "user_cpu_secs": 1.793529,
+          "system_cpu_secs": 0.905377,
+          "peak_rss_bytes": 7536640
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "tcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-3-tcp-tls-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.064000332999996,
+      "log_file": "round-3-tcp-tls-32.log",
+      "loadavg_after": [
+        12.232421875,
+        8.919921875,
+        13.37451171875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": true,
+        "connection_setup_ms": 8.022042,
+        "requests": 327689,
+        "responses": 327689,
+        "throughput_rps": 65537.8,
+        "latency": {
+          "avg_ms": 0.488,
+          "p50_ms": 0.423,
+          "p95_ms": 0.766,
+          "p99_ms": 1.593
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 10253,
+            "responses": 10253,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10223,
+            "responses": 10223,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10196,
+            "responses": 10196,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10230,
+            "responses": 10230,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10276,
+            "responses": 10276,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10265,
+            "responses": 10265,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10230,
+            "responses": 10230,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10248,
+            "responses": 10248,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10240,
+            "responses": 10240,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10255,
+            "responses": 10255,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10269,
+            "responses": 10269,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10234,
+            "responses": 10234,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10248,
+            "responses": 10248,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10251,
+            "responses": 10251,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10255,
+            "responses": 10255,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10260,
+            "responses": 10260,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10228,
+            "responses": 10228,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10229,
+            "responses": 10229,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10190,
+            "responses": 10190,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10263,
+            "responses": 10263,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10292,
+            "responses": 10292,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10236,
+            "responses": 10236,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10225,
+            "responses": 10225,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10232,
+            "responses": 10232,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10239,
+            "responses": 10239,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10256,
+            "responses": 10256,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10190,
+            "responses": 10190,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10240,
+            "responses": 10240,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10265,
+            "responses": 10265,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10241,
+            "responses": 10241,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10219,
+            "responses": 10219,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 10211,
+            "responses": 10211,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 5397840,
+        "requested_bytes": 1573391323,
+        "handled_requests": 384704,
+        "resources": {
+          "user_cpu_secs": 8.270767,
+          "system_cpu_secs": 6.939484,
+          "peak_rss_bytes": 8683520
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "kcp",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-3-kcp-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.0366998749999965,
+      "log_file": "round-3-kcp-1.log",
+      "loadavg_after": [
+        11.73291015625,
+        8.87109375,
+        13.3310546875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": false,
+        "connection_setup_ms": 0.5573330000000001,
+        "requests": 3973,
+        "responses": 3973,
+        "throughput_rps": 794.6,
+        "latency": {
+          "avg_ms": 1.258,
+          "p50_ms": 1.293,
+          "p95_ms": 3.047,
+          "p99_ms": 6.246
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3973,
+            "responses": 3973,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 122362,
+        "requested_bytes": 33934273,
+        "handled_requests": 4847,
+        "resources": {
+          "user_cpu_secs": 1.420754,
+          "system_cpu_secs": 0.908998,
+          "peak_rss_bytes": 6897664
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "kcp",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-3-kcp-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.042921916999987,
+      "log_file": "round-3-kcp-32.log",
+      "loadavg_after": [
+        11.43359375,
+        8.8564453125,
+        13.2998046875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": false,
+        "connection_setup_ms": 5.192125,
+        "requests": 103907,
+        "responses": 103907,
+        "throughput_rps": 20781.4,
+        "latency": {
+          "avg_ms": 1.54,
+          "p50_ms": 1.375,
+          "p95_ms": 2.48,
+          "p99_ms": 3.593
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3270,
+            "responses": 3270,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3254,
+            "responses": 3254,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3239,
+            "responses": 3239,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3261,
+            "responses": 3261,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3250,
+            "responses": 3250,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3216,
+            "responses": 3216,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3270,
+            "responses": 3270,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3229,
+            "responses": 3229,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3259,
+            "responses": 3259,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3261,
+            "responses": 3261,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3279,
+            "responses": 3279,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3218,
+            "responses": 3218,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3260,
+            "responses": 3260,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3253,
+            "responses": 3253,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3249,
+            "responses": 3249,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3247,
+            "responses": 3247,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3255,
+            "responses": 3255,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3261,
+            "responses": 3261,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3253,
+            "responses": 3253,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3240,
+            "responses": 3240,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3292,
+            "responses": 3292,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3250,
+            "responses": 3250,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3231,
+            "responses": 3231,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3271,
+            "responses": 3271,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3212,
+            "responses": 3212,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3228,
+            "responses": 3228,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3193,
+            "responses": 3193,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3233,
+            "responses": 3233,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3252,
+            "responses": 3252,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3221,
+            "responses": 3221,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3254,
+            "responses": 3254,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3246,
+            "responses": 3246,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3156593,
+        "requested_bytes": 805226722,
+        "handled_requests": 126040,
+        "resources": {
+          "user_cpu_secs": 3.452799,
+          "system_cpu_secs": 12.099341,
+          "peak_rss_bytes": 8126464
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "kcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-3-kcp-tls-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.034314292000005,
+      "log_file": "round-3-kcp-tls-1.log",
+      "loadavg_after": [
+        10.677734375,
+        8.7421875,
+        13.2333984375
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": true,
+        "connection_setup_ms": 0.9928750000000001,
+        "requests": 3656,
+        "responses": 3656,
+        "throughput_rps": 731.2,
+        "latency": {
+          "avg_ms": 1.368,
+          "p50_ms": 1.34,
+          "p95_ms": 3.162,
+          "p99_ms": 6.819
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3656,
+            "responses": 3656,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 123082,
+        "requested_bytes": 33775857,
+        "handled_requests": 4506,
+        "resources": {
+          "user_cpu_secs": 1.481643,
+          "system_cpu_secs": 0.895137,
+          "peak_rss_bytes": 7831552
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "kcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/round-3-kcp-tls-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.061391166000007,
+      "log_file": "round-3-kcp-tls-32.log",
+      "loadavg_after": [
+        10.302734375,
+        8.6962890625,
+        13.19091796875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": true,
+        "connection_setup_ms": 11.442542,
+        "requests": 106023,
+        "responses": 106023,
+        "throughput_rps": 21204.6,
+        "latency": {
+          "avg_ms": 1.509,
+          "p50_ms": 1.383,
+          "p95_ms": 2.437,
+          "p99_ms": 3.261
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3324,
+            "responses": 3324,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3329,
+            "responses": 3329,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3315,
+            "responses": 3315,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3303,
+            "responses": 3303,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3313,
+            "responses": 3313,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3301,
+            "responses": 3301,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3376,
+            "responses": 3376,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3331,
+            "responses": 3331,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3287,
+            "responses": 3287,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3292,
+            "responses": 3292,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3324,
+            "responses": 3324,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3332,
+            "responses": 3332,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3320,
+            "responses": 3320,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3290,
+            "responses": 3290,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3347,
+            "responses": 3347,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3332,
+            "responses": 3332,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3281,
+            "responses": 3281,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3305,
+            "responses": 3305,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3328,
+            "responses": 3328,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3324,
+            "responses": 3324,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3293,
+            "responses": 3293,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3277,
+            "responses": 3277,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3314,
+            "responses": 3314,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3266,
+            "responses": 3266,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3304,
+            "responses": 3304,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3315,
+            "responses": 3315,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3352,
+            "responses": 3352,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3322,
+            "responses": 3322,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3307,
+            "responses": 3307,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3303,
+            "responses": 3303,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3305,
+            "responses": 3305,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3311,
+            "responses": 3311,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3472967,
+        "requested_bytes": 874370588,
+        "handled_requests": 128305,
+        "resources": {
+          "user_cpu_secs": 3.745679,
+          "system_cpu_secs": 11.919953,
+          "peak_rss_bytes": 9568256
+        }
+      },
+      "valid": true
+    }
+  ]
+}

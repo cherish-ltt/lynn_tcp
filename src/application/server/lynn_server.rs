@@ -416,9 +416,25 @@ impl<'a> LynnServer<'a> {
         // (requires the `tls` feature and a valid certificate/key pair).
         #[cfg(feature = "tls")]
         let stream_acceptor = match self.lynn_config.get_tls() {
-            Some(tls_config) => Arc::new(StreamAcceptor::Tls(Arc::new(
-                crate::infrastructure::tls::tls_provider::build_server_acceptor(tls_config)?,
-            ))),
+            Some(tls_config) => {
+                #[cfg(not(feature = "kcp-tls"))]
+                let secure_kcp = false;
+                #[cfg(feature = "kcp-tls")]
+                let secure_kcp = self.lynn_config.kcp.is_some();
+                let acceptor = Arc::new(
+                    crate::infrastructure::tls::tls_provider::build_server_acceptor_mode(
+                        tls_config, secure_kcp,
+                    )?,
+                );
+                #[cfg(feature = "kcp-tls")]
+                if secure_kcp {
+                    Arc::new(StreamAcceptor::KcpTls(acceptor))
+                } else {
+                    Arc::new(StreamAcceptor::Tls(acceptor))
+                }
+                #[cfg(not(feature = "kcp-tls"))]
+                Arc::new(StreamAcceptor::Tls(acceptor))
+            },
             None => Arc::new(StreamAcceptor::Plain),
         };
         #[cfg(not(feature = "tls"))]
