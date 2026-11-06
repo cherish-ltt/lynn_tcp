@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use lynn_tcp::{
-    lynn_client::{LynnClient, LynnClientConfigBuilder},
+    lynn_client::{ConnectionState, LynnClient, LynnClientConfigBuilder},
     lynn_tcp_dependents::HandlerResult,
 };
 use tokio::{
@@ -108,6 +108,8 @@ async fn restarting_client_closes_previous_connection() {
         .start()
         .await;
     let old_sender = client.get_sender().await.unwrap();
+    let mut old_state = client.subscribe_connection_state().unwrap();
+    old_state.borrow_and_update();
     let (mut old_peer, _) = timeout(Duration::from_secs(2), listener.accept())
         .await
         .unwrap()
@@ -129,6 +131,51 @@ async fn restarting_client_closes_previous_connection() {
         .unwrap()
         .unwrap();
     assert!(client.is_connected());
+    assert!(
+        timeout(Duration::from_secs(2), old_state.changed())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    let state = client.subscribe_connection_state().unwrap();
+    assert_eq!(
+        *state.borrow(),
+        ConnectionState::Connected { generation: 1 }
+    );
+}
+
+#[tokio::test]
+async fn cancelling_restart_ends_the_previous_subscription() {
+    use std::{future::Future, task::Poll};
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let client = LynnClient::new_with_addr(listener.local_addr().unwrap())
+        .await
+        .start()
+        .await;
+    let mut state = client.subscribe_connection_state().unwrap();
+    state.borrow_and_update();
+    let (mut peer, _) = listener.accept().await.unwrap();
+    timeout(Duration::from_secs(2), peer.read_exact(&mut [0; 15]))
+        .await
+        .unwrap()
+        .unwrap();
+    let mut restart = Box::pin(client.start());
+    assert!(std::future::poll_fn(|cx| Poll::Ready(restart.as_mut().poll(cx).is_pending())).await);
+    drop(restart);
+
+    assert!(
+        timeout(Duration::from_secs(2), state.changed())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    assert_closed(&mut peer).await;
+    assert!(
+        timeout(Duration::from_millis(100), listener.accept())
+            .await
+            .is_err()
+    );
 }
 
 #[cfg(feature = "tls")]
@@ -185,6 +232,8 @@ async fn drop_closes_idle_connection_even_with_cloned_sender() {
             .build();
         let mut client = LynnClient::new_with_config(config).await.start().await;
         let sender = client.get_sender().await.unwrap();
+        let mut state = client.subscribe_connection_state().unwrap();
+        state.borrow_and_update();
         let (mut peer, _) = timeout(Duration::from_secs(2), listener.accept())
             .await
             .unwrap()
@@ -200,6 +249,16 @@ async fn drop_closes_idle_connection_even_with_cloned_sender() {
         timeout(Duration::from_secs(2), sender.closed())
             .await
             .expect("sender must not extend the owner lifetime");
+        assert!(
+            timeout(Duration::from_secs(2), state.changed())
+                .await
+                .unwrap()
+                .is_err()
+        );
+        assert_eq!(
+            *state.borrow(),
+            ConnectionState::Connected { generation: 1 }
+        );
         assert_closed(&mut peer).await;
         assert!(
             sender
@@ -229,24 +288,25 @@ async fn drop_cancels_reconnect_delay() {
         .build();
     let mut client = LynnClient::new_with_config(config).await.start().await;
     let sender = client.get_sender().await.unwrap();
+    let mut state = client.subscribe_connection_state().unwrap();
     let (peer, _) = timeout(Duration::from_secs(2), listener.accept())
         .await
         .unwrap()
         .unwrap();
     drop(listener);
     drop(peer);
-    timeout(Duration::from_secs(2), async {
-        while client.is_connected() {
-            tokio::task::yield_now().await;
-        }
-    })
+    timeout(
+        Duration::from_secs(2),
+        state.wait_for(|value| *value == ConnectionState::Reconnecting { generation: 1 }),
+    )
     .await
+    .unwrap()
     .unwrap();
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     drop(client);
 
     timeout(Duration::from_secs(2), sender.closed())
         .await
         .expect("reconnect delay must not keep the write receiver alive");
+    assert!(state.changed().await.is_err());
 }

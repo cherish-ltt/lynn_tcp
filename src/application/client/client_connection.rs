@@ -16,6 +16,8 @@ use tokio::{
 };
 use tracing::{error, info, warn};
 
+use super::connection_state::ConnectionState;
+
 use crate::{
     LynnError, application::client::client_common::run_connection_pumps,
     application::client::client_config::LynnClientConfig,
@@ -144,25 +146,25 @@ pub(super) async fn connection_supervisor(
     params: ConnectionParams,
     tx_read: mpsc::Sender<InputBufVO>,
     mut rx_write: mpsc::Receiver<HandlerResult>,
-    state_tx: watch::Sender<bool>,
+    state_tx: watch::Sender<ConnectionState>,
     mut init_tx: Option<oneshot::Sender<Result<(), String>>>,
 ) {
     let max_attempts = params.reconnect_max_attempts;
     let mut attempts: usize = 0;
+    let mut generation = 0;
     loop {
         // If the client itself is gone (its receive half dropped), stop.
         if tx_read.is_closed() {
             info!("Client - [connection supervisor] client dropped, exiting");
-            state_tx.send_replace(false);
+            state_tx.send_replace(ConnectionState::Stopped { generation });
             return;
         }
         match try_connect(&params).await {
             Ok(stream) => {
                 attempts = 0;
-                // Publish the connected state BEFORE resolving the start()
-                // notification, so `is_connected()` is guaranteed to observe
-                // `true` as soon as `start()` returns.
-                state_tx.send_replace(true);
+                generation += 1;
+                // Publish transport readiness before resolving the initial start().
+                state_tx.send_replace(ConnectionState::Connected { generation });
                 if let Some(init) = init_tx.take() {
                     let _ = init.send(Ok(()));
                 }
@@ -180,7 +182,7 @@ pub(super) async fn connection_supervisor(
                 )
                 .await;
 
-                state_tx.send_replace(false);
+                state_tx.send_replace(ConnectionState::Reconnecting { generation });
                 let dropped = drain_write_queue(&mut rx_write);
                 if dropped > 0 {
                     warn!(
@@ -203,7 +205,7 @@ pub(super) async fn connection_supervisor(
                     if let Some(init) = init_tx.take() {
                         let _ = init.send(Err(message.clone()));
                     }
-                    state_tx.send_replace(false);
+                    state_tx.send_replace(ConnectionState::Stopped { generation });
                     error!("Client - [connection supervisor] {}", message);
                     return;
                 }

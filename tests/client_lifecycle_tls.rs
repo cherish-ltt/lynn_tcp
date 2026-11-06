@@ -3,13 +3,13 @@
 use std::{sync::Arc, time::Duration};
 
 use lynn_tcp::{
-    lynn_client::{LynnClient, LynnClientConfigBuilder},
+    lynn_client::{ConnectionState, LynnClient, LynnClientConfigBuilder},
     lynn_tls::TlsClientConfigBuilder,
 };
 use tokio::{io::AsyncReadExt, net::TcpListener, time::timeout};
 
 #[tokio::test]
-async fn drop_closes_authenticated_tls_connection() {
+async fn state_tracks_authenticated_tls_reconnect_and_owner_drop() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let rcgen::CertifiedKey { cert, signing_key } =
         rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
@@ -41,7 +41,7 @@ async fn drop_closes_authenticated_tls_connection() {
                 .build(),
         )
         .build();
-    let client = tokio::spawn(async move {
+    let mut client = tokio::spawn(async move {
         LynnClient::new_with_config(client_config)
             .await
             .start()
@@ -51,6 +51,12 @@ async fn drop_closes_authenticated_tls_connection() {
         .await
         .unwrap()
         .unwrap();
+    assert!(
+        timeout(Duration::from_millis(50), &mut client)
+            .await
+            .is_err(),
+        "TCP connect must not publish readiness before the TLS handshake"
+    );
     let mut peer = timeout(Duration::from_secs(2), acceptor.accept(socket))
         .await
         .unwrap()
@@ -61,6 +67,11 @@ async fn drop_closes_authenticated_tls_connection() {
         .unwrap();
     std::fs::remove_file(cert_path).unwrap();
     assert!(client.is_connected());
+    let mut state = client.subscribe_connection_state().unwrap();
+    assert_eq!(
+        *state.borrow_and_update(),
+        ConnectionState::Connected { generation: 1 }
+    );
     let sender = client.get_sender().await.unwrap();
     let mut heartbeat = [0; 15];
     timeout(Duration::from_secs(2), peer.read_exact(&mut heartbeat))
@@ -68,11 +79,51 @@ async fn drop_closes_authenticated_tls_connection() {
         .unwrap()
         .unwrap();
 
+    drop(peer);
+    timeout(
+        Duration::from_secs(2),
+        state.wait_for(|value| *value == ConnectionState::Reconnecting { generation: 1 }),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let (socket, _) = timeout(Duration::from_secs(3), listener.accept())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        timeout(
+            Duration::from_millis(50),
+            state.wait_for(|value| matches!(value, ConnectionState::Connected { .. })),
+        )
+        .await
+        .is_err(),
+        "a replacement TCP socket must remain Reconnecting until TLS is ready"
+    );
+    assert!(!client.is_connected());
+    let mut peer = timeout(Duration::from_secs(2), acceptor.accept(socket))
+        .await
+        .unwrap()
+        .unwrap();
+    timeout(
+        Duration::from_secs(2),
+        state.wait_for(|value| *value == ConnectionState::Connected { generation: 2 }),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
     drop(client);
 
     timeout(Duration::from_secs(2), sender.closed())
         .await
         .expect("TLS owner drop must close its sender");
+    assert!(
+        timeout(Duration::from_secs(2), state.changed())
+            .await
+            .unwrap()
+            .is_err()
+    );
     let closed = timeout(Duration::from_secs(2), peer.read(&mut heartbeat))
         .await
         .expect("TLS transport must close promptly");
