@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use lynn_tcp::{
     bytes::Bytes,
-    lynn_client::{LynnClient, LynnClientConfigBuilder},
+    lynn_client::{ConnectionState, LynnClient, LynnClientConfigBuilder},
     lynn_tcp_dependents::{HandlerResult, InputBufVOTrait},
     tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
@@ -21,15 +21,20 @@ static RECONNECT_ATTEMPTS: usize = 3;
 static RECONNECT_INTERVAL: u64 = 0;
 static CONNECT_TIMEOUT: u64 = 1;
 
-async fn wait_until(desc: &str, secs: u64, mut cond: impl FnMut() -> bool) {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    while Instant::now() < deadline {
-        if cond() {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-    panic!("condition not met within {secs}s: {desc}");
+#[tokio::test]
+async fn subscription_starts_with_the_current_snapshot() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let client = LynnClient::new_with_addr(listener.local_addr().unwrap()).await;
+    assert!(client.subscribe_connection_state().is_none());
+    let client = client.start().await;
+    let first = client.subscribe_connection_state().unwrap();
+    let second = client.subscribe_connection_state().unwrap();
+    assert_eq!(
+        *first.borrow(),
+        ConnectionState::Connected { generation: 1 }
+    );
+    assert_eq!(*second.borrow(), *first.borrow());
+    assert!(client.is_connected());
 }
 
 fn client_config(addr: &str) -> lynn_tcp::lynn_client::LynnClientConfig<'static> {
@@ -79,6 +84,21 @@ async fn client_reconnects_and_resumes_data_exchange() {
         .start()
         .await;
     assert!(client.is_connected(), "initial connect must succeed");
+    let mut state = client.subscribe_connection_state().unwrap();
+    let mut slow = state.clone();
+    assert_eq!(
+        *slow.borrow_and_update(),
+        ConnectionState::Connected { generation: 1 }
+    );
+    let (connected_tx, connected_rx) = tokio::sync::oneshot::channel();
+    let observer = tokio::spawn(async move {
+        state
+            .wait_for(|value| *value == ConnectionState::Connected { generation: 2 })
+            .await
+            .expect("reconnect state");
+        connected_tx.send(()).unwrap();
+        while state.changed().await.is_ok() {}
+    });
     let (mut conn1, _) = timeout(Duration::from_secs(3), listener.accept())
         .await
         .expect("initial connect must be accepted")
@@ -93,7 +113,14 @@ async fn client_reconnects_and_resumes_data_exchange() {
         .await
         .expect("no reconnect attempt within 5s")
         .expect("reconnect attempt failed");
-    wait_until("reconnected", 5, || client.is_connected()).await;
+    timeout(Duration::from_secs(5), connected_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        *slow.borrow_and_update(),
+        ConnectionState::Connected { generation: 2 }
+    );
 
     // The reconnected session must carry data end to end: raw echo server
     // (heartbeats, if any, are skipped like a real server would).
@@ -117,6 +144,12 @@ async fn client_reconnects_and_resumes_data_exchange() {
         "data must flow over the reconnected session"
     );
     assert!(client.is_connected());
+    drop(client);
+    timeout(Duration::from_secs(2), observer)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(slow.changed().await.is_err());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -133,17 +166,31 @@ async fn reconnect_gives_up_after_max_attempts() {
         .expect("initial connect must be accepted")
         .expect("accept");
     assert!(client.is_connected());
+    let mut state = client.subscribe_connection_state().unwrap();
+    let sender = client.get_sender().await.unwrap();
+    state.borrow_and_update();
 
+    drop(probe);
     conn1.shutdown().await.expect("shutdown");
     drop(conn1);
-    drop(probe);
 
-    // Disconnect is detected...
-    wait_until("disconnected after drop", 5, || !client.is_connected()).await;
-
-    // ...3 reconnect attempts are refused (interval 0) and the supervisor
-    // gives up. Give it a moment to burn through the attempts.
-    tokio::time::sleep(Duration::from_millis(800)).await;
+    timeout(
+        Duration::from_secs(5),
+        state.wait_for(|value| *value == ConnectionState::Stopped { generation: 1 }),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(
+        sender.is_closed(),
+        "Stopped must reject further queue admission"
+    );
+    timeout(Duration::from_secs(5), async {
+        while state.changed().await.is_ok() {}
+    })
+    .await
+    .expect("exhausted retries must close the subscription");
+    assert_eq!(*state.borrow(), ConnectionState::Stopped { generation: 1 });
     assert!(
         !client.is_connected(),
         "must stay disconnected after giving up"
@@ -157,6 +204,12 @@ async fn reconnect_gives_up_after_max_attempts() {
     assert!(
         err.is_err(),
         "send must fail after reconnect attempts are exhausted"
+    );
+    assert!(
+        timeout(Duration::from_secs(1), client.get_receive_data())
+            .await
+            .unwrap()
+            .is_none()
     );
 }
 
@@ -174,6 +227,7 @@ async fn initial_connect_failure_leaves_client_disconnected() {
         .start()
         .await;
     assert!(!client.is_connected(), "initial connect must fail");
+    assert!(client.subscribe_connection_state().is_none());
     let err = client
         .send_data(
             HandlerResult::new_with_send_to_server(1, Bytes::new())
@@ -201,10 +255,21 @@ async fn accepted_then_closed_sessions_obey_reconnect_interval() {
         .with_reconnect_interval_secs(&1)
         .build();
     let client = LynnClient::new_with_config(config).await.start().await;
+    let mut state = client.subscribe_connection_state().unwrap();
+    let mut slow = state.clone();
+    slow.borrow_and_update();
     let (mut peer, _) = listener.accept().await.unwrap();
-    for _ in 0..2 {
+    for generation in 1..=2 {
         let disconnected_at = Instant::now();
         drop(peer);
+        timeout(
+            Duration::from_secs(1),
+            state.wait_for(|value| *value == ConnectionState::Reconnecting { generation }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(!client.is_connected());
         assert!(
             timeout(Duration::from_millis(150), listener.accept())
                 .await
@@ -216,7 +281,23 @@ async fn accepted_then_closed_sessions_obey_reconnect_interval() {
             .unwrap()
             .unwrap();
         assert!(disconnected_at.elapsed() >= Duration::from_secs(1));
+        timeout(
+            Duration::from_secs(1),
+            state.wait_for(|value| {
+                *value
+                    == ConnectionState::Connected {
+                        generation: generation + 1,
+                    }
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
     }
+    assert_eq!(
+        *slow.borrow_and_update(),
+        ConnectionState::Connected { generation: 3 }
+    );
     drop(client);
     drop(peer);
 }

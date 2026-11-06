@@ -542,6 +542,41 @@ if !client.is_connected() {
 
 释放 `LynnClient` 会取消连接、读写、重试及心跳任务。`get_sender()` 克隆出的句柄不会延长客户端生命周期，并将进入关闭状态。取消异步完成，不保证发送完队列中的消息或发送 TLS `close_notify`；必须完成的交互应在释放 owner 前结束。
 
+成功启动后，`subscribe_connection_state()` 返回可克隆的 Tokio watch receiver；未启动或
+初次连接失败时返回 `None`。订阅可移到另一任务，owner 同时调用 `get_receive_data()`。
+先读取初始快照，再等待变化：
+
+```rust
+let mut state = client.subscribe_connection_state().expect("successful start");
+let observer = tokio::spawn(async move {
+    loop {
+        if state.has_changed().is_err() {
+            break;
+        }
+        let snapshot = *state.borrow_and_update();
+        println!("{snapshot:?}");
+        if state.changed().await.is_err() {
+            println!("connection supervisor ended");
+            break;
+        }
+    }
+});
+```
+
+`lynn_client::ConnectionState` 区分 `Connected`、`Reconnecting`、`Stopped`，均携带
+`generation: u64`。首次传输初始化完成为第 1 代，每次重连成功递增；重连中及结束状态保留
+最近一次成功连接的代次。它是有界的最新快照：慢订阅者可能错过中间状态，但可通过代次识别
+连接替换。Drop、启动取消及再次 `start()` 会关闭旧订阅；通道关闭是生命周期结束的权威信号，
+即使缓存仍为 `Connected` 也不表示在线。重新启动后须重新订阅，代次只在同一监督生命周期内
+比较；重试耗尽会发布 `Stopped` 并关闭通道。
+正常终止在发布 `Stopped` 前关闭发送准入与接收生产端；已缓冲的接收消息仍可继续读取。
+
+`Connected` 仅表示 TCP/TLS/KCP 初始化完成，不表示业务鉴权或订阅恢复。状态与接收帧没有
+全序或逐帧代次，缓冲数据可能来自旧连接；登录、发送顺序及会话恢复由应用协调。
+`get_receive_data()` 会跨暂时断线继续等待，仅在未启动、初次失败，或接收通道关闭并排空缓冲后
+返回 `None`。可运行自包含的状态、重连及 echo 示例：
+`cargo run --example client_connection_state --no-default-features --features client`。
+
 ---
 
 ### 规划

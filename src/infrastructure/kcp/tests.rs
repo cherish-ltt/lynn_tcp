@@ -45,6 +45,90 @@ async fn pair_with_config(config: KcpConfig) -> (KcpStream, KcpStream) {
     (left, right)
 }
 
+#[cfg(feature = "client")]
+#[tokio::test]
+async fn client_state_waits_for_kcp_handshake_and_ends_on_owner_drop() {
+    use crate::lynn_client::{ConnectionState, LynnClient, LynnClientConfigBuilder};
+
+    let socket = Arc::new(UdpSocket::bind("127.0.0.1:0").await.unwrap());
+    let config = LynnClientConfigBuilder::new()
+        .with_server_addr(socket.local_addr().unwrap())
+        .unwrap()
+        .with_kcp(KcpConfig::default())
+        .build();
+    let mut start =
+        tokio::spawn(async move { LynnClient::new_with_config(config).await.start().await });
+    let mut packet = [0; 65536];
+    let (n, addr) = timeout(Duration::from_secs(2), socket.recv_from(&mut packet))
+        .await
+        .unwrap()
+        .unwrap();
+    let (header, _) = KcpPacketHeader::from_bytes(&mut &packet[..n]).unwrap();
+    assert!(
+        timeout(Duration::from_millis(50), &mut start)
+            .await
+            .is_err(),
+        "sending HELLO alone must not complete client startup"
+    );
+
+    let (tx, rx) = mpsc::channel(PACKETS);
+    let (mut peer, ready) = KcpStream::start(
+        socket.clone(),
+        addr,
+        header.conv,
+        KcpConfig::default(),
+        Some(rx),
+    )
+    .unwrap();
+    tx.send(packet[..n].to_vec()).await.unwrap();
+    let forwarder = tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = tx.closed() => break,
+                received = socket.recv_from(&mut packet) => {
+                    let (n, _) = received.unwrap();
+                    if tx.send(packet[..n].to_vec()).await.is_err() { break; }
+                }
+            }
+        }
+    });
+    timeout(Duration::from_secs(2), ready)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let mut client = timeout(Duration::from_secs(2), start)
+        .await
+        .unwrap()
+        .unwrap();
+    let mut state = client.subscribe_connection_state().unwrap();
+    assert_eq!(
+        *state.borrow_and_update(),
+        ConnectionState::Connected { generation: 1 }
+    );
+    assert!(client.is_connected());
+    timeout(Duration::from_secs(2), peer.read_exact(&mut [0; 15]))
+        .await
+        .unwrap()
+        .unwrap();
+    let sender = client.get_sender().await.unwrap();
+    drop(client);
+    assert!(
+        timeout(Duration::from_secs(2), state.changed())
+            .await
+            .unwrap()
+            .is_err()
+    );
+    timeout(Duration::from_secs(2), sender.closed())
+        .await
+        .unwrap();
+    drop(peer);
+    timeout(Duration::from_secs(2), forwarder)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
 #[tokio::test]
 async fn fast_data_and_ack_do_not_wait_for_the_periodic_tick() {
     let mut config = KcpConfig::default();

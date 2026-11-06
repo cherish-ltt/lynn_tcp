@@ -7,6 +7,7 @@ use tracing_subscriber::fmt;
 use crate::application::client::client_common::spawn_check_heart;
 use crate::application::client::client_config::{LynnClientConfig, LynnClientConfigBuilder};
 use crate::application::client::client_connection::{ConnectionParams, connection_supervisor};
+use crate::application::client::connection_state::ConnectionState;
 use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::InputBufVO;
 
@@ -59,7 +60,7 @@ pub struct LynnClient<'a> {
     /// The receiver for the read channel, valid across reconnections.
     rx_read: Option<mpsc::Receiver<InputBufVO>>,
     /// Live connection state, driven by the connection supervisor.
-    connection_state: Option<watch::Receiver<bool>>,
+    connection_state: Option<watch::Receiver<ConnectionState>>,
 }
 
 impl<'a> LynnClient<'a> {
@@ -166,8 +167,27 @@ impl<'a> LynnClient<'a> {
     pub fn is_connected(&self) -> bool {
         self.connection_state
             .as_ref()
-            .map(|state| state.has_changed().is_ok() && *state.borrow())
+            .map(|state| {
+                state.has_changed().is_ok()
+                    && matches!(*state.borrow(), ConnectionState::Connected { .. })
+            })
             .unwrap_or(false)
+    }
+
+    /// Subscribes to the latest state of this supervisor lifecycle.
+    ///
+    /// Returns `None` before startup or after initial connection failure. Read
+    /// the current snapshot before awaiting `changed()` and copy values out of
+    /// the borrow guard before awaiting other work. Slow readers may miss
+    /// intermediate states; generation changes identify replacement connections.
+    ///
+    /// The receiver does not keep the client alive. Channel closure is the
+    /// authoritative end signal even if the cached snapshot is `Connected`.
+    /// Starting again closes old subscriptions; subscribe again afterwards.
+    /// Generations are only comparable within one supervisor lifecycle, and
+    /// are not attached to received frames or ordered with the data channel.
+    pub fn subscribe_connection_state(&self) -> Option<watch::Receiver<ConnectionState>> {
+        self.connection_state.clone()
     }
 
     /// Runs the client: creates the user-facing channels once, then spawns
@@ -184,7 +204,7 @@ impl<'a> LynnClient<'a> {
         let channel_size = *self.lynn_client_config.get_client_single_channel_size();
         let (tx_read, rx_read) = mpsc::channel::<InputBufVO>(channel_size);
         let (tx_write, rx_write) = mpsc::channel::<HandlerResult>(channel_size);
-        let (state_tx, state_rx) = watch::channel(false);
+        let (state_tx, state_rx) = watch::channel(ConnectionState::Reconnecting { generation: 0 });
         let (init_tx, init_rx) = tokio::sync::oneshot::channel();
 
         // A bad configuration (e.g. TLS cert files) fails fast, before any
@@ -230,13 +250,14 @@ impl<'a> LynnClient<'a> {
 
     /// Gets the received data from the server.
     ///
-    /// Returns `None` while the client is disconnected and reconnecting
-    /// (the read half is idle until the connection is re-established), or
-    /// permanently after the client was dropped or gave up reconnecting.
+    /// Waits across temporary disconnections. Returns `None` before successful
+    /// startup, or after the receive channel closes and buffered messages drain.
+    /// Use [`Self::subscribe_connection_state`] to observe connection changes
+    /// independently; buffered messages can come from an older connection.
     ///
     /// # Returns
     ///
-    /// An `Option` containing the received data, or `None` if the client is not connected.
+    /// An `Option` containing the received data, or `None` when reception ends.
     pub async fn get_receive_data(&mut self) -> Option<InputBufVO> {
         match self.rx_read.as_mut() {
             Some(rx) => rx.recv().await,
@@ -314,8 +335,14 @@ mod tests {
     #[tokio::test]
     async fn closed_supervisor_does_not_report_connected() {
         let mut client = LynnClient::new_with_addr("127.0.0.1:9197").await;
-        let (sender, receiver) = watch::channel(true);
+        let (sender, receiver) = watch::channel(ConnectionState::Connected { generation: 1 });
         client.connection_state = Some(receiver);
+        assert!(client.is_connected());
+        sender.send_replace(ConnectionState::Reconnecting { generation: 1 });
+        assert!(!client.is_connected());
+        sender.send_replace(ConnectionState::Stopped { generation: 1 });
+        assert!(!client.is_connected());
+        sender.send_replace(ConnectionState::Connected { generation: 2 });
         assert!(client.is_connected());
         drop(sender);
         assert!(!client.is_connected());

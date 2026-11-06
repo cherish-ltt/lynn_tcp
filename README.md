@@ -576,6 +576,46 @@ if !client.is_connected() {
 
 Dropping `LynnClient` cancels its connection, read/write, retry, and heartbeat work. Cloned `get_sender()` handles do not extend the client's lifetime and become closed. Cancellation is asynchronous and does not flush queued messages or guarantee a TLS `close_notify`; finish required exchanges before dropping the owner.
 
+`subscribe_connection_state()` returns a cloned Tokio watch receiver after a successful
+start, or `None` before startup / after initial connection failure. It can move to another
+task while the owner calls `get_receive_data()`. Read the initial snapshot before waiting:
+
+```rust
+let mut state = client.subscribe_connection_state().expect("successful start");
+let observer = tokio::spawn(async move {
+    loop {
+        if state.has_changed().is_err() {
+            break;
+        }
+        let snapshot = *state.borrow_and_update();
+        println!("{snapshot:?}");
+        if state.changed().await.is_err() {
+            println!("connection supervisor ended");
+            break;
+        }
+    }
+});
+```
+
+`lynn_client::ConnectionState` distinguishes `Connected`, `Reconnecting`, and `Stopped`;
+each carries `generation: u64`. The first completed transport initialization is generation 1,
+and each successful reconnect increments it. `Reconnecting` and `Stopped` retain the last
+connected generation. This is a bounded latest snapshot: slow readers may miss intermediate
+states but can detect a replaced connection from its generation. Drop, cancelled startup,
+or a repeated `start()` closes the old subscription; channel closure is authoritative even
+if its cached value is `Connected`. Subscribe again after restarting; generations are only
+comparable within one supervisor lifecycle. Exhausted retries publish `Stopped` and close.
+Normal termination closes send admission and the receive producer before publishing `Stopped`;
+already buffered incoming messages can still be read.
+
+`Connected` means TCP/TLS/KCP initialization completed, not that business authentication or
+subscriptions were restored. State and received frames have no total ordering or per-frame
+generation; buffered data can belong to an older connection. Applications coordinate login,
+sending, and session recovery. `get_receive_data()` waits through temporary disconnections;
+it returns `None` when never started / initially failed, or after the receive channel closes
+and buffered messages drain. Run the self-contained state/reconnect/echo example with
+`cargo run --example client_connection_state --no-default-features --features client`.
+
 ---
 
 ### Road Map

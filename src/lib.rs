@@ -289,6 +289,7 @@ pub mod lynn_client {
     pub use super::application::client::client_config::LynnClientConfig;
     /// The client configuration builder, providing a fluent interface to build client configurations.
     pub use super::application::client::client_config::LynnClientConfigBuilder;
+    pub use super::application::client::connection_state::ConnectionState;
     /// The client implementation, handling outgoing connections and requests.
     pub use super::application::client::lynn_client::LynnClient;
 }
