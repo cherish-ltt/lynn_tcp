@@ -13,8 +13,8 @@ non-waiting enqueue to that connection's bounded writer queue; `Full` and `Close
 explicitly reject the push. No retry or offline storage is provided. A concurrent close
 can discard an accepted frame. Payload validation happens first: empty payloads are legal,
 and payloads above 10 MiB minus 5 bytes return `LynnError::Protocol` without harming the
-connection. The normal writer applies instance frame markers and handles TCP, TLS and
-KCP; sent counters advance after write and flush, not when the frame is queued. Rejected
+connection. The normal writer applies instance frame markers and handles TCP, TLS, KCP and
+KCP+TLS; sent counters advance after write and flush, not when the frame is queued. Rejected
 queues count as dropped messages. Existing handler responses retain waiting backpressure.
 Outgoing pushes bypass incoming middleware. Applications must authorize a request before
 granting or storing private push capability.
@@ -31,6 +31,8 @@ shutdown. EOF alone is not close. Writer errors, read errors/timeouts, heartbeat
 and owner cancellation retain their existing termination policies. A notification is not a
 delivery receipt, an immediate physical-disconnect signal, or a guarantee that every handler
 side effect has stopped. Valid-size sends made after observing close return `Closed`.
+For [KCP+TLS](kcp-tls.md), private pushes use the same authenticated session; close waits
+for both TLS halves and the underlying KCP driver to be released.
 
 **Do not wait for final close inside a handler or middleware that still holds that
 connection's request permit.** Normal EOF needs that request to return before it can drain.
@@ -61,7 +63,7 @@ are disabled.
 Handler 注册并返回后，后台调用 `try_send(method_id, Bytes)`。`Enqueued` 仅表示向原会话有界
 队列非等待入队，`Full` 和 `Closed` 明确拒绝；没有重试、离线存储或交付保证。并发关闭可能
 丢弃已入队消息。长度先校验：空 payload 合法，超过 10 MiB 减 5 字节返回 `LynnError::Protocol`，
-不关闭健康连接。复用实例帧标记及 TCP/TLS/KCP 共用 writer，发送指标在写完并 flush 后增加，
+不关闭健康连接。复用实例帧标记及 TCP/TLS/KCP/KCP+TLS 共用 writer，发送指标在写完并 flush 后增加，
 队列拒绝计入 dropped；普通 Handler 响应仍等待背压。主动发送不经过入站中间件，应用必须先
 完成授权再授予或保存私人推送能力。
 
@@ -72,7 +74,8 @@ Handler 注册并返回后，后台调用 `try_send(method_id, Bytes)`。`Enqueu
 关闭表示本地读写两端及 KCP driver 已经释放。正常读 EOF 先排空已接收的请求链及响应入队，再完成 writer
 shutdown，EOF 本身不是终态。写错误、读错误/超时、心跳驱逐和 owner 取消保留现有策略。
 通知不代表交付、物理断网立即可见或所有 Handler 副作用已停止；观察关闭之后的合法长度推送
-返回 `Closed`。仍持有该连接处理许可的 Handler/中间件不得等待本会话最终关闭，否则会与正常
+返回 `Closed`。[KCP+TLS](kcp-tls.md) 私发使用同一条已认证会话，关闭须等待 TLS 读写两端和底层
+KCP driver 释放。仍持有该连接处理许可的 Handler/中间件不得等待本会话最终关闭，否则会与正常
 EOF 排空互相等待。应先返回，由独立后台任务等待；按业务用户键清理时，先比较保存的 SessionId，
 防止旧会话清理删除重连记录。上方有界示例让两个连接注册同一演示键，验证旧连接关闭保留新记录、
 新连接关闭移除记录；示例直接绑定 loopback 端口 `0`，通过 `startup_handle()` 等待实际地址，

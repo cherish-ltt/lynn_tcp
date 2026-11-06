@@ -287,6 +287,8 @@ docs/
 ├── update_logs/        # 每个版本的中文更新日志（vX.Y.Z.md）
 ├── version.md          # 全版本英文历史记录
 ├── kcp.md              # KCP 配置、迁移、建议场景与验证契约
+├── kcp-tls.md          # TLS-over-KCP 配置、迁移、认证和资源边界
+├── kcp-tls-performance.md # KCP/TCP+TLS/KCP+TLS 独立进程性能对照
 ├── kcp-performance.md  # KCP 参数及同条件性能研究
 ├── kcp-v0.6.0-validation.md # kcp-ovo 0.5.2/0.6.0 配对复测
 ├── kcp-v0.8.0-validation.md # kcp-ovo 0.8.0 API 迁移与升级验证
@@ -424,8 +426,8 @@ docs/
 
 ### 10.21 可选 KCP 传输
 
-- `kcp` 默认关闭，双端使用 `with_kcp` 显式选择；单实例不自动回退或同时监听。TLS+KCP 必须显式拒绝。
-- 使用 kcp-ovo 0.8.0 底层控制块及有界适配，保持现有帧/业务层不变；KCP 会话没有加密认证，不兼容标准 KCP 或上游高层 API。
+- `kcp` 默认关闭，双端使用 `with_kcp` 显式选择；单实例不自动回退或同时监听。未启用 `kcp-tls` 时 TLS+KCP 必须显式拒绝。
+- 使用 kcp-ovo 0.8.0 底层控制块及有界适配，保持现有帧/业务层不变；明文 KCP 会话没有加密认证，不兼容标准 KCP 或上游高层 API。
 - 会话先取得总数/每 IP 配额再分派，地址与 conv 同时区分报文；活跃旧会话不被不同 conv 抢占，失效后清理；owner 持有 driver，Drop 必须取消。
 - KCP flush 等待已写字节的传输 ACK，shutdown 等待有序 EOF 确认；均不代表业务交付，强制释放不承诺排空。
 - KCP 保持 10 MiB 帧 body 上限；适配发送分片、接收队列及逐会话报文队列均有界。
@@ -475,3 +477,15 @@ docs/
 - 定向推送使用弱队列引用、公共长度校验、实例帧标记和共用 writer；非等待反馈 Enqueued/Full/Closed，不保活 owner、I/O 或 AppState，不改变 Handler 响应背压。
 - 观察器独立于发送权限，保留可重复等待的终态；终态须在读写 transport 两端及 KCP driver 实际释放后通知，正常 EOF 先排空请求链及响应并完成 writer shutdown，不能以读 EOF 或发出 abort 代替。
 - Handler/中间件持有处理许可时不得等待原会话最终关闭；有界示例须先注册返回再后台推送/等待，说明授权、重连、入队非交付和副作用边界。
+
+### 10.28 TLS-over-KCP
+
+- `kcp-tls` 默认关闭，复用现有 `kcp`、`tls` 依赖；双端必须同时配置 KCP/TLS，使用独立 `\0lynn-kcp/2` HELLO，不回退明文或 TCP，不更改旧明文线路。
+- 只启用 TLS 1.3，强制 CA 与名称校验，保留可选 mTLS 的成对身份校验；拒绝 `danger_accept_invalid_certs`，禁用 0-RTT、恢复、tickets 和 half-RTT 应用数据。
+- 客户端总期限覆盖 KCP、TLS 及加密的服务端认证确认，确认前不得报告 Connected。服务端按 worker 数限制握手并发，先取得许可再创建任务，10 秒总期限从准入开始；认证前不得进入 Handler 或广播在线表。
+- 逐帧刷新 TLS 记录及底层 KCP ACK；正常关闭先 close_notify 再有序 EOF，异常截断报错，Drop/abort 仍为强制取消。握手、背压与 owner 取消须回收 driver、AppState、任务和连接许可。
+- 原会话观察必须同时等待 TLS 读写两端及底层 KCP driver 释放；定向发送复用已认证会话，不跳过认证确认或向重连后的新会话转发。
+- TLS 只保护完整 Lynn 业务字节流，KCP 控制字段及 ACK 仍不认证，不承诺抗伪造/放大/DoS 或业务交付；指标只计框架明文字节，不计 TLS 确认、握手、记录开销或重传。
+- 保留 1400 字节 UDP 上限、10 MiB body、KCP 既有有界队列并记录 TLS 额外缓冲。回归覆盖证书负例、IPv4/IPv6、模式不匹配、密文修改/重放、弱网、慢握手隔离、关闭与取消。
+- CI 包含 `kcp-tls`、`client,kcp-tls`、`server,kcp-tls`、`client,server,kcp-tls`，并保留 `client,server,kcp,tls` 验证未启用组合的拒绝行为。双语配置须编译并做内容一致性回归；独立进程比较保留失败轮次，不将回环结果推广为公网保证。
+- KCP+TLS 性能存档保留采样时的 v2.5.0 开发版本与哈希，首次密钥编码失败和 named-curve 完整复测分别留存；建连时间按整批含重试计量，分配/CPU/RSS 按服务端全生命周期计量，不冒充纯握手或 Handler 内部成本。

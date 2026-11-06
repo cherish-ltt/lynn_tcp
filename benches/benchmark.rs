@@ -163,6 +163,7 @@ struct CellResult {
     rtts_ns: Vec<u64>,
     client_results: Vec<ClientResult>,
     server_stop_succeeded: bool,
+    connection_setup_ms: f64,
 }
 
 impl CellResult {
@@ -309,7 +310,7 @@ fn spawn_echo_server(max_connections: usize) -> Result<BenchServer, String> {
 
 async fn connect_client(addr: SocketAddr) -> LynnClient<'static> {
     // Connection storms can overflow the listen backlog or exhaust ephemeral
-    // ports; retry a few times before giving up (setup is not measured).
+    // ports; retries are included in connection_setup_ms, outside the traffic window.
     for attempt in 0..5 {
         let config = LynnClientConfigBuilder::new()
             .with_server_addr(addr)
@@ -323,6 +324,16 @@ async fn connect_client(addr: SocketAddr) -> LynnClient<'static> {
                 Ok("fast") | Err(_) => lynn_tcp::lynn_kcp::KcpConfig::default(),
                 _ => panic!("LYNN_BENCH_KCP_MODE must be fast or normal"),
             })
+        } else {
+            config
+        };
+        #[cfg(feature = "tls")]
+        let config = if let Ok(ca) = std::env::var("LYNN_BENCH_TLS_CA") {
+            let mut tls = lynn_tcp::lynn_tls::TlsClientConfigBuilder::new().with_ca_cert_path(ca);
+            if let Ok(name) = std::env::var("LYNN_BENCH_TLS_NAME") {
+                tls = tls.with_server_name(name);
+            }
+            config.with_tls(tls.build())
         } else {
             config
         };
@@ -363,7 +374,9 @@ fn build_request(payload: usize) -> HandlerResult {
 // model 1: ping-pong
 
 async fn run_model1_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellResult {
+    let connecting = Instant::now();
     let mut connected = connect_clients(addr, clients).await;
+    let connection_setup_ms = connecting.elapsed().as_secs_f64() * 1000.0;
     let request = build_request(args.payload);
     let t0 = Instant::now();
     let measure_start = t0 + args.warmup;
@@ -391,6 +404,7 @@ async fn run_model1_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
         rtts_ns: Vec::new(),
         client_results: Vec::with_capacity(clients),
         server_stop_succeeded: true,
+        connection_setup_ms,
     };
     for handle in handles {
         let mut client = match handle.await {
@@ -466,7 +480,9 @@ async fn model2_receiver(
 }
 
 async fn run_model2_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellResult {
+    let connecting = Instant::now();
     let mut connected = connect_clients(addr, clients).await;
+    let connection_setup_ms = connecting.elapsed().as_secs_f64() * 1000.0;
     let request = build_request(args.payload);
     let t0 = Instant::now();
     let measure_start = t0 + args.warmup;
@@ -501,6 +517,7 @@ async fn run_model2_cell(addr: SocketAddr, clients: usize, args: &Args) -> CellR
         rtts_ns: Vec::new(),
         client_results: Vec::new(),
         server_stop_succeeded: true,
+        connection_setup_ms,
     };
     for handle in sender_handles {
         result.requests += handle.await.expect("model2 sender panicked");
@@ -550,6 +567,7 @@ fn print_markdown(results: &[CellResult], args: &Args) {
 fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Result<()> {
     let transport = std::env::var("LYNN_BENCH_TRANSPORT").unwrap_or_else(|_| "tcp".into());
     let kcp_mode = std::env::var("LYNN_BENCH_KCP_MODE").unwrap_or_else(|_| "fast".into());
+    let tls = std::env::var_os("LYNN_BENCH_TLS_CA").is_some();
     let cores = std::thread::available_parallelism().map_or(0, |n| n.get());
     let mut out = String::with_capacity(1024 + results.len() * 256);
     let _ = writeln!(
@@ -592,9 +610,10 @@ fn write_json(path: &str, results: &[CellResult], args: &Args) -> std::io::Resul
         };
         let _ = writeln!(
             out,
-            "    {{\"model\": {}, \"clients\": {}, \"requests\": {}, \"responses\": {}, \"throughput_rps\": {:.1}, \"latency\": {}, \"success\": {}, \"server_stop_succeeded\": {}, \"client_outcomes\": [{}]}}{}",
+            "    {{\"model\": {}, \"clients\": {}, \"tls\": {tls}, \"connection_setup_ms\": {}, \"requests\": {}, \"responses\": {}, \"throughput_rps\": {:.1}, \"latency\": {}, \"success\": {}, \"server_stop_succeeded\": {}, \"client_outcomes\": [{}]}}{}",
             r.model,
             r.clients,
+            r.connection_setup_ms,
             r.requests,
             r.responses,
             r.throughput_rps(args.duration),
@@ -620,6 +639,11 @@ async fn main() {
     );
     #[cfg(not(feature = "kcp"))]
     assert!(transport != "kcp", "rebuild with --features kcp");
+    #[cfg(not(feature = "tls"))]
+    assert!(
+        std::env::var_os("LYNN_BENCH_TLS_CA").is_none(),
+        "rebuild with --features tls"
+    );
     println!("transport: {transport}");
     let args = match parse_args() {
         Ok(args) => args,

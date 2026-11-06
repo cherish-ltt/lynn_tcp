@@ -276,12 +276,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `client` | TCP 客户端，支持消息收发与断线自动重连 | ✅ |
 | `metrics` | Prometheus 集成（17 个生产级指标，HTTP /metrics 端点） | ✅（由 `server` 启用） |
 | `kcp` | 基于 kcp-ovo 0.8.0 的可选明文 UDP/KCP 传输 | 默认关闭 |
+| `kcp-tls` | KCP 上运行 TLS 1.3；启用 `kcp` 与 `tls`，运行时须同时配置 | 默认关闭 |
 | `tls` | 服务端与客户端 TLS 1.3 传输加密（rustls/ring） | ❌ 按需开启 |
 | `seaorm` | 内置 SeaORM 支持：`with_db(...)` + `DbConn` 数据库句柄 | ❌ 按需开启 |
 
 > **注意**: 选择 `server` 特性时 `metrics` 会自动启用。单独使用：`default-features = false, features = ["metrics"]`。`tls` 与 `seaorm` 默认关闭，必须显式启用。
 
-`client` 与 `server` 可独立编译，也可分别搭配 `tls`。未启用任何 feature 时，crate 仍可构建，但不提供两种传输 API。示例、集成测试及基准目标须启用其声明的角色；CI 检查并测试无 feature、仅客户端、仅服务端、仅 metrics、客户端+TLS、服务端+TLS 六种配置。
+`client` 与 `server` 可独立编译，也可分别搭配 `tls`、`kcp` 或 `kcp-tls`。未启用任何 feature 时，crate 仍可构建，但不提供两种传输 API。示例、集成测试及基准目标须启用其声明的角色；CI 还保留未启用 `kcp-tls` 的 `kcp,tls` 组合，验证未经显式开启的运行时组合会报错。
 
 metrics HTTP 端点支持 `/metrics` 和 `/health` 请求行跨 TCP 分片到达。
 请求行必须在 1024 字节内以 CRLF 结束，并在 5 秒内收齐；超长或不完整的请求会关闭连接。
@@ -386,9 +387,10 @@ cargo run --example kcp_echo --features kcp
 LYNN_BENCH_TRANSPORT=kcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
 ```
 
-KCP **不加密、不认证**，不等价于 TLS，也不兼容标准 KCP 线路协议。本适配使用
-kcp-ovo 的 28 字节大端头及 Lynn 会话握手/封装，两端均须使用本适配。
-TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
+明文 KCP **不加密、不认证**。本适配使用 kcp-ovo 的 28 字节大端头及 Lynn
+会话握手/封装，两端均须使用本适配，不兼容标准 KCP 线路协议。TLS 与 KCP
+同时配置须显式启用 `kcp-tls`，且双端使用相同配置。仅启用 `kcp,tls` 仍拒绝
+该组合；任何模式均不自动回退明文。
 
 `KcpConfig::idle_timeout_secs` 默认 60，必须非零。Drop/abort 异步取消并丢弃排队
 数据；UDP 对端消失后通过空闲超时回收，不保证立即发现。帧保留现有 10 MiB body
@@ -402,10 +404,52 @@ TCP+TLS 保留；TLS 与 KCP 同时配置会拒绝启动，不静默降级。
 上游仍启用 Tokio `full`；适配层在上游字节 API 边界改用借用切片与 `Vec<u8>`，自定义 fast 配置不变。
 0.8.0 迁移结果见 [v2.4.2 升级验证](docs/kcp-v0.8.0-validation.md)。
 [0.5.2/0.6.0 配对复测](docs/kcp-v0.6.0-validation.md) 与更早数据仍是历史证据，保留其中的改善与下降。
-本版本未新增 KCP 性能测量，KCP 仍默认关闭且不承诺更快。
+独立的 [KCP/TCP+TLS/KCP+TLS 对照](docs/kcp-tls-performance.md) 使用新的开发快照；
+KCP 仍默认关闭且不承诺更快。
 应用若直接传入另行依赖的上游配置类型，须同步升级该依赖至 0.8.0，或使用
 `lynn_kcp::KcpOptions` 重导出，避免不同版本的 Rust 类型不匹配。
 生命周期、内存边界、指标、安全、互操作与测试见 [KCP 传输契约](docs/kcp.md)。
+
+### KCP + TLS 1.3（feature `kcp-tls`）
+
+双端启用 `features = ["kcp-tls"]`，并在 builder 上**同时**配置 KCP 与 TLS。
+独立角色使用 `default-features = false`，搭配
+`features = ["client", "kcp-tls"]` 或 `["server", "kcp-tls"]`。
+以下片段构造配对配置；证书文件在双端启动时加载：
+
+```rust
+use lynn_tcp::{
+    lynn_client::LynnClientConfigBuilder,
+    lynn_kcp::KcpConfig,
+    lynn_server::LynnServerConfigBuilder,
+    lynn_tls::{TlsClientConfigBuilder, TlsServerConfig},
+};
+
+let server = LynnServerConfigBuilder::new()
+    .with_addr("127.0.0.1:9177")?
+    .with_kcp(KcpConfig::default())
+    .with_tls(TlsServerConfig::new("server.pem", "server.key"))
+    .build();
+let client = LynnClientConfigBuilder::new()
+    .with_server_addr("127.0.0.1:9177")?
+    .with_kcp(KcpConfig::default())
+    .with_tls(TlsClientConfigBuilder::new().with_ca_cert_path("ca.pem").build())
+    .build();
+```
+
+服务端证书须包含目标地址的 IP SAN，也可显式设置与 DNS SAN 匹配的 `server_name`。
+可选 mTLS 复用 `with_client_ca` 和成对的客户端证书/私钥配置。KCP+TLS 拒绝
+`danger_accept_invalid_certs`，禁用会话恢复及 0-RTT；服务端确认 TLS 认证后才报告
+客户端已连接。握手在业务 worker 外限并发执行；客户端单次总期限覆盖 KCP、TLS
+和加密的认证确认。
+
+TLS 保护 Lynn 业务字节流。**KCP 头、ACK、HELLO 和 DATA/EOF 控制字段仍不认证**，
+仍可被干扰；该模式不提供抗 DoS 或业务交付证明。双端须采用相同的安全 HELLO 模式。
+详见 [KCP+TLS 配置、迁移与安全边界](docs/kcp-tls.md)。
+
+[独立进程性能对照](docs/kcp-tls-performance.md) 记录三种传输的建连、分配、CPU
+和 RSS，并保留失败轮次。本机完整复测的 18 格请求与响应各 1,622,486 条，计数一致；
+回环和短窗口结果不能作为公网性能结论。
 
 ### TLS 1.3 传输加密（feature `tls`）
 
@@ -533,13 +577,14 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 `RequestContext::session()` 与 `MiddlewareRequest::session()` 提供在请求入队前绑定的可克隆
 `SessionHandle`。Handler 返回后，后台调用 `try_send(method_id, Bytes)`，非等待得到
 `Enqueued`、`Full` 或 `Closed`。身份不会跟随地址复用或其他服务端实例，复用普通响应的
-长度上限、实例帧标记、TCP/TLS/KCP writer 和发送指标；主动推送不执行入站中间件。
+长度上限、实例帧标记、TCP/TLS/KCP/KCP+TLS writer 和发送指标；主动推送不执行入站中间件。
 
 `handle.observer()` 单独提供 `SessionId` 比较、`is_closed()` 及可取消、可重复的
 `closed().await`，不授予发送权限。正常 EOF 先排空已接受的请求链与响应，再完成 writer
 shutdown 及 KCP driver 释放；读 EOF 本身不通知关闭。句柄和观察器不保活 owner、I/O 或 AppState。关闭不是
 交付确认，也不保证所有 Handler 副作用均已停止。清理应用记录前须比较会话身份，防止删除
 重连后替换的新记录。
+KCP+TLS 观察须等待 TLS 读写两端和底层 KCP driver 释放；私发仍使用同一条已认证连接。
 
 保存私人推送能力前先完成应用授权。Handler 应返回后再由后台任务等待关闭，持有处理许可
 等待可能与正常 EOF 排空互相阻塞。详见[完整契约](docs/session-handles.md)及有界的

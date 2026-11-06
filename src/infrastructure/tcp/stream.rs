@@ -36,6 +36,8 @@ pub(crate) enum LynnStream {
     Plain(TcpStream),
     #[cfg(feature = "kcp")]
     Kcp(crate::infrastructure::kcp::stream::KcpStream),
+    #[cfg(feature = "kcp-tls")]
+    KcpTls(Box<tokio_rustls::TlsStream<crate::infrastructure::kcp::stream::KcpStream>>),
     /// TLS 1.3 wrapped stream (requires the `tls` feature). Boxed because
     /// the TLS session state is large compared to a plain socket.
     #[cfg(feature = "tls")]
@@ -54,6 +56,8 @@ impl AsyncRead for LynnStream {
             Self::Kcp(stream) => Pin::new(stream).poll_read(cx, buf),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_read(cx, buf),
+            #[cfg(feature = "kcp-tls")]
+            Self::KcpTls(stream) => Pin::new(stream.as_mut()).poll_read(cx, buf),
         }
     }
 }
@@ -70,6 +74,8 @@ impl AsyncWrite for LynnStream {
             Self::Kcp(stream) => Pin::new(stream).poll_write(cx, buf),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_write(cx, buf),
+            #[cfg(feature = "kcp-tls")]
+            Self::KcpTls(stream) => Pin::new(stream.as_mut()).poll_write(cx, buf),
         }
     }
 
@@ -80,6 +86,8 @@ impl AsyncWrite for LynnStream {
             Self::Kcp(stream) => Pin::new(stream).poll_flush(cx),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_flush(cx),
+            #[cfg(feature = "kcp-tls")]
+            Self::KcpTls(stream) => Pin::new(stream.as_mut()).poll_flush(cx),
         }
     }
 
@@ -90,6 +98,8 @@ impl AsyncWrite for LynnStream {
             Self::Kcp(stream) => Pin::new(stream).poll_shutdown(cx),
             #[cfg(feature = "tls")]
             Self::Tls(stream) => Pin::new(stream.as_mut()).poll_shutdown(cx),
+            #[cfg(feature = "kcp-tls")]
+            Self::KcpTls(stream) => Pin::new(stream.as_mut()).poll_shutdown(cx),
         }
     }
 }
@@ -108,6 +118,8 @@ pub(crate) fn split_transport(
     #[cfg(feature = "kcp")]
     let observer = match &stream {
         LynnStream::Kcp(stream) => observer.with_driver(stream.completion()),
+        #[cfg(feature = "kcp-tls")]
+        LynnStream::KcpTls(stream) => observer.with_driver(stream.get_ref().0.completion()),
         _ => observer,
     };
     let stream = crate::infrastructure::metrics::transport::MeasuredIo::new(stream);
@@ -124,6 +136,8 @@ pub(crate) enum StreamAcceptor {
     /// Accept connections after a TLS 1.3 handshake.
     #[cfg(feature = "tls")]
     Tls(Arc<tokio_rustls::TlsAcceptor>),
+    #[cfg(feature = "kcp-tls")]
+    KcpTls(Arc<tokio_rustls::TlsAcceptor>),
 }
 
 impl StreamAcceptor {
@@ -134,6 +148,33 @@ impl StreamAcceptor {
     pub(crate) async fn accept(&self, stream: LynnStream, addr: SocketAddr) -> Option<LynnStream> {
         match self {
             Self::Plain => Some(stream),
+            #[cfg(feature = "kcp-tls")]
+            Self::KcpTls(acceptor) => match stream {
+                LynnStream::Kcp(stream) => match acceptor.accept(stream).await {
+                    Ok(mut stream) => {
+                        use tokio::io::AsyncWriteExt;
+                        // TLS 1.3 clients need proof that the server accepted their final flight.
+                        let ready = async {
+                            stream
+                                .write_all(crate::infrastructure::kcp::TLS_READY)
+                                .await?;
+                            stream.flush().await
+                        }
+                        .await;
+                        if let Err(error) = ready {
+                            warn!("KCP TLS readiness with {addr} failed: {error}");
+                            return None;
+                        }
+                        Some(LynnStream::KcpTls(Box::new(stream.into())))
+                    },
+                    Err(error) => {
+                        warn!("KCP TLS handshake with {addr} failed: {error}");
+                        None
+                    },
+                },
+                LynnStream::KcpTls(_) => Some(stream),
+                _ => None,
+            },
             #[cfg(feature = "tls")]
             Self::Tls(acceptor) => {
                 let LynnStream::Plain(stream) = stream else {

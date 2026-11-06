@@ -8,21 +8,27 @@ use tokio::{
     time::{Instant, interval},
 };
 
-use super::{CHUNK, HELLO, KcpConfig};
+use super::{CHUNK, KcpConfig, Mode};
 
 pub(crate) struct Driver {
     kcp: Kcp,
     socket: Arc<UdpSocket>,
     incoming: Option<mpsc::Receiver<Vec<u8>>>,
     idle: Duration,
+    mode: Mode,
 }
 
 impl Driver {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "transport construction requires peer, mode and bounded ingress"
+    )]
     pub(crate) fn new(
         socket: Arc<UdpSocket>,
         peer: SocketAddr,
         conv: u32,
         config: KcpConfig,
+        mode: Mode,
         incoming: Option<mpsc::Receiver<Vec<u8>>>,
     ) -> io::Result<Self> {
         config.validate().map_err(io::Error::other)?;
@@ -41,6 +47,7 @@ impl Driver {
         });
         Ok(Self {
             kcp,
+            mode,
             socket,
             incoming,
             idle: Duration::from_secs(config.idle_timeout_secs),
@@ -70,7 +77,7 @@ impl Driver {
         let mut input = vec![0; 65536];
         let mut data = vec![0; CHUNK];
         if client {
-            self.kcp.send(HELLO).map_err(io::Error::other)?;
+            self.kcp.send(self.mode.hello()).map_err(io::Error::other)?;
         }
         loop {
             if offset == pending.len() {
@@ -78,11 +85,11 @@ impl Driver {
                 offset = 0;
                 match self.kcp.recv() {
                     Ok(message) if !established => {
-                        if message != HELLO {
+                        if message != self.mode.hello() {
                             return Err(io::Error::other("invalid KCP handshake"));
                         }
                         if !client {
-                            self.kcp.send(HELLO).map_err(io::Error::other)?;
+                            self.kcp.send(self.mode.hello()).map_err(io::Error::other)?;
                             output_ready = true;
                         }
                         established = true;

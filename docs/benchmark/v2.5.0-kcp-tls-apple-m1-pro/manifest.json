@@ -1,0 +1,1353 @@
+{
+  "platform": "macOS-27.2-arm64-arm-64bit",
+  "logical_cores": 8,
+  "revision": "ecfdac20b36cb905a99f1bc14effe5039627efb0 + uncommitted #94; full source SHA256 4acb446f534348c0496fa8e7d51574a8e0f6f32d6b4eb325937067fa065bce5f",
+  "source_sha256": "5dee7b95ae47fa62f23cdcece6226cee658ba38aa0d7eac9850bfd40d0bb57e5",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "binaries": {
+    "benchmark": {
+      "path": "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+      "sha256": "b979014e0411da066149d375dbe03472954d7cd788f373b861c85b4b78ff28f8"
+    },
+    "server": {
+      "path": "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/examples/middleware_bench_server",
+      "sha256": "75362613b6897449bc4fbf0aadb7abcf015324d2f6d57198945b8bf4c38d7971"
+    }
+  },
+  "tool_sources_sha256": {
+    "benches/kcp_tls_compare.py": "94f99dc69c6c0df93bda06ff355b5de8af91eed6f40d63fb33c16faea46c5df1",
+    "benches/benchmark.rs": "28e0b40bbd9df2c2d339a2ae3ef1f4ae9547c08b21058dfb5c4b7aec20803062",
+    "benches/support/model1.rs": "d42e360735ad115d69e42e513b242ced56a4bd93a33cfcdf455697719752519a",
+    "examples/middleware_bench_server.rs": "367b816232779f67713868c191ad2909f8a6c72d2939ef6cfd1fce49ba7575e4",
+    "examples/support/allocation_counter.rs": "79714bd84a7844817c2c4dafa0aa4dc7506e5304e392a515b63d587dd32a080a"
+  },
+  "conditions": {
+    "model": 1,
+    "network": "loopback, no injected impairment",
+    "clients": [
+      1,
+      32
+    ],
+    "payload_bytes": 128,
+    "warmup_secs": 1,
+    "duration_secs": 5,
+    "rounds": 3,
+    "server_runtime_workers": 4,
+    "kcp": "fast, default parameters",
+    "tls": "TLS 1.3; KCP+TLS disables resumption/0-RTT; fresh configs for TCP+TLS clients",
+    "connection_setup": "whole connect_clients batch including any retries; before traffic window",
+    "resources": "whole server lifetime, including startup/warmup/teardown; allocation requests, CPU, peak RSS",
+    "logging": "no subscriber",
+    "order": "rotated modes, serial cells, no builds"
+  },
+  "runs": [
+    {
+      "round": 1,
+      "mode": "kcp",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-kcp-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 7.035711291,
+      "log_file": "round-1-kcp-1.log",
+      "loadavg_after": [
+        6.361328125,
+        7.10888671875,
+        14.86181640625
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": false,
+        "connection_setup_ms": 0.403125,
+        "requests": 3995,
+        "responses": 3995,
+        "throughput_rps": 799.0,
+        "latency": {
+          "avg_ms": 1.249,
+          "p50_ms": 1.347,
+          "p95_ms": 2.829,
+          "p99_ms": 4.562
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3995,
+            "responses": 3995,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 118455,
+        "requested_bytes": 32954369,
+        "handled_requests": 4691,
+        "resources": {
+          "user_cpu_secs": 1.530314,
+          "system_cpu_secs": 0.971882,
+          "peak_rss_bytes": 6848512
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 1,
+      "mode": "kcp",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-kcp-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.094680833,
+      "log_file": "round-1-kcp-32.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": false,
+        "connection_setup_ms": 6.573708,
+        "requests": 96578,
+        "responses": 96578,
+        "throughput_rps": 19315.6,
+        "latency": {
+          "avg_ms": 1.657,
+          "p50_ms": 1.423,
+          "p95_ms": 2.805,
+          "p99_ms": 5.122
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3014,
+            "responses": 3014,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3009,
+            "responses": 3009,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2987,
+            "responses": 2987,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3021,
+            "responses": 3021,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3030,
+            "responses": 3030,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2995,
+            "responses": 2995,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3084,
+            "responses": 3084,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2988,
+            "responses": 2988,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3029,
+            "responses": 3029,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3025,
+            "responses": 3025,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3011,
+            "responses": 3011,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3010,
+            "responses": 3010,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2990,
+            "responses": 2990,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3007,
+            "responses": 3007,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2992,
+            "responses": 2992,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3014,
+            "responses": 3014,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3026,
+            "responses": 3026,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3022,
+            "responses": 3022,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3028,
+            "responses": 3028,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2970,
+            "responses": 2970,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3015,
+            "responses": 3015,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2990,
+            "responses": 2990,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 2993,
+            "responses": 2993,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3059,
+            "responses": 3059,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3026,
+            "responses": 3026,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3038,
+            "responses": 3038,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3006,
+            "responses": 3006,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3049,
+            "responses": 3049,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3047,
+            "responses": 3047,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3039,
+            "responses": 3039,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3064,
+            "responses": 3064,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3000,
+            "responses": 3000,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3000091,
+        "requested_bytes": 765761741,
+        "handled_requests": 119784,
+        "resources": {
+          "user_cpu_secs": 3.283297,
+          "system_cpu_secs": 11.464499,
+          "peak_rss_bytes": 8290304
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 1,
+      "mode": "kcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-kcp-tls-1.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.011819000000000912,
+      "log_file": "round-1-kcp-tls-1.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-kcp-tls-1.json'"
+    },
+    {
+      "round": 1,
+      "mode": "kcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-kcp-tls-32.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.010960459000001421,
+      "log_file": "round-1-kcp-tls-32.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-kcp-tls-32.json'"
+    },
+    {
+      "round": 1,
+      "mode": "tcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-tcp-tls-1.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.010720416999999927,
+      "log_file": "round-1-tcp-tls-1.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-tcp-tls-1.json'"
+    },
+    {
+      "round": 1,
+      "mode": "tcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-tcp-tls-32.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.01370550000000037,
+      "log_file": "round-1-tcp-tls-32.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-1-tcp-tls-32.json'"
+    },
+    {
+      "round": 2,
+      "mode": "kcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-kcp-tls-1.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.022498666999998918,
+      "log_file": "round-2-kcp-tls-1.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-kcp-tls-1.json'"
+    },
+    {
+      "round": 2,
+      "mode": "kcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-kcp-tls-32.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.010504666999999301,
+      "log_file": "round-2-kcp-tls-32.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-kcp-tls-32.json'"
+    },
+    {
+      "round": 2,
+      "mode": "tcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-tcp-tls-1.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.014893083000000473,
+      "log_file": "round-2-tcp-tls-1.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-tcp-tls-1.json'"
+    },
+    {
+      "round": 2,
+      "mode": "tcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-tcp-tls-32.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.019857416000000683,
+      "log_file": "round-2-tcp-tls-32.log",
+      "loadavg_after": [
+        7.052734375,
+        7.23974609375,
+        14.8623046875
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-tcp-tls-32.json'"
+    },
+    {
+      "round": 2,
+      "mode": "kcp",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-kcp-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.056191874999998,
+      "log_file": "round-2-kcp-1.log",
+      "loadavg_after": [
+        6.80810546875,
+        7.185546875,
+        14.79833984375
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": false,
+        "connection_setup_ms": 0.43195799999999995,
+        "requests": 3933,
+        "responses": 3933,
+        "throughput_rps": 786.6,
+        "latency": {
+          "avg_ms": 1.271,
+          "p50_ms": 1.372,
+          "p95_ms": 2.807,
+          "p99_ms": 4.35
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3933,
+            "responses": 3933,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 120561,
+        "requested_bytes": 33480477,
+        "handled_requests": 4775,
+        "resources": {
+          "user_cpu_secs": 1.50788,
+          "system_cpu_secs": 0.986574,
+          "peak_rss_bytes": 6930432
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 2,
+      "mode": "kcp",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-2-kcp-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.046620292,
+      "log_file": "round-2-kcp-32.log",
+      "loadavg_after": [
+        6.7431640625,
+        7.16552734375,
+        14.74658203125
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": false,
+        "connection_setup_ms": 6.651334,
+        "requests": 99294,
+        "responses": 99294,
+        "throughput_rps": 19858.8,
+        "latency": {
+          "avg_ms": 1.611,
+          "p50_ms": 1.409,
+          "p95_ms": 2.701,
+          "p99_ms": 4.183
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3130,
+            "responses": 3130,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3106,
+            "responses": 3106,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3116,
+            "responses": 3116,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3125,
+            "responses": 3125,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3097,
+            "responses": 3097,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3103,
+            "responses": 3103,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3112,
+            "responses": 3112,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3116,
+            "responses": 3116,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3073,
+            "responses": 3073,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3073,
+            "responses": 3073,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3104,
+            "responses": 3104,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3123,
+            "responses": 3123,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3089,
+            "responses": 3089,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3063,
+            "responses": 3063,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3104,
+            "responses": 3104,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3100,
+            "responses": 3100,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3105,
+            "responses": 3105,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3091,
+            "responses": 3091,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3114,
+            "responses": 3114,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3069,
+            "responses": 3069,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3109,
+            "responses": 3109,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3113,
+            "responses": 3113,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3112,
+            "responses": 3112,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3112,
+            "responses": 3112,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3113,
+            "responses": 3113,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3126,
+            "responses": 3126,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3104,
+            "responses": 3104,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3108,
+            "responses": 3108,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3087,
+            "responses": 3087,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3096,
+            "responses": 3096,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3073,
+            "responses": 3073,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3128,
+            "responses": 3128,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 2754616,
+        "requested_bytes": 703439058,
+        "handled_requests": 109962,
+        "resources": {
+          "user_cpu_secs": 3.095882,
+          "system_cpu_secs": 10.430202,
+          "peak_rss_bytes": 8077312
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "tcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-tcp-tls-1.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.011124540999997379,
+      "log_file": "round-3-tcp-tls-1.log",
+      "loadavg_after": [
+        6.7431640625,
+        7.16552734375,
+        14.74658203125
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-tcp-tls-1.json'"
+    },
+    {
+      "round": 3,
+      "mode": "tcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-tcp-tls-32.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.020857125000002696,
+      "log_file": "round-3-tcp-tls-32.log",
+      "loadavg_after": [
+        6.7431640625,
+        7.16552734375,
+        14.74658203125
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-tcp-tls-32.json'"
+    },
+    {
+      "round": 3,
+      "mode": "kcp",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-kcp-1.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.059228917000002,
+      "log_file": "round-3-kcp-1.log",
+      "loadavg_after": [
+        7.72412109375,
+        7.35791015625,
+        14.72607421875
+      ],
+      "result": {
+        "model": 1,
+        "clients": 1,
+        "tls": false,
+        "connection_setup_ms": 0.352209,
+        "requests": 3730,
+        "responses": 3730,
+        "throughput_rps": 746.0,
+        "latency": {
+          "avg_ms": 1.338,
+          "p50_ms": 1.346,
+          "p95_ms": 2.953,
+          "p99_ms": 6.887
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3730,
+            "responses": 3730,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 115349,
+        "requested_bytes": 32167517,
+        "handled_requests": 4567,
+        "resources": {
+          "user_cpu_secs": 1.378449,
+          "system_cpu_secs": 0.898108,
+          "peak_rss_bytes": 6881280
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "kcp",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-kcp-32.json"
+      ],
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_secs": 6.053753917000002,
+      "log_file": "round-3-kcp-32.log",
+      "loadavg_after": [
+        7.986328125,
+        7.41796875,
+        14.7041015625
+      ],
+      "result": {
+        "model": 1,
+        "clients": 32,
+        "tls": false,
+        "connection_setup_ms": 5.435709,
+        "requests": 114099,
+        "responses": 114099,
+        "throughput_rps": 22819.8,
+        "latency": {
+          "avg_ms": 1.402,
+          "p50_ms": 1.315,
+          "p95_ms": 2.309,
+          "p99_ms": 3.018
+        },
+        "success": true,
+        "server_stop_succeeded": true,
+        "client_outcomes": [
+          {
+            "requests": 3510,
+            "responses": 3510,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3541,
+            "responses": 3541,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3567,
+            "responses": 3567,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3618,
+            "responses": 3618,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3573,
+            "responses": 3573,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3516,
+            "responses": 3516,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3597,
+            "responses": 3597,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3561,
+            "responses": 3561,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3578,
+            "responses": 3578,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3521,
+            "responses": 3521,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3580,
+            "responses": 3580,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3575,
+            "responses": 3575,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3527,
+            "responses": 3527,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3584,
+            "responses": 3584,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3610,
+            "responses": 3610,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3575,
+            "responses": 3575,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3543,
+            "responses": 3543,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3582,
+            "responses": 3582,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3547,
+            "responses": 3547,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3594,
+            "responses": 3594,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3523,
+            "responses": 3523,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3606,
+            "responses": 3606,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3536,
+            "responses": 3536,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3549,
+            "responses": 3549,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3559,
+            "responses": 3559,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3565,
+            "responses": 3565,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3622,
+            "responses": 3622,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3550,
+            "responses": 3550,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3544,
+            "responses": 3544,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3597,
+            "responses": 3597,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3592,
+            "responses": 3592,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          },
+          {
+            "requests": 3557,
+            "responses": 3557,
+            "exit": "window_complete",
+            "failure_in_warmup": false
+          }
+        ]
+      },
+      "server": {
+        "allocation_calls": 3429137,
+        "requested_bytes": 874342960,
+        "handled_requests": 136950,
+        "resources": {
+          "user_cpu_secs": 3.612496,
+          "system_cpu_secs": 13.174544,
+          "peak_rss_bytes": 8142848
+        }
+      },
+      "valid": true
+    },
+    {
+      "round": 3,
+      "mode": "kcp-tls",
+      "clients": 1,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "1",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-kcp-tls-1.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.010974750000002587,
+      "log_file": "round-3-kcp-tls-1.log",
+      "loadavg_after": [
+        7.986328125,
+        7.41796875,
+        14.7041015625
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-kcp-tls-1.json'"
+    },
+    {
+      "round": 3,
+      "mode": "kcp-tls",
+      "clients": 32,
+      "command": [
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure-performance-target/release/deps/benchmark-7f1894ae530c92ec",
+        "--model",
+        "1",
+        "--clients",
+        "32",
+        "--payload",
+        "128",
+        "--warmup",
+        "1",
+        "--duration",
+        "5",
+        "--json",
+        "/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-kcp-tls-32.json"
+      ],
+      "exit_code": 1,
+      "timed_out": false,
+      "elapsed_secs": 0.010935542000005682,
+      "log_file": "round-3-kcp-tls-32.log",
+      "loadavg_after": [
+        7.986328125,
+        7.41796875,
+        14.7041015625
+      ],
+      "result_error": "[Errno 2] No such file or directory: '/private/tmp/lynn-tcp-features-jwn_9qaa/secure/docs/benchmark/v2.5.0-kcp-tls-apple-m1-pro/round-3-kcp-tls-32.json'"
+    }
+  ]
+}

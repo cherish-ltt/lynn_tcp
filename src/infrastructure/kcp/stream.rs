@@ -14,7 +14,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::{BUFFER, KcpConfig, driver};
+use super::{BUFFER, KcpConfig, Mode, driver};
 
 type Flush = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
 
@@ -29,18 +29,23 @@ pub(crate) struct KcpStream {
 }
 
 impl KcpStream {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "transport construction requires peer, mode and bounded ingress"
+    )]
     pub(crate) fn start(
         socket: Arc<UdpSocket>,
         peer: SocketAddr,
         conv: u32,
         config: KcpConfig,
+        mode: Mode,
         incoming: Option<mpsc::Receiver<Vec<u8>>>,
     ) -> io::Result<(Self, oneshot::Receiver<io::Result<()>>)> {
         let (io, transport) = tokio::io::duplex(BUFFER);
         let (ack_tx, acknowledged) = watch::channel((0, false));
         let (error_tx, error) = watch::channel(None);
         let (ready_tx, ready) = oneshot::channel();
-        let driver = driver::Driver::new(socket, peer, conv, config, incoming)?;
+        let driver = driver::Driver::new(socket, peer, conv, config, mode, incoming)?;
         // Drop driver I/O before its completion sender, including before the first poll.
         let driver_task = (driver, transport, error_tx);
         let worker = tokio::spawn(async move {
@@ -74,7 +79,11 @@ impl KcpStream {
     }
 
     #[cfg(feature = "client")]
-    pub(crate) async fn connect(peer: SocketAddr, config: KcpConfig) -> io::Result<Self> {
+    pub(crate) async fn connect(
+        peer: SocketAddr,
+        config: KcpConfig,
+        mode: Mode,
+    ) -> io::Result<Self> {
         use std::{collections::hash_map::RandomState, hash::BuildHasher};
         let socket = Arc::new(
             UdpSocket::bind(if peer.is_ipv4() {
@@ -86,7 +95,7 @@ impl KcpStream {
         );
         socket.connect(peer).await?;
         let conv = (RandomState::new().hash_one(socket.local_addr()?) as u32).max(1);
-        let (stream, ready) = Self::start(socket, peer, conv, config, None)?;
+        let (stream, ready) = Self::start(socket, peer, conv, config, mode, None)?;
         ready
             .await
             .map_err(|_| io::Error::other("KCP handshake worker stopped"))??;

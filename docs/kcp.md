@@ -11,6 +11,8 @@
 5. 连接建立后确认 `client.is_connected()`，处理 `server.start().await` 的错误；`build()` 本身不验证 KCP 组合。非法参数在双端传输初始化时拒绝，客户端连接失败沿用现有重试/未连接语义，不把 builder 成功当作已连通。
 6. 删除对框架自动指标的重复手工累加，执行真实 echo、断开/取消及指标增量验收；严格交付场景必须先取得应用层确认，再释放 owner，见 [指标迁移](../METRICS.md#自动采集边界与迁移)。
 
+已选定 KCP 且需要业务流加密时，双端改启用 `kcp-tls` 并同时配置 KCP/TLS；详细配对配置和迁移边界见 [KCP+TLS](kcp-tls.md)。仅增加 feature 不会启用加密，原明文 KCP 配置保持原样。
+
 双端依赖（默认同时启用 server/client；独立角色设置 `default-features = false`）：
 
 ```toml
@@ -51,7 +53,7 @@ fn main() -> lynn_tcp::Result<()> {
 | 回环、稳定局域网、低丢包或吞吐优先 | 优先 TCP | 历史纯回环 KCP 仅为 TCP 的 29.9%；大文件/持续流未测，不预设 KCP 优势 |
 | 有 RTT、受控 UDP 链路、延迟敏感小消息 | 评估默认 fast | 128 B、32 并发、20 ms RTT 无丢包为 TCP 的 94.5%；1 并发低丢包仍可能落后 |
 | 独立随机丢包明显的小消息交互 | 目标环境 A/B 验证 KCP fast | 同轮 10%/20%/30% 丢包吞吐为 TCP 的 2.21/4.40/7.42 倍，不代表突发丢包或拥塞链路 |
-| 需要认证、加密，或不可信共享公网 | 优先 TCP+TLS | 本适配无认证/加密；TLS+KCP 不支持，fast nocwnd 存在公平性/拥塞风险 |
+| 需要认证、加密，或不可信共享公网 | 优先 TCP+TLS；已选 KCP 的应用可评估 `kcp-tls` | TLS 只保护业务流，外层 KCP 控制报文仍不认证；fast nocwnd 存在公平性/拥塞风险 |
 | 需要保守参数基线或排查 fast 取舍 | 对照 normal | 开启拥塞窗口约束、100 ms 周期输出，可能增加时延；未单独验证其公网公平性 |
 
 先保持默认参数，用真实 payload/并发、目标 RTT/带宽和丢包分布比较 TCP/fast/normal；同时记录吞吐、尾延迟、请求/回复差值、连接错误及资源占用，而非只看响应/s。该历史研究采用固定顺序短时测试，0.6.0 配对复测交错新旧顺序；两者均不是统计显著性或容量上限证明。
@@ -63,6 +65,7 @@ fn main() -> lynn_tcp::Result<()> {
 ## 选择与兼容
 
 - TCP 默认不变；feature `kcp` 默认关闭，双端 builder 的 `with_kcp(KcpConfig)` 显式选择 UDP/KCP；不自动回退、不同时监听。
+- `kcp-tls` 同样默认关闭，并启用 `kcp` 和 `tls`；只有该 feature 加双端 `with_kcp`/`with_tls` 才选择 TLS-over-KCP。仅启用 `kcp,tls` 仍拒绝运行时同时配置，原 TCP+TLS 不受影响。
 - TCP 专用的 nodelay、keepalive 和 socket buffer 配置不作用于 KCP；KCP 通过 `KcpConfig::protocol` 设置底层参数，框架读写超时继续生效。
 - 业务 handler、AppState、多路由、广播和既有帧格式复用；只改变传输接入。独立角色关闭默认 feature 后使用 `client,kcp` 或 `server,kcp`。
 - 固定 kcp-ovo `=0.8.0`，直接使用 `core::kcp::Kcp`；继续由本适配管理 accept、会话及 driver 所有权，不接入上游高层 KcpStream/KcpListener 或 drain API。
@@ -109,16 +112,16 @@ let custom = KcpConfig {
 
 ## 安全及互操作
 
-KCP 无加密、无认证，不适合直接承载不可信网络上的敏感数据。TLS+KCP 明确拒绝；现有 TCP+TLS 仍可用。服务端通过已有连接/速率限制约束资源，但不提供防源地址伪造、cookie 握手、抗放大或公网 DoS 承诺；不要把一次可达性握手当作认证。
+明文 KCP 无加密、无认证，不适合直接承载不可信网络上的敏感数据。显式启用 `kcp-tls` 后可在 KCP 字节流上运行 TLS 1.3，复用 CA、名称校验和可选 mTLS；安全模式拒绝无验证开关，禁用 0-RTT 和会话恢复。业务流之外的 KCP 头、ACK、HELLO、DATA/EOF 类型仍未认证。服务端通过已有连接/速率限制约束资源，但不提供防源地址伪造、cookie 握手、抗放大或公网 DoS 承诺；不要把 KCP ACK 当作认证或业务交付证明。完整边界见 [KCP+TLS](kcp-tls.md)。
 
-kcp-ovo 使用自有 28 字节大端 KCP 头，不兼容原版 24 字节 KCP。本适配进一步添加可靠的 `\0lynn-kcp/1` 首消息及 DATA/EOF 封装，因此只与使用本适配的对端互通，不直接兼容上游高层 API。客户端每次连接生成新的随机非零 32 位 conv，这不是安全令牌。
+kcp-ovo 使用自有 28 字节大端 KCP 头，不兼容原版 24 字节 KCP。本适配进一步添加可靠的首消息（明文 `\0lynn-kcp/1`，KCP+TLS `\0lynn-kcp/2`）及 DATA/EOF 封装，因此只与使用本适配且选择相同模式的对端互通，不直接兼容上游高层 API。模式不匹配会失败，不自动降级；首消息本身不承担认证。客户端每次连接生成新的随机非零 32 位 conv，这不是安全令牌。
 
 ## 会话与所有权
 
 - 服务端首先校验单个数据报长度、非零 conv、Push/sn=0/frg=0 和首消息，再获取现有总连接/每 IP/速率许可，之后才创建 driver 和分派任务。首次握手数据报可能因网络丢失被重传。
 - 同一地址当前只允许一个 conv；不同 conv 不会顶替仍存活会话，地址重用须等待旧会话关闭/空闲回收。关闭的映射会在收到数据报或 100 ms 清理周期移除。其他地址独立会话不受影响。
 - 每条连接的 LynnStream 持有 driver JoinHandle；释放或取消 owner 会中止 driver，克隆业务 sender 不延长连接生命周期。服务端释放后 listener 通道关闭，driver 与配额随后回收。
-- 客户端握手须收到对端可靠首消息后才进入 connected；连接超时和重连间隔沿用现有配置，地址绑定错误通过服务端 `start()` 返回。
+- 明文客户端须收到对端可靠首消息后才进入 connected；KCP+TLS 还须完成 TLS 握手并收到加密的服务端认证确认。安全会话在认证前不进入业务在线表或 Handler。客户端单次连接期限覆盖全部阶段，服务端从握手准入开始沿用 10 秒总期限并在 worker 外限并发；地址绑定错误通过服务端 `start()` 返回。
 - `idle_timeout_secs` 默认 60，非零，按有效同 conv 数据报进展续期；UDP 不能立即感知远端 Drop。框架原有读/写超时、心跳、配额及每连接处理许可继续生效。请让 KCP idle timeout 大于预期心跳和调度间隔。
 - 传输错误保留到流上；不以 EOF 掩盖错误。普通远端 EOF 仍走现有响应排空路径；强制取消不排空。
 
@@ -128,7 +131,7 @@ kcp-ovo 使用自有 28 字节大端 KCP 头，不兼容原版 24 字节 KCP。�
 - 固定 MTU 1400，默认 send/receive window 为 32/128，10 ms tick，自定义 fast 启用 nodelay/fastresend=2/nocwnd。发送 backlog 达到配置 snd_wnd 时暂停读取本地流；单次分块允许最多额外 12 段，队列不会随用户输入无界增长。
 - 双向本地 duplex 各最多 64 KiB；服务端每会话 UDP 队列最多 128 包、每包不超过 1400 字节。队列满时丢弃 UDP 包并由 KCP 重传恢复，不 detach 无限发送。接收重组受窗口及分片数校验限制，再进入原有有界帧解析器。
 - `send_data()` 仅表示业务队列入队；AsyncWrite 成功仅表示适配缓冲接收字节；`flush()` 等待之前写入字节全部获得对端 KCP ACK；ACK 不等价于对端 handler 成功或持久化。
-- `shutdown()` 在 flush 后发送可靠有序 EOF 并等待其确认；Drop 不保证执行 shutdown。丢失最后 ACK 的对端可能仍等重传/idle timeout，因此不承诺双方同时释放。
+- 明文 `shutdown()` 在 flush 后发送可靠有序 EOF 并等待其确认；KCP+TLS 先发送 TLS close_notify，再推进底层 EOF。缺少 close_notify 的 TLS 截断必须报错。Drop 不保证执行 shutdown。丢失最后 ACK 的对端可能仍等重传/idle timeout，因此不承诺双方同时释放。
 - TLS 指标计量解密后的框架字节；KCP 指标同样只计框架适配读写，不含 UDP/KCP 头、握手、ACK 或重传。发送帧指标在 ACK flush 后才增加；收到响应后立刻 Drop 可能让服务端尚未记录 sent，应用验收应区分收到响应和对方完成 flush。
 
 ## 验证入口
@@ -137,6 +140,7 @@ kcp-ovo 使用自有 28 字节大端 KCP 头，不兼容原版 24 字节 KCP。�
 cargo test --locked --all-features --test kcp_transport --test kcp_process
 cargo test --locked --features kcp --test kcp_dependency_contract
 cargo test --locked --all-features --lib infrastructure::kcp
+cargo test --locked --features kcp-tls --test kcp_tls_transport --test readme_kcp_tls_config
 cargo run --example kcp_echo --features kcp
 LYNN_BENCH_TRANSPORT=tcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
 LYNN_BENCH_TRANSPORT=kcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128

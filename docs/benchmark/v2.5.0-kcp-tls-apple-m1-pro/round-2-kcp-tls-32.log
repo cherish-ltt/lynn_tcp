@@ -1,0 +1,6 @@
+transport: kcp
+lynn_tcp benchmark v2.5.0
+models [1] | clients [32] | payload 128 B | warmup 1s | duration 5s
+Error: Tls("invalid server certificate/key pair: unexpected error: failed to parse private key as RSA, ECDSA, or EdDSA")
+benchmark setup failed
+running model 1 with 32 clients (warmup 1s + measured 5s)...

@@ -51,7 +51,7 @@ impl ConnectionParams {
         #[cfg(feature = "kcp")]
         if let Some(kcp) = &config.kcp {
             kcp.validate()?;
-            #[cfg(feature = "tls")]
+            #[cfg(all(feature = "tls", not(feature = "kcp-tls")))]
             if config.get_tls().is_some() {
                 return Err(LynnError::config("TLS over KCP is not supported"));
             }
@@ -68,12 +68,22 @@ impl ConnectionParams {
             message_tail_mark: *config.get_message_tail_mark(),
             #[cfg(feature = "tls")]
             tls: match config.get_tls() {
-                Some(tls_config) => {
-                    Some(crate::infrastructure::tls::tls_provider::build_client_tls(
+                Some(tls_config) => Some(
+                    crate::infrastructure::tls::tls_provider::build_client_tls_mode(
                         tls_config,
                         &config.get_server_ipv4(),
-                    )?)
-                },
+                        {
+                            #[cfg(feature = "kcp-tls")]
+                            {
+                                config.kcp.is_some()
+                            }
+                            #[cfg(not(feature = "kcp-tls"))]
+                            {
+                                false
+                            }
+                        },
+                    )?,
+                ),
                 None => None,
             },
         })
@@ -85,20 +95,45 @@ async fn try_connect(params: &ConnectionParams) -> Result<LynnStream, LynnError>
     let timeout = Duration::from_secs(params.connect_timeout_secs);
     #[cfg(feature = "kcp")]
     if let Some(config) = &params.kcp {
-        let stream = time::timeout(
-            timeout,
-            crate::infrastructure::kcp::stream::KcpStream::connect(
-                params
-                    .addr
-                    .parse()
-                    .map_err(|e| LynnError::config(format!("invalid KCP address: {e}")))?,
-                config.clone(),
-            ),
-        )
-        .await
-        .map_err(|_| LynnError::timeout("KCP connect timeout"))??;
-        return Ok(LynnStream::Kcp(stream));
+        use crate::infrastructure::kcp::{Mode, stream::KcpStream};
+        let peer = params
+            .addr
+            .parse()
+            .map_err(|e| LynnError::config(format!("invalid KCP address: {e}")))?;
+        let attempt = async {
+            let mode = Mode::Plain;
+            #[cfg(feature = "kcp-tls")]
+            let mode = if params.tls.is_some() {
+                Mode::Tls
+            } else {
+                mode
+            };
+            let stream = KcpStream::connect(peer, config.clone(), mode).await?;
+            #[cfg(feature = "kcp-tls")]
+            if let Some(tls) = &params.tls {
+                let mut stream = tls
+                    .connector
+                    .connect(tls.server_name.clone(), stream)
+                    .await
+                    .map_err(|e| LynnError::tls(format!("KCP TLS handshake failed: {e}")))?;
+                use tokio::io::AsyncReadExt;
+                let mut ready = [0; crate::infrastructure::kcp::TLS_READY.len()];
+                stream
+                    .read_exact(&mut ready)
+                    .await
+                    .map_err(|e| LynnError::tls(format!("KCP TLS server readiness failed: {e}")))?;
+                if ready != crate::infrastructure::kcp::TLS_READY {
+                    return Err(LynnError::tls("invalid KCP TLS server readiness"));
+                }
+                return Ok(LynnStream::KcpTls(Box::new(stream.into())));
+            }
+            Ok(LynnStream::Kcp(stream))
+        };
+        return time::timeout(timeout, attempt)
+            .await
+            .map_err(|_| LynnError::timeout("KCP connection attempt timed out"))?;
     }
+
     let tcp = time::timeout(timeout, TcpStream::connect(&params.addr))
         .await
         .map_err(|_| {

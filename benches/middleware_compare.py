@@ -26,9 +26,21 @@ def prepare_baseline(destination):
     }
 }
 """
+    source = before + replacement + after
+    server_source = destination / "src/application/server/lynn_server.rs"
+    if "startup_handle(" not in server_source.read_text():
+        # Preserve the old startup path when comparing a pre-readiness revision.
+        begin = source.index("        let ready = server.startup_handle();")
+        end = source.index('        println!("READY {}", addr.port());', begin)
+        source = source[:begin] + "        let mut server = Box::pin(server.start());\n" + source[end:]
+        source = source.replace(
+            "    let runtime = tokio::runtime::Builder::new_multi_thread()",
+            '    let addr = std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?;\n'
+            "    let runtime = tokio::runtime::Builder::new_multi_thread()",
+        ).replace('.with_addr("127.0.0.1:0")?', '.with_addr(addr)?')
     target = destination / "examples"
     (target / "support").mkdir(parents=True, exist_ok=True)
-    (target / "middleware_bench_server.rs").write_text(before + replacement + after)
+    (target / "middleware_bench_server.rs").write_text(source)
     shutil.copyfile(
         root / "examples/support/allocation_counter.rs",
         target / "support/allocation_counter.rs",

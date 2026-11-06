@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "crate_version": "2.5.0",
+    "os": "macos",
+    "arch": "aarch64",
+    "transport": "kcp",
+    "kcp_mode": "fast",
+    "request_counter": "successful local enqueue counted by send start time; model-1 replies payload-checked",
+    "logical_cores": 8,
+    "topology": "loopback, echo server in an independent process (bench_echo_server binary)",
+    "payload_bytes": 128,
+    "warmup_secs": 1,
+    "duration_secs": 5,
+    "client_channel_size": 8,
+    "unix_timestamp": 1793969297
+  },
+  "results": [
+    {"model": 1, "clients": 32, "tls": true, "connection_setup_ms": 11.442542, "requests": 106023, "responses": 106023, "throughput_rps": 21204.6, "latency": {"avg_ms": 1.509, "p50_ms": 1.383, "p95_ms": 2.437, "p99_ms": 3.261}, "success": true, "server_stop_succeeded": true, "client_outcomes": [{"requests":3324,"responses":3324,"exit":"window_complete","failure_in_warmup":false},{"requests":3329,"responses":3329,"exit":"window_complete","failure_in_warmup":false},{"requests":3315,"responses":3315,"exit":"window_complete","failure_in_warmup":false},{"requests":3303,"responses":3303,"exit":"window_complete","failure_in_warmup":false},{"requests":3313,"responses":3313,"exit":"window_complete","failure_in_warmup":false},{"requests":3301,"responses":3301,"exit":"window_complete","failure_in_warmup":false},{"requests":3376,"responses":3376,"exit":"window_complete","failure_in_warmup":false},{"requests":3331,"responses":3331,"exit":"window_complete","failure_in_warmup":false},{"requests":3287,"responses":3287,"exit":"window_complete","failure_in_warmup":false},{"requests":3292,"responses":3292,"exit":"window_complete","failure_in_warmup":false},{"requests":3324,"responses":3324,"exit":"window_complete","failure_in_warmup":false},{"requests":3332,"responses":3332,"exit":"window_complete","failure_in_warmup":false},{"requests":3320,"responses":3320,"exit":"window_complete","failure_in_warmup":false},{"requests":3290,"responses":3290,"exit":"window_complete","failure_in_warmup":false},{"requests":3347,"responses":3347,"exit":"window_complete","failure_in_warmup":false},{"requests":3332,"responses":3332,"exit":"window_complete","failure_in_warmup":false},{"requests":3281,"responses":3281,"exit":"window_complete","failure_in_warmup":false},{"requests":3305,"responses":3305,"exit":"window_complete","failure_in_warmup":false},{"requests":3328,"responses":3328,"exit":"window_complete","failure_in_warmup":false},{"requests":3324,"responses":3324,"exit":"window_complete","failure_in_warmup":false},{"requests":3293,"responses":3293,"exit":"window_complete","failure_in_warmup":false},{"requests":3277,"responses":3277,"exit":"window_complete","failure_in_warmup":false},{"requests":3314,"responses":3314,"exit":"window_complete","failure_in_warmup":false},{"requests":3266,"responses":3266,"exit":"window_complete","failure_in_warmup":false},{"requests":3304,"responses":3304,"exit":"window_complete","failure_in_warmup":false},{"requests":3315,"responses":3315,"exit":"window_complete","failure_in_warmup":false},{"requests":3352,"responses":3352,"exit":"window_complete","failure_in_warmup":false},{"requests":3322,"responses":3322,"exit":"window_complete","failure_in_warmup":false},{"requests":3307,"responses":3307,"exit":"window_complete","failure_in_warmup":false},{"requests":3303,"responses":3303,"exit":"window_complete","failure_in_warmup":false},{"requests":3305,"responses":3305,"exit":"window_complete","failure_in_warmup":false},{"requests":3311,"responses":3311,"exit":"window_complete","failure_in_warmup":false}]}
+  ]
+}

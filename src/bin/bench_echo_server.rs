@@ -11,8 +11,6 @@
 //! cargo run --release --bin bench_echo_server -- --port 9177
 //! ```
 
-use std::net::TcpListener;
-
 use lynn_tcp::{
     lynn_server::{LynnServer, LynnServerConfigBuilder},
     lynn_tcp_dependents::{HandlerResult, InputBufVO, InputBufVOTrait},
@@ -41,6 +39,15 @@ fn main() {
     let kcp = std::env::var("LYNN_BENCH_TRANSPORT").as_deref() == Ok("kcp");
     #[cfg(not(feature = "kcp"))]
     assert!(!kcp, "rebuild with --features kcp");
+    let tls_cert = std::env::var("LYNN_BENCH_TLS_CERT").ok();
+    let tls_key = std::env::var("LYNN_BENCH_TLS_KEY").ok();
+    assert_eq!(
+        tls_cert.is_some(),
+        tls_key.is_some(),
+        "configure both TLS certificate and key"
+    );
+    #[cfg(not(feature = "tls"))]
+    assert!(tls_cert.is_none(), "rebuild with --features tls");
     let port: u16 = std::env::args()
         .nth(1)
         .and_then(|arg| arg.parse().ok())
@@ -51,22 +58,6 @@ fn main() {
         .build()
         .expect("server runtime");
     runtime.block_on(async move {
-        // Probe a free port first so the harness can learn it (the server
-        // API owns the actual bind, so port 0 cannot be reported back).
-        let port = if port == 0 {
-            if kcp {
-                std::net::UdpSocket::bind("127.0.0.1:0")
-                    .expect("probe bind")
-                    .local_addr()
-                    .unwrap()
-                    .port()
-            } else {
-                let probe = TcpListener::bind("127.0.0.1:0").expect("probe bind");
-                probe.local_addr().expect("probe addr").port()
-            }
-        } else {
-            port
-        };
         let addr = format!("127.0.0.1:{port}");
         let config = LynnServerConfigBuilder::new()
             .with_addr(&addr)
@@ -85,16 +76,24 @@ fn main() {
         } else {
             config
         };
+        #[cfg(feature = "tls")]
+        let config = match (tls_cert, tls_key) {
+            (Some(cert), Some(key)) => config.with_tls_cert_paths(cert, key),
+            _ => config,
+        };
         let config = config.build();
-        println!("READY {port}");
+        let server = LynnServer::new_with_config(config)
+            .await
+            .add_router(METHOD_ID, echo_handler);
+        let ready = server.startup_handle();
+        let task = tokio::spawn(server.start());
+        let addr = ready.wait().await.expect("server initialization");
+        println!("READY {}", addr.port());
         use std::io::Write as _;
         std::io::stdout().flush().expect("flush READY line");
 
-        LynnServer::new_with_config(config)
-            .await
-            .add_router(METHOD_ID, echo_handler)
-            .start()
-            .await
+        task.await
+            .expect("server task failed")
             .expect("server failed");
     });
 }

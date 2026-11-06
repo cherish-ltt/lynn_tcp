@@ -80,7 +80,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        features: ["", "client", "server", "metrics", "client,tls", "server,tls", "kcp", "client,kcp", "server,kcp", "client,server,kcp"]
+        features: ["", "client", "server", "metrics", "client,tls", "server,tls", "kcp", "client,kcp", "server,kcp", "client,server,kcp", "client,server,kcp,tls", "kcp-tls", "client,kcp-tls", "server,kcp-tls", "client,server,kcp-tls"]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

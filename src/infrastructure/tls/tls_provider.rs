@@ -50,7 +50,15 @@ fn provider() -> Arc<CryptoProvider> {
 }
 
 /// Builds a TLS 1.3 only server acceptor from the given configuration.
+#[cfg(test)]
 pub(crate) fn build_server_acceptor(config: &TlsServerConfig) -> Result<TlsAcceptor> {
+    build_server_acceptor_mode(config, false)
+}
+
+pub(crate) fn build_server_acceptor_mode(
+    config: &TlsServerConfig,
+    secure_kcp: bool,
+) -> Result<TlsAcceptor> {
     let certs = load_certs(&config.cert_path)?;
     let key = load_private_key(&config.key_path)?;
 
@@ -69,10 +77,17 @@ pub(crate) fn build_server_acceptor(config: &TlsServerConfig) -> Result<TlsAccep
         None => builder.with_no_client_auth(),
     };
 
-    let server_config = builder
+    let mut server_config = builder
         .with_single_cert(certs, key)
         .map_err(|e| LynnError::tls(format!("invalid server certificate/key pair: {e}")))?;
 
+    if secure_kcp {
+        server_config.session_storage = Arc::new(rustls::server::NoServerSessionStorage {});
+        server_config.send_tls13_tickets = 0;
+        server_config.max_tls13_tickets = 0;
+        server_config.max_early_data_size = 0;
+        server_config.send_half_rtt_data = false;
+    }
     Ok(TlsAcceptor::from(Arc::new(server_config)))
 }
 
@@ -85,7 +100,21 @@ pub(crate) struct ClientTls {
 
 /// Builds a TLS 1.3 only client connector from the given configuration and
 /// resolves the server name to verify against.
+#[cfg(test)]
 pub(crate) fn build_client_tls(config: &TlsClientConfig, fallback_addr: &str) -> Result<ClientTls> {
+    build_client_tls_mode(config, fallback_addr, false)
+}
+
+pub(crate) fn build_client_tls_mode(
+    config: &TlsClientConfig,
+    fallback_addr: &str,
+    secure_kcp: bool,
+) -> Result<ClientTls> {
+    if secure_kcp && config.danger_accept_invalid_certs {
+        return Err(LynnError::config(
+            "KCP TLS requires certificate verification",
+        ));
+    }
     let server_name = resolve_server_name(config, fallback_addr)?;
 
     let builder = rustls::ClientConfig::builder_with_provider(provider())
@@ -108,7 +137,7 @@ pub(crate) fn build_client_tls(config: &TlsClientConfig, fallback_addr: &str) ->
         let roots = load_root_store(ca_path)?;
         builder.with_root_certificates(roots)
     };
-    let client_config = match (&config.client_cert_path, &config.client_key_path) {
+    let mut client_config = match (&config.client_cert_path, &config.client_key_path) {
         (Some(cert_path), Some(key_path)) => builder
             .with_client_auth_cert(load_certs(cert_path)?, load_private_key(key_path)?)
             .map_err(|e| LynnError::tls(format!("invalid client certificate/key pair: {e}")))?,
@@ -120,6 +149,10 @@ pub(crate) fn build_client_tls(config: &TlsClientConfig, fallback_addr: &str) ->
         },
     };
 
+    if secure_kcp {
+        client_config.resumption = rustls::client::Resumption::disabled();
+        client_config.enable_early_data = false;
+    }
     Ok(ClientTls {
         connector: TlsConnector::from(Arc::new(client_config)),
         server_name,

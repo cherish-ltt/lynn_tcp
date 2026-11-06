@@ -281,12 +281,13 @@ The **`echo_server_client`** and **`multi_route_service`** examples are the best
 | `client` | TCP client for sending/receiving messages, automatic reconnection | ✅ |
 | `metrics` | Prometheus integration (17 production metrics, HTTP /metrics endpoint) | ✅ (via `server`) |
 | `kcp` | Optional plaintext UDP/KCP transport using kcp-ovo 0.8.0 | opt-in |
+| `kcp-tls` | TLS 1.3 over KCP; enables `kcp` and `tls`, requires both runtime configurations | opt-in |
 | `tls` | TLS 1.3 transport encryption for server & client (rustls/ring) | ❌ opt-in |
 | `seaorm` | Built-in SeaORM support: `with_db(...)` + `DbConn` state handle | ❌ opt-in |
 
 > **Note**: `metrics` is automatically enabled when `server` is selected. To use it independently: `default-features = false, features = ["metrics"]`. `tls` and `seaorm` are disabled by default and must be enabled explicitly.
 
-`client` and `server` compile independently, including with `tls`. With no features enabled, the crate builds without either transport API. Examples, integration tests, and benchmark targets require their declared roles; CI checks and tests the no-feature, client-only, server-only, metrics-only, client+TLS, and server+TLS configurations.
+`client` and `server` compile independently, including with `tls`, `kcp`, or `kcp-tls`. With no features enabled, the crate builds without either transport API. Examples, integration tests, and benchmark targets require their declared roles; CI also retains `kcp,tls` without `kcp-tls` to verify that an unapproved runtime combination fails explicitly.
 
 The metrics HTTP endpoint accepts TCP-fragmented request lines for `/metrics` and `/health`.
 Each request line must end with CRLF within 1024 bytes and 5 seconds; oversized or incomplete
@@ -402,10 +403,11 @@ cargo run --example kcp_echo --features kcp
 LYNN_BENCH_TRANSPORT=kcp cargo bench --features kcp --bench benchmark -- --model 1 --clients 32,128
 ```
 
-KCP is **unencrypted and unauthenticated**; it is not TLS or standard KCP wire
-compatibility. This adapter uses kcp-ovo's 28-byte big-endian header plus a Lynn
-session handshake/envelope; both peers must use this adapter. TCP+TLS remains
-available, but configuring TLS with KCP is rejected, never downgraded.
+Plain KCP is **unencrypted and unauthenticated**. This adapter uses kcp-ovo's
+28-byte big-endian header plus a Lynn session handshake/envelope; both peers
+must use this adapter, and it is not standard KCP wire compatible. TLS with KCP
+requires the explicit `kcp-tls` feature and matching configuration on both peers.
+Enabling only `kcp,tls` still rejects that combination; no mode falls back to plaintext.
 
 `KcpConfig::idle_timeout_secs` defaults to 60 and must be nonzero. Drop/abort is
 asynchronous and discards queued data; a vanished UDP peer is reclaimed on idle
@@ -423,12 +425,58 @@ are supported. Upstream still enables Tokio `full`. The adapter now uses borrowe
 slices and `Vec<u8>` at upstream byte API boundaries; the custom fast preset is unchanged.
 See the [v2.4.2 upgrade validation](docs/kcp-v0.8.0-validation.md) for the 0.8.0 migration.
 The [0.5.2/0.6.0 paired retest](docs/kcp-v0.6.0-validation.md) and earlier data remain
-historical evidence, with gains and declines preserved. This release adds no KCP performance
-measurement, and KCP remains optional without a speed guarantee.
+historical evidence, with gains and declines preserved. The separate
+[KCP/TCP+TLS/KCP+TLS comparison](docs/kcp-tls-performance.md) uses a new development snapshot;
+KCP remains optional without a speed guarantee.
 Applications passing a separately imported upstream configuration must also upgrade
 that dependency to 0.8.0, or use the `lynn_kcp::KcpOptions` re-export to avoid versioned type mismatches.
 See [KCP transport contract](docs/kcp.md)
 for lifecycle, bounds, metrics, security, interoperability and test details.
+
+### KCP + TLS 1.3 (feature `kcp-tls`)
+
+Enable `features = ["kcp-tls"]` on both endpoints and configure **both** builders
+with KCP and TLS. For an isolated role, use `default-features = false` and
+`features = ["client", "kcp-tls"]` or `["server", "kcp-tls"]`.
+The following snippet builds the paired configuration; certificate files are
+loaded when starting each endpoint:
+
+```rust
+use lynn_tcp::{
+    lynn_client::LynnClientConfigBuilder,
+    lynn_kcp::KcpConfig,
+    lynn_server::LynnServerConfigBuilder,
+    lynn_tls::{TlsClientConfigBuilder, TlsServerConfig},
+};
+
+let server = LynnServerConfigBuilder::new()
+    .with_addr("127.0.0.1:9177")?
+    .with_kcp(KcpConfig::default())
+    .with_tls(TlsServerConfig::new("server.pem", "server.key"))
+    .build();
+let client = LynnClientConfigBuilder::new()
+    .with_server_addr("127.0.0.1:9177")?
+    .with_kcp(KcpConfig::default())
+    .with_tls(TlsClientConfigBuilder::new().with_ca_cert_path("ca.pem").build())
+    .build();
+```
+
+The server certificate must contain the destination IP SAN, or set an explicit
+`server_name` matching its DNS SAN. Optional mTLS reuses `with_client_ca` and a
+paired client certificate/key. KCP+TLS rejects `danger_accept_invalid_certs`,
+disables session resumption and 0-RTT, and exposes a connected client only after
+the server confirms TLS authentication. Handshake work is bounded outside business
+workers; one client attempt deadline covers KCP, TLS and the encrypted confirmation.
+
+TLS protects the Lynn business byte stream. **KCP headers, ACKs, HELLO and DATA/EOF
+control fields remain unauthenticated** and can still be disrupted; this is not a
+DoS defense or proof of application delivery. Both endpoints must use the secure
+HELLO mode. See [KCP+TLS configuration, migration and security boundaries](docs/kcp-tls.md).
+
+The [independent-process comparison](docs/kcp-tls-performance.md) records all three
+transports, connection setup, allocations, CPU and RSS, including failed rounds.
+Its local 18-cell rerun matched 1,622,486 requests and responses; loopback results
+and short measurement windows do not establish public-network performance.
 
 ### TLS 1.3 Encryption (feature `tls`)
 
@@ -568,7 +616,7 @@ and cancellation; the library provides no timer, retry policy or delivery guaran
 `SessionHandle` bound before the request was queued. After a handler returns, background
 work can call `try_send(method_id, Bytes)` for `Enqueued`, `Full` or `Closed` without waiting
 for queue capacity. Identity never follows address reuse or another server instance.
-Payload limits, instance frame markers, TCP/TLS/KCP writers and send metrics are shared
+Payload limits, instance frame markers, TCP/TLS/KCP/KCP+TLS writers and send metrics are shared
 with ordinary responses; incoming middleware does not run for outgoing pushes.
 
 `handle.observer()` provides `SessionId` comparison, `is_closed()` and cancellation-safe,
@@ -577,6 +625,8 @@ request chains and responses, then writer shutdown and any KCP driver release; r
 Handles and observers retain no server owner, transport or AppState. Close is not delivery
 confirmation or a guarantee that all handler side effects stopped. Compare session IDs
 before removing an application record that a reconnect may have replaced.
+For KCP+TLS, observation waits for both TLS halves and the underlying KCP driver;
+private pushes use the same authenticated connection.
 
 Authorize requests before storing private push capability. Return from the handler before
 waiting for final close in a background task; waiting while holding a request permit can

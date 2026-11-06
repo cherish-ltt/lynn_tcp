@@ -115,7 +115,7 @@ async fn owner_cancellation_rejects_enqueue_before_transport_teardown() {
 #[tokio::test]
 async fn kcp_observer_waits_for_the_aborted_driver_to_release_its_socket() {
     use crate::infrastructure::{
-        kcp::{KcpConfig, stream::KcpStream},
+        kcp::{KcpConfig, Mode, stream::KcpStream},
         tcp::stream::{LynnStream, split_transport},
     };
 
@@ -126,7 +126,7 @@ async fn kcp_observer_waits_for_the_aborted_driver_to_release_its_socket() {
         socket.connect(addr).await.unwrap();
         let weak_socket = Arc::downgrade(&socket);
         let (stream, _ready) =
-            KcpStream::start(socket, addr, 123, KcpConfig::default(), None).unwrap();
+            KcpStream::start(socket, addr, 123, KcpConfig::default(), Mode::Plain, None).unwrap();
         let (read, write, observer) = split_transport(LynnStream::Kcp(stream));
         if poll_driver {
             tokio::task::yield_now().await;
@@ -148,7 +148,7 @@ async fn kcp_ordered_eof_and_same_address_reconnection_keep_original_identity() 
     use crate::{
         application::server::{lynn_server::LynnServer, server_config::LynnServerConfigBuilder},
         domain::handler::request_context::RequestContext,
-        infrastructure::kcp::{KcpConfig, stream::KcpStream},
+        infrastructure::kcp::{KcpConfig, Mode, stream::KcpStream},
     };
     let (registered, mut registrations) = tokio::sync::mpsc::unbounded_channel();
     let config = LynnServerConfigBuilder::new()
@@ -183,6 +183,7 @@ async fn kcp_ordered_eof_and_same_address_reconnection_keep_original_identity() 
             addr,
             conversation,
             KcpConfig::default(),
+            Mode::Plain,
             None,
         )
         .unwrap();
