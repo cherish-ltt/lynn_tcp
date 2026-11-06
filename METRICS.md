@@ -10,7 +10,7 @@
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", default-features = false, features = ["server", "metrics"] }
+lynn_tcp = { version = "=2.6.0", default-features = false, features = ["server", "metrics"] }
 ```
 
 ### 2. 运行示例

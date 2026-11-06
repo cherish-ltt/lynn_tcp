@@ -1,5 +1,61 @@
 # Version Note
 
+### v2.6.0
+
+#### v2.6.0
+
+Release notes dated 2026-11-06. This version covers six feature issues: server readiness [#104](https://github.com/cherish-ltt/lynn_tcp/issues/104), client connection state [#93](https://github.com/cherish-ltt/lynn_tcp/issues/93), original-session push [#102](https://github.com/cherish-ltt/lynn_tcp/issues/102), final close observation [#103](https://github.com/cherish-ltt/lynn_tcp/issues/103), bounded server draining [#92](https://github.com/cherish-ltt/lynn_tcp/issues/92), and TLS 1.3 over KCP [#94](https://github.com/cherish-ltt/lynn_tcp/issues/94). See the [full changelog](update_logs/v2.6.0.md), [session guide](session-handles.md), [shutdown guide](graceful-shutdown.md), and [KCP+TLS guide](kcp-tls.md).
+
+1.feat — server readiness and client connection state
+
+- Obtain a clonable `ServerReady` with `LynnServer::startup_handle()` before consuming the server. `wait()` returns the actual bound `SocketAddr` after configuration, binding, TLS acceptor and worker initialization, including an assigned port for `127.0.0.1:0`. Failures/cancellation are observable, late waits retain the result, and the observer does not keep the owner alive. Readiness is not ongoing health or a completed client handshake (#104 / PR #105).
+- After successful client startup, `subscribe_connection_state()` returns an independent Tokio watch receiver for `Connected`, `Reconnecting` and `Stopped`, each with a generation. Initial success is generation 1; successful reconnection increments it. No subscription is available before startup or after initial connection failure (#93 / PR #106).
+- Watch retains the latest state and may coalesce transitions. Closed subscriptions are terminal even if they cache `Connected`; repeated startup requires a new subscription, and generations are comparable only within one supervisor lifecycle. Normal termination closes send admission and the receive producer before publishing `Stopped`; buffered received messages can still drain. State does not tag individual frames or restore business authentication/subscriptions.
+
+2.feat — original-session push and final close observation
+
+- `RequestContext::session()` and `MiddlewareRequest::session()` expose a `SessionHandle` bound before the request enters the processing queue. Delayed work stays bound to the original connection even after address reuse. `SessionId` is a process-local comparison/hash identity, not a user identity or credential (#102).
+- `try_send(method_id, Bytes)` validates payload length and attempts a non-waiting enqueue to the original bounded writer, returning `Enqueued`, `Full` or `Closed` for valid payloads. It shares instance frame markers, TCP/TLS/KCP/KCP+TLS writers and send metrics. Ordinary Handler responses retain waiting backpressure; outgoing pushes bypass inbound middleware. Authorize requests before granting or storing private push capability.
+- `observer()` grants separate close observation with repeatable, cancellable and late-safe waits. Close means both local transport halves and any KCP driver have actually been released. Normal EOF first drains accepted request chains and responses and completes writer shutdown; EOF alone or issuing cancellation is not final close (#103).
+- Handles/observers retain no server owner, transport, task or AppState. Queue acceptance and close notification are not application delivery receipts. Return from a Handler before waiting for close in background work, and compare `SessionId` before removing a record that a reconnect may have replaced. See the [session_push example](../examples/session_push.rs).
+
+3.feat — server draining with one grace budget
+
+- `start_with_shutdown(signal, grace)` returns `lynn_tcp::Result<ShutdownOutcome>`. It observes the application signal only after successful initialization; startup errors retain their original types. The application owns OS signals and shutdown policy (#92).
+- Once the signal is observed, close admission for new connections, pending handshakes, inbound business requests, broadcasts and original-session pushes. Accepted requests are those that obtained a processing permit and entered the work queue. Bytes merely read from the transport, partial frames and later input are not promised processing.
+- Wait for all accepted Handler/middleware chains and final response enqueueing across the server before closing writers, including responses targeting another connection. Drain queued output and complete transport shutdown under the same deadline. Existing KCP DATA/ACK/EOF traffic remains driven until local output/EOF acknowledgment and actual transport/driver release.
+- `Drained` reports completed accepted work, writes and transport shutdown; `Incomplete` records request/queue/transport failure; `TimedOut` initiates cancellation. Zero grace explicitly selects forced cancellation. Wait for cancellable tasks and framework-held resources to be released before returning. Cooperative cancellation cannot preempt synchronous code that never yields, so return may occur after the grace deadline.
+- Existing `start()`, owner Drop and cancellation of either startup future retain immediate-cancellation semantics. Draining does not confirm application delivery, roll back side effects or retry partially written frames. See the [graceful_shutdown example](../examples/graceful_shutdown.rs).
+
+4.feat / sec — opt-in TLS 1.3 over KCP
+
+- Enable `kcp-tls` and configure both KCP and TLS on both endpoints. Secure HELLO mode is distinct from plaintext; enabling only `kcp,tls` still rejects their combined runtime configuration. Enabling `kcp-tls` without both runtime settings does not automatically encrypt a plaintext KCP connection (#94).
+- Reuse the existing pinned rustls/tokio-rustls/ring stack and kcp-ovo 0.8.0. Require certificate trust and IP/DNS name verification; optional mTLS retains paired client identity checks. Secure mode rejects skipped verification and disables session resumption, tickets, 0-RTT and half-RTT application data. The client reports `Connected` only after encrypted server authentication confirmation.
+- One client attempt deadline covers KCP, TLS and confirmation. Server handshakes remain outside business workers with bounded concurrency, connection quotas and cancellation ownership. Authentication precedes business dispatch and visibility to background sends. Secure session observation waits for both TLS halves and the KCP driver.
+- Preserve the 10 MiB frame-body limit and existing bounded queues/backpressure. Normal shutdown sends TLS `close_notify` before KCP EOF; truncation is an error. Metrics count Lynn plaintext frame bytes after decryption and exclude handshake/confirmation bytes, TLS/KCP overhead and retransmissions. Neither successful flush nor unauthenticated outer KCP ACKs prove application delivery.
+- TLS protects the business byte stream; outer KCP headers, ACKs, HELLO and DATA/EOF control fields remain unauthenticated and can be disrupted. No automatic fallback, whole-datagram authentication, DoS protection or public-network SLA is introduced.
+
+5.compatibility and upgrade
+
+- Update the dependency to `lynn_tcp = "=2.6.0"`. Rust 1.99.1, Tokio `=1.52.3`, bytes `=1.11.1`, optional kcp-ovo `=0.8.0`, ordinary Handler APIs, valid frame formats and default features remain unchanged. TCP remains default; plain KCP remains opt-in and unencrypted/unauthenticated.
+- Select `default-features = false` with the desired `server` or `client` role. Secure UDP requires coordinated peers, UDP reachability, valid certificates and both runtime configurations; it is not compatible with plaintext KCP peers, standard KCP or upstream high-level peers.
+- Older upstream KCP configuration types still require the 0.8.0 migration or `lynn_kcp::KcpOptions` re-export. Earlier upgrades still require the [v2.3.0 return-type migration](update_logs/v2.3.0.md) and [metrics migration](../METRICS.md). See [KCP configuration and scenarios](kcp.md).
+
+6.pre-release verification and measured limits
+
+- The final feature integration passed all 13 full `prek run --all-files --verbose` hooks, including all-target/all-feature check, strict Clippy and **316 tests across 38 suites**, with zero failures or ignored tests. The 118 scanner warnings were reviewed: relative to the secure baseline, one internal ownership-aggregate field was added and two obsolete single-field findings disappeared; no rule or check was weakened. One existing Node cache-version notice did not skip any effective hook.
+- Fresh isolated all-feature coverage passed the same 316 tests and measured **94.0280% (5,369/5,710) production lines**, above the 80% gate. Final source hashes match the validated files. Default strict Clippy/build and **232 tests** passed; all-feature doctests passed **9 tests**. Metrics process blackbox observed exactly 5 connection opens/closes, 400 messages in each direction and 9,200 plaintext-frame bytes in each direction.
+- All **15 isolated feature combinations** passed all-target compilation and tests, including plain `kcp,tls` rejection and the four `kcp-tls` role combinations. Fresh coverage emitted no compiler or LLVM profile/coverage diagnostics.
+- Initial default checks found an oversized request event and a cancellation test racing its 40ms timeout. Shared task state removes the copied context without adding per-request boxing; the abort branch now has an independent grace period and asserts the task is still active. Both failures remain in validation records and the corrected checks passed.
+- Independent-process measurements on Apple M1 Pro/macOS arm64 used Rust 1.99.1, KCP custom fast, 128-byte payloads, one in-flight request per client, 1/32 clients, one-second warmup, five-second measurement and three serial rounds. The initial run retained six successful plaintext cells and 12 TLS initialization failures caused by explicit EC key-parameter encoding. Fresh named-curve certificate material required no source/dependency change; the same binaries completed all 18 rerun cells with **1,622,486 independent requests and matching payload-checked responses**.
+- The measured one-minute load average ranged from 6.03 to 14.77. Secure/plain KCP throughput medians differed by -8.0%/-0.8% at 1/32 clients, with overlapping ranges; three rounds do not establish a stable difference. TCP+TLS was faster in this loopback model. Connection setup covers the whole concurrent client batch including retries, after a separate readiness probe. Allocation, CPU and peak RSS cover the server lifecycle; atomic allocation counting perturbs performance, and unequal completed traffic prevents interpreting total CPU seconds as per-request efficiency.
+- Preserve the [initial archive](benchmark/v2.5.0-kcp-tls-apple-m1-pro/manifest.json), [complete rerun](benchmark/v2.5.0-kcp-tls-apple-m1-pro-named-curve/manifest.json), original versions and source/tool/binary hashes. These are **v2.5.0 development-snapshot** measurements from before integration/version changes, not a v2.6.0 rerun. Earlier KCP and middleware archives remain historical evidence. Details and reproduction commands are in the [performance report](kcp-tls-performance.md).
+- After updating the package version to 2.6.0, all 13 complete prek hooks and 316 tests passed again. The scanner retained the same 118 reviewed warnings and zero errors; three old Node cache-version notices did not skip effective hooks. Strict `RUSTDOCFLAGS='-D warnings' cargo doc --locked --all-features --no-deps` passed and generated the new public API documentation.
+- `cargo package --locked --allow-dirty --all-features` packaged 360 files and passed the build from the package. Every source file, example, regression, changelog and historical measurement archive matched the validated content; no build output or private key was included. Only these validation notes were added afterward; the resulting final archive is checked separately.
+- Version/package checks and GitHub CI must refer to their own commit snapshots. GitHub Release and crates.io publication are verified separately; these source notes do not assert publication completion. Public networks, Windows, long pressure runs and independent cryptographic audit are outside these local results.
+
+Signature: GPT-6-Astra-Ultra
+
 ### v2.5.0
 
 #### v2.5.0

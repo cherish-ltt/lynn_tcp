@@ -26,23 +26,42 @@
 
 采用 **DDD（领域驱动设计）+ 洋葱架构**，将核心领域逻辑与基础设施实现分离，提升可维护性和可扩展性。
 
-### v2.5.0 - 后台主动广播与请求中间件
+### v2.6.0 - 生命周期、会话句柄与 KCP+TLS
 
-[Issue #91](https://github.com/cherish-ltt/lynn_tcp/issues/91) 新增实例级 `BroadcastHandle`，
-供后台任务主动广播，逐类报告成功入队、满队列和已关闭目标，不等待慢连接。
-句柄不保活服务端，成功入队不代表交付。
-[Issue #95](https://github.com/cherish-ltt/lynn_tcp/issues/95) 新增全局与路由级异步中间件，
-提供单次 `Next`、隔离的请求数据和 `RequestContext`。
-现有 Handler 继续可用；超时不回滚副作用。
-详见 [v2.5.0 变更日志](docs/update_logs/v2.5.0.md)、[中间件指南](docs/middleware.md)
-和 [开销实测](docs/middleware-performance.md)。性能存档保留发布前版本与哈希；
-空链不代表零内存成本，现有测量不能证明稳定的吞吐变化。
+- [Issue #104](https://github.com/cherish-ltt/lynn_tcp/issues/104) 新增 `startup_handle()`，
+  等待服务端初始化并取得实际监听地址，包括绑定端口 `0` 的结果。
+  就绪仅表示初始化完成，不代表持续健康或已有客户端完成握手。
+- [Issue #93](https://github.com/cherish-ltt/lynn_tcp/issues/93) 新增
+  `subscribe_connection_state()`，提供 `Connected`、`Reconnecting`、`Stopped` 和连接代次。
+  watch 只保留最新快照，通道关闭表示该订阅结束；重连不恢复业务认证或订阅。
+- [Issue #102](https://github.com/cherish-ltt/lynn_tcp/issues/102) 与
+  [#103](https://github.com/cherish-ltt/lynn_tcp/issues/103) 新增 `SessionHandle` 原会话后台定向推送
+  和 `SessionObserver` 本地最终关闭观察。句柄不跟随地址复用，也不保活服务端；成功入队不代表交付。
+- [Issue #92](https://github.com/cherish-ltt/lynn_tcp/issues/92) 新增
+  `start_with_shutdown(signal, grace)`，停止准入，完成已接受工作及响应，再在同一宽限预算内关闭传输。
+  结果区分 `Drained`、`Incomplete` 和 `TimedOut`；超时发起协作式取消，不回滚副作用。
+- [Issue #94](https://github.com/cherish-ltt/lynn_tcp/issues/94) 新增默认关闭的 `kcp-tls`。
+  双端同时配置 KCP 与 TLS，即可启用 TLS 1.3 证书和名称校验及可选 mTLS。
+  安全模式拒绝跳过校验，禁用会话恢复与 0-RTT，收到加密的服务端确认后才报告 `Connected`。
+  外层 KCP 控制字段仍未认证；不回退明文，也不提供抗 DoS 能力。
+
+详见 [v2.6.0 变更日志](docs/update_logs/v2.6.0.md)、[会话指南](docs/session-handles.md)、
+[排空停机指南](docs/graceful-shutdown.md) 和 [KCP+TLS 配置与迁移](docs/kcp-tls.md)。
+
+最终功能集成通过 **316 项全 feature 测试**和 **232 项默认 feature 测试**，生产代码行覆盖率为 **94.0280%（5,369/5,710）**。
+**15 组独立 feature 组合**的编译和测试全部通过。
+[性能对照](docs/kcp-tls-performance.md) 保留所有失败和成功轮次，包括完整重跑的 18 格结果：
+请求与响应各 **1,622,486** 条。存档保留 **v2.5.0 开发快照**名称与哈希；版本更新不代表
+重新测量性能，也不提供公网表现保证。
 
 Rust **1.99.1**、Tokio/bytes **1.52.3/1.11.1** 与可选 kcp-ovo **0.8.0** 不变。
-TCP 保持默认，KCP 仍不认证、不加密。直接传入旧上游配置类型的应用须同步升级该依赖至 0.8.0，
-或使用 `lynn_kcp::KcpOptions`，详见 [KCP 迁移与建议场景](docs/kcp.md)。
-从 v2.4.0 之前升级时仍须删除重复的内置 [指标累加](METRICS.md)，更早版本用户还须适配
+TCP 保持默认，明文 KCP 仍不加密、不认证；现有 Handler 与合法帧格式继续支持。
+直接使用旧版上游 KCP 配置类型的应用须同步升级该依赖或使用 `lynn_kcp::KcpOptions`，
+详见 [KCP 迁移与建议场景](docs/kcp.md)。从 v2.4.0 之前升级仍须删除重复的
+内置 [指标累加](METRICS.md)，更早版本用户还须适配
 [v2.3.0 返回类型变更](docs/update_logs/v2.3.0.md)。
+
+署名：GPT-6-Astra-Ultra
 
 ---
 
@@ -127,7 +146,7 @@ TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配
 
 ```toml
 [dependencies]
-lynn_tcp = "=2.5.0"
+lynn_tcp = "=2.6.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -136,7 +155,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.6.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -145,7 +164,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.6.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -467,7 +486,7 @@ TLS **默认关闭**。启用 `tls` feature 并配置证书即手动开启 —�
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", features = ["tls"] }
+lynn_tcp = { version = "=2.6.0", features = ["tls"] }
 ```
 
 ```rust

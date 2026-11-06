@@ -503,3 +503,8 @@ docs/
 - 保留 1400 字节 UDP 上限、10 MiB body、KCP 既有有界队列并记录 TLS 额外缓冲。回归覆盖证书负例、IPv4/IPv6、模式不匹配、密文修改/重放、弱网、慢握手隔离、关闭与取消。
 - CI 包含 `kcp-tls`、`client,kcp-tls`、`server,kcp-tls`、`client,server,kcp-tls`，并保留 `client,server,kcp,tls` 验证未启用组合的拒绝行为。双语配置须编译并做内容一致性回归；独立进程比较保留失败轮次，不将回环结果推广为公网保证。
 - KCP+TLS 性能存档保留采样时的 v2.5.0 开发版本与哈希，首次密钥编码失败和 named-curve 完整复测分别留存；建连时间按整批含重试计量，分配/CPU/RSS 按服务端全生命周期计量，不冒充纯握手或 Handler 内部成本。
+
+### 10.29 v2.6.0 发布记录
+
+- 启动就绪、客户端状态、原会话推送/关闭观察、限时排空和 TLS-over-KCP 归入 v2.6.0；版本更新同步 Cargo、双语 README、当前配置示例、中文日志及英文版本历史。
+- 最终集成的功能验证与版本/package 预检分别记录；v2.5.0 KCP+TLS 开发性能样本保持原名与哈希，不得将版本更新描述为重新测量。GitHub Release 和 crates.io 必须分别核实。
