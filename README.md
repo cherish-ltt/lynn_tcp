@@ -26,27 +26,49 @@ English | [简体中文](https://github.com/cherish-ltt/lynn_tcp/blob/main/READM
 
 It adopts a **DDD (Domain-Driven Design) + Onion Architecture**, separating core domain logic from infrastructure concerns for better maintainability and extensibility.
 
-### v2.5.0 - Background Broadcast And Request Middleware
+### v2.6.0 - Lifecycle, Session Handles and KCP+TLS
 
-[Issue #91](https://github.com/cherish-ltt/lynn_tcp/issues/91) adds an instance-scoped
-`BroadcastHandle` for background tasks, reporting enqueued, full and closed targets
-without waiting for slow connections. The handle does not keep the server alive;
-queue acceptance is not delivery.
-[Issue #95](https://github.com/cherish-ltt/lynn_tcp/issues/95) adds global and route-level
-async middleware with single-use `Next`, isolated request data and `RequestContext`.
-Existing handlers remain supported; timeouts do not roll back side effects.
-See the [v2.5.0 changelog](docs/update_logs/v2.5.0.md),
-[middleware guide](docs/middleware.md) and [measured costs](docs/middleware-performance.md).
-The performance archive preserves its pre-release version and hashes; an empty chain
-does not imply zero memory cost, and the measurements do not establish a stable throughput change.
+- [Issue #104](https://github.com/cherish-ltt/lynn_tcp/issues/104) adds `startup_handle()`
+  to await server initialization and obtain the actual bound address when binding port `0`.
+  Readiness describes initialization, not ongoing health or a completed client handshake.
+- [Issue #93](https://github.com/cherish-ltt/lynn_tcp/issues/93) adds
+  `subscribe_connection_state()` with `Connected`, `Reconnecting`, `Stopped` and connection
+  generations. Watch retains the latest snapshot; channel closure ends that subscription,
+  and reconnecting does not restore business authentication or subscriptions.
+- [Issues #102](https://github.com/cherish-ltt/lynn_tcp/issues/102) and
+  [#103](https://github.com/cherish-ltt/lynn_tcp/issues/103) add `SessionHandle` for background
+  pushes to the original connection and `SessionObserver` for final local close. Handles
+  cannot follow address reuse or keep the server alive. Queue acceptance is not delivery.
+- [Issue #92](https://github.com/cherish-ltt/lynn_tcp/issues/92) adds
+  `start_with_shutdown(signal, grace)`: stop admission, finish accepted work and responses,
+  then close transports within one grace budget. Results distinguish `Drained`, `Incomplete`
+  and `TimedOut`; timeout initiates cooperative cancellation and does not undo side effects.
+- [Issue #94](https://github.com/cherish-ltt/lynn_tcp/issues/94) adds opt-in `kcp-tls`.
+  Configure KCP and TLS on both peers for TLS 1.3 certificate/name verification and optional
+  mTLS. Secure mode rejects skipped verification, disables resumption and 0-RTT, and waits
+  for encrypted server confirmation before reporting `Connected`. Outer KCP controls remain
+  unauthenticated; no plaintext fallback or DoS protection is provided.
+
+See the [v2.6.0 changelog](docs/update_logs/v2.6.0.md),
+[session guide](docs/session-handles.md), [shutdown guide](docs/graceful-shutdown.md)
+and [KCP+TLS configuration and migration](docs/kcp-tls.md).
+
+The final feature integration passed **316 all-feature tests** and **232 default-feature tests**; production line coverage was **94.0280% (5,369/5,710)**.
+All **15 isolated feature combinations** passed compilation and tests.
+The [performance comparison](docs/kcp-tls-performance.md) retains all failed and successful runs,
+including the complete 18-cell rerun with **1,622,486 requests and matching responses**.
+Archives retain their **v2.5.0 development-snapshot** names and hashes; the version update
+does not imply a performance rerun or a public-network guarantee.
 
 Rust **1.99.1**, Tokio/bytes **1.52.3/1.11.1** and optional kcp-ovo **0.8.0** remain unchanged.
-TCP stays the default; KCP remains unauthenticated and unencrypted. Applications passing
-older upstream configuration types must upgrade that dependency to 0.8.0 or use
-`lynn_kcp::KcpOptions`; see [KCP migration and scenarios](docs/kcp.md).
-Users upgrading from before v2.4.0 must also remove duplicate built-in
-[metrics updates](METRICS.md); earlier users must apply the
+TCP stays the default, and plain KCP stays unencrypted and unauthenticated. Existing
+handlers and valid frame formats remain supported. Direct users of older upstream KCP
+configuration types must upgrade that dependency or use `lynn_kcp::KcpOptions`; see
+[KCP migration and scenarios](docs/kcp.md). Upgrades from before v2.4.0 still require removing
+duplicate built-in [metrics updates](METRICS.md), and earlier users must apply the
 [v2.3.0 return-type changes](docs/update_logs/v2.3.0.md).
+
+Signature: GPT-6-Astra-Ultra
 
 ---
 
@@ -134,7 +156,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-lynn_tcp = "=2.5.0"
+lynn_tcp = "=2.6.0"
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -143,7 +165,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", default-features = false, features = ["server"] }
+lynn_tcp = { version = "=2.6.0", default-features = false, features = ["server"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -152,7 +174,7 @@ tracing-subscriber = "0.3"
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", default-features = false, features = ["client"] }
+lynn_tcp = { version = "=2.6.0", default-features = false, features = ["client"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 tracing-subscriber = "0.3"
 ```
@@ -496,7 +518,7 @@ TLS is **disabled by default**. Enable the `tls` feature and attach certificates
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", features = ["tls"] }
+lynn_tcp = { version = "=2.6.0", features = ["tls"] }
 ```
 
 ```rust

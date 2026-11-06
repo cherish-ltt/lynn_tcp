@@ -1,6 +1,6 @@
 # KCP 配置、迁移与场景指南
 
-适用 lynn_tcp **v2.5.0**，延续 v2.4.2 锁定的 kcp-ovo **0.8.0**；v2.4.1 使用 0.6.0，v2.4.0 使用 0.5.2。配置和安全边界以本页为准；v2.4.2 升级证据见 [0.8.0 验证](kcp-v0.8.0-validation.md)。[0.5.2/0.6.0 配对复测](kcp-v0.6.0-validation.md) 与 [0.5.2 复测](kcp-v0.5.2-validation.md) 保留为历史证据，v2.5.0 未新增 KCP 性能测量。
+适用 lynn_tcp **v2.6.0**，延续 v2.4.2 锁定的 kcp-ovo **0.8.0**；v2.4.1 使用 0.6.0，v2.4.0 使用 0.5.2。配置和安全边界以本页为准；v2.4.2 升级证据见 [0.8.0 验证](kcp-v0.8.0-validation.md)。[0.5.2/0.6.0 配对复测](kcp-v0.6.0-validation.md) 与 [0.5.2 复测](kcp-v0.5.2-validation.md) 保留为历史证据。新的 [KCP/TCP+TLS/KCP+TLS 对照](kcp-tls-performance.md) 采样于 v2.5.0 开发快照，存档保留原版本与哈希；v2.6.0 的集成和版本更新不代表重新测量。
 
 ## 从 TCP 或早期 PR 迁移
 
@@ -17,7 +17,7 @@
 
 ```toml
 [dependencies]
-lynn_tcp = { version = "=2.5.0", features = ["kcp"] }
+lynn_tcp = { version = "=2.6.0", features = ["kcp"] }
 tokio = { version = "=1.52.3", features = ["macros", "rt-multi-thread"] }
 ```
 
