@@ -108,7 +108,11 @@ mod tests {
             InputBufVO::new_none(),
             ClientsContext::new_none(),
             states,
-            RequestContext::new(0, "127.0.0.1:0".parse().unwrap()),
+            RequestContext::new(
+                0,
+                "127.0.0.1:0".parse().unwrap(),
+                crate::domain::model::session::SessionHandle::closed_for_test(),
+            ),
         )
     }
 

@@ -260,6 +260,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `custom_protocol_full` | `cargo run --example custom_protocol_full` | 自定义协议客户端配套 |
 | `state_example` | `cargo run --example state_example` | **全局状态注入**（`AppState<T>`） |
 | `middleware_example` | `cargo run --example middleware_example` | 请求鉴权、上下文注入、超时与错误映射 |
+| `session_push` | `cargo run --example session_push` | 注册后返回、向原会话推送并等待最终关闭 |
 | `tls_example` | `cargo run --example tls_example --features tls` | **TLS 1.3 加密**服务器 ↔ 客户端 |
 | `metrics_example` | `cargo run --example metrics_example --features metrics` | Prometheus 指标集成演示 |
 
@@ -526,6 +527,23 @@ async fn find_user(repo: AppState<UserRepo>, input: InputBufVO) -> HandlerResult
 返回 `LynnError::Protocol`，空 payload 合法。原有 Handler 响应仍保留等待背压；自动发送消息数和
 字节数仍按实际写入统计，队列拒绝计入丢弃消息数。调度与取消由应用管理，框架不提供定时器、
 重试策略或交付保证。
+
+### 原会话定向推送与关闭观察
+
+`RequestContext::session()` 与 `MiddlewareRequest::session()` 提供在请求入队前绑定的可克隆
+`SessionHandle`。Handler 返回后，后台调用 `try_send(method_id, Bytes)`，非等待得到
+`Enqueued`、`Full` 或 `Closed`。身份不会跟随地址复用或其他服务端实例，复用普通响应的
+长度上限、实例帧标记、TCP/TLS/KCP writer 和发送指标；主动推送不执行入站中间件。
+
+`handle.observer()` 单独提供 `SessionId` 比较、`is_closed()` 及可取消、可重复的
+`closed().await`，不授予发送权限。正常 EOF 先排空已接受的请求链与响应，再完成 writer
+shutdown 及 KCP driver 释放；读 EOF 本身不通知关闭。句柄和观察器不保活 owner、I/O 或 AppState。关闭不是
+交付确认，也不保证所有 Handler 副作用均已停止。清理应用记录前须比较会话身份，防止删除
+重连后替换的新记录。
+
+保存私人推送能力前先完成应用授权。Handler 应返回后再由后台任务等待关闭，持有处理许可
+等待可能与正常 EOF 排空互相阻塞。详见[完整契约](docs/session-handles.md)及有界的
+[session_push 示例](examples/session_push.rs)，它验证收到注册响应后的实际推送，以及旧会话关闭时保留替换后的新记录。
 
 ### 客户端断线自动重连
 

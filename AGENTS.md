@@ -292,6 +292,7 @@ docs/
 ├── kcp-v0.8.0-validation.md # kcp-ovo 0.8.0 API 迁移与升级验证
 ├── middleware.md       # 请求中间件 API、顺序、错误与生命周期契约
 ├── middleware-performance.md # 中间件独立进程性能对照与复测方法
+├── session-handles.md  # 原会话定向发送、关闭观察及授权/清理边界
 ├── benchmark/          # 基准测试结果存档（JSON，按版本与机型命名）
 ├── FlowChart.png       # v1.x 架构流程图
 ├── FlowChart-v2.png    # v2.x（DDD + 洋葱架构）流程图
@@ -467,3 +468,10 @@ docs/
 - 未启动及初次失败返回 None；重试耗尽发布 Stopped 后关闭，Drop/启动取消/再次启动以旧通道关闭为结束信号，缓存 Connected 不代表在线。再次启动须重新订阅，代次仅在同一监督生命周期内比较。
 - 正常终止须先关闭发送准入与接收生产端，再发布 Stopped，不能让观察者收到终态后仍成功入队。
 - 文档先复制并读取初始快照，再等待 changed 并处理关闭；回归覆盖多订阅、慢读取、接收并发、重试结束及 TCP/TLS/KCP 初始化与取消边界。
+
+### 10.26 原会话能力
+
+- 请求入队时绑定原 `SessionHandle`，延迟执行不得按地址重查；`SessionId` 在实例及连接代次间隔离，应用清理须比较身份。
+- 定向推送使用弱队列引用、公共长度校验、实例帧标记和共用 writer；非等待反馈 Enqueued/Full/Closed，不保活 owner、I/O 或 AppState，不改变 Handler 响应背压。
+- 观察器独立于发送权限，保留可重复等待的终态；终态须在读写 transport 两端及 KCP driver 实际释放后通知，正常 EOF 先排空请求链及响应并完成 writer shutdown，不能以读 EOF 或发出 abort 代替。
+- Handler/中间件持有处理许可时不得等待原会话最终关闭；有界示例须先注册返回再后台推送/等待，说明授权、重连、入队非交付和副作用边界。

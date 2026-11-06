@@ -11,6 +11,7 @@ use crate::{
 };
 
 pub(crate) struct ConnectionSession {
+    pub(crate) handle: crate::domain::model::session::SessionHandle,
     pub(crate) writer: JoinHandle<()>,
     pub(crate) closed: watch::Receiver<bool>,
     pub(crate) clients: ClientsStructType,
@@ -101,6 +102,7 @@ mod tests {
         let send = user.send_response(&BytesMut::from(&b"response"[..]));
         clients.insert(addr, user);
         let session = ConnectionSession {
+            handle: crate::domain::model::session::SessionHandle::closed_for_test(),
             writer,
             closed,
             clients: clients.clone(),
@@ -151,6 +153,7 @@ mod tests {
             LynnUser::new(Box::new(tokio::io::sink()), old_time.clone(), 0);
         clients.insert(addr, old_user);
         let session = ConnectionSession {
+            handle: crate::domain::model::session::SessionHandle::closed_for_test(),
             writer,
             closed,
             clients: clients.clone(),

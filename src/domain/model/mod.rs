@@ -5,3 +5,5 @@ pub(crate) mod input_buf_vo;
 #[cfg(feature = "server")]
 pub(crate) mod lynn_user;
 pub(crate) mod message_validation;
+#[cfg(feature = "server")]
+pub(crate) mod session;

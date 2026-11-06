@@ -265,6 +265,7 @@ All examples are located in the [`examples/`](examples/) directory. Run them wit
 | `custom_protocol_full` | `cargo run --example custom_protocol_full` | Custom protocol with client support |
 | `state_example` | `cargo run --example state_example` | **Global state injection** (`AppState<T>`) |
 | `middleware_example` | `cargo run --example middleware_example` | Request authentication, context injection, timeout and error mapping |
+| `session_push` | `cargo run --example session_push` | Register, return, push to the original session and await final close |
 | `tls_example` | `cargo run --example tls_example --features tls` | **TLS 1.3 encrypted** server ↔ client |
 | `metrics_example` | `cargo run --example metrics_example --features metrics` | Prometheus metrics integration |
 
@@ -560,6 +561,28 @@ frames that shutdown later discards. Payloads above 10 MiB minus 5 bytes return
 responses retain their waiting backpressure. Automatic sent/byte metrics still count actual
 writes; rejected target queues increment dropped messages. The application owns scheduling
 and cancellation; the library provides no timer, retry policy or delivery guarantee.
+
+### Original Session Push And Close Observation
+
+`RequestContext::session()` and `MiddlewareRequest::session()` expose a clonable
+`SessionHandle` bound before the request was queued. After a handler returns, background
+work can call `try_send(method_id, Bytes)` for `Enqueued`, `Full` or `Closed` without waiting
+for queue capacity. Identity never follows address reuse or another server instance.
+Payload limits, instance frame markers, TCP/TLS/KCP writers and send metrics are shared
+with ordinary responses; incoming middleware does not run for outgoing pushes.
+
+`handle.observer()` provides `SessionId` comparison, `is_closed()` and cancellation-safe,
+repeatable `closed().await` without granting send capability. Normal EOF waits for accepted
+request chains and responses, then writer shutdown and any KCP driver release; read EOF alone does not signal close.
+Handles and observers retain no server owner, transport or AppState. Close is not delivery
+confirmation or a guarantee that all handler side effects stopped. Compare session IDs
+before removing an application record that a reconnect may have replaced.
+
+Authorize requests before storing private push capability. Return from the handler before
+waiting for final close in a background task; waiting while holding a request permit can
+deadlock normal EOF draining. See the [complete contract](docs/session-handles.md) and the
+bounded [session_push example](examples/session_push.rs), which verifies actual pushes
+after registration responses and preserves a replacement record when the old session closes.
 
 ### Client Automatic Reconnection
 

@@ -83,6 +83,10 @@ name = "background_broadcast"
 required-features = ["server"]
 
 [[example]]
+name = "session_push"
+required-features = ["server", "client"]
+
+[[example]]
 name = "custom_config_server"
 required-features = ["server"]
 
@@ -137,6 +141,10 @@ required-features = ["server", "client"]
 
 [[test]]
 name = "state_injection"
+required-features = ["server"]
+
+[[test]]
+name = "session_handles"
 required-features = ["server"]
 
 [[test]]

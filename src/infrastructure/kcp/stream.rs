@@ -36,15 +36,22 @@ impl KcpStream {
         config: KcpConfig,
         incoming: Option<mpsc::Receiver<Vec<u8>>>,
     ) -> io::Result<(Self, oneshot::Receiver<io::Result<()>>)> {
-        let (io, mut transport) = tokio::io::duplex(BUFFER);
+        let (io, transport) = tokio::io::duplex(BUFFER);
         let (ack_tx, acknowledged) = watch::channel((0, false));
         let (error_tx, error) = watch::channel(None);
         let (ready_tx, ready) = oneshot::channel();
         let driver = driver::Driver::new(socket, peer, conv, config, incoming)?;
+        // Drop driver I/O before its completion sender, including before the first poll.
+        let driver_task = (driver, transport, error_tx);
         let worker = tokio::spawn(async move {
-            if let Err(error) = driver.run(&mut transport, ack_tx, ready_tx).await {
+            let mut driver_task = driver_task;
+            if let Err(error) = driver_task
+                .0
+                .run(&mut driver_task.1, ack_tx, ready_tx)
+                .await
+            {
                 tracing::warn!("KCP session {peer} ended: {error}");
-                error_tx.send_replace(Some(error.to_string()));
+                driver_task.2.send_replace(Some(error.to_string()));
             }
         });
         Ok((
@@ -59,6 +66,11 @@ impl KcpStream {
             },
             ready,
         ))
+    }
+
+    #[cfg(feature = "server")]
+    pub(crate) fn completion(&self) -> watch::Receiver<Option<String>> {
+        self.error.clone()
     }
 
     #[cfg(feature = "client")]

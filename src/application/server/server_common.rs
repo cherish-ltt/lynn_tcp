@@ -12,6 +12,7 @@ use tokio::{
 };
 use tracing::{error, info, warn};
 
+use super::server_tasks::ServerTasks;
 use crate::application::server::connection_session::ConnectionSession;
 use crate::application::server::lynn_server::ReactorEventSender;
 use crate::const_config::DEFAULT_MAX_RECEIVE_BYTES_SIZE;
@@ -21,6 +22,7 @@ use crate::domain::model::handler_result::HandlerResult;
 use crate::domain::model::input_buf_vo::{InputBufVO, InputBufVOTrait};
 use crate::domain::model::lynn_user::LynnUser;
 use crate::domain::model::lynn_user::{ClientsStruct, ClientsStructType};
+use crate::domain::model::session::SessionHandle;
 use crate::domain::routing::router::LynnRouter;
 use crate::domain::routing::router::Route;
 use crate::domain::state::state_registry::StateRegistry;
@@ -163,6 +165,7 @@ pub(crate) async fn input_dto_build(
     handler_method: Arc<Route>,
     reactor_event_sender: ReactorEventSender,
     states: Arc<StateRegistry>,
+    session: SessionHandle,
 ) {
     // Attempt to acquire a permit from the semaphore.
     match process_permit.try_acquire_owned() {
@@ -173,7 +176,7 @@ pub(crate) async fn input_dto_build(
                     input_buf_vo,
                     ClientsContext::new(ClientsStruct(clients.clone())),
                     states,
-                    RequestContext::new(method_id, addr),
+                    RequestContext::new(method_id, addr, session),
                 ),
                 clients,
                 permit,
@@ -195,20 +198,24 @@ pub(crate) async fn add_client(
     last_communicate_time: Arc<RwLock<SystemTime>>,
     mut permit: ConnectionPermits,
     write_timeout_secs: u64,
+    tasks: ServerTasks,
+    marks: (u16, u16),
 ) -> (BoxedReadHalf, ConnectionSession) {
     if let Some(observation) = &mut permit.observation {
         observation.established = true;
     }
-    let (read_half, write_half): (BoxedReadHalf, BoxedWriteHalf) = split_transport(stream);
+    let (read_half, write_half, observer) = split_transport(stream);
     let (lynn_user, writer, closed) = LynnUser::new(
         write_half,
         last_communicate_time.clone(),
         write_timeout_secs,
     );
+    let handle = SessionHandle::new(&lynn_user, observer, closed.clone(), tasks, marks);
     clients.insert(addr, lynn_user);
     (
         read_half,
         ConnectionSession {
+            handle,
             writer,
             closed,
             clients,
@@ -287,6 +294,7 @@ pub(crate) async fn read_connection(
                                                 handler_method.clone(),
                                                 reactor_event_sender.clone(),
                                                 states.clone(),
+                                                session.handle.clone(),
                                             )
                                             .await;
                                         } else {
