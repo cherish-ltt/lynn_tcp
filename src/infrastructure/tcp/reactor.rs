@@ -565,6 +565,7 @@ impl TcpReactor {
         )>,
         tcp_config: TcpSocketConfig,
         stream_acceptor: Arc<StreamAcceptor>,
+        on_ready: impl FnOnce(),
     ) {
         self.event_manager.run(
             clients.clone(),
@@ -586,6 +587,8 @@ impl TcpReactor {
                 self.event_manager.tasks.spawn(limiter.clone().cleanup());
             }
         }
+
+        on_ready();
 
         #[cfg(not(feature = "kcp"))]
         let crate::infrastructure::tcp::listener::TransportListener::Tcp(tcp_listener) = listener;

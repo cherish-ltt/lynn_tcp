@@ -96,12 +96,6 @@ async fn protected(context: RequestContext, input: InputBufVO) -> HandlerResult 
 }
 
 async fn exchange(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
-    for _ in 0..100 {
-        if tokio::net::TcpStream::connect(addr).await.is_ok() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
     let attempts = 1;
     let config = LynnClientConfigBuilder::new()
         .with_server_addr(addr)?
@@ -134,26 +128,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
-    let addr = std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?;
-    let server = tokio::spawn(async move {
-        let addr = addr.to_string();
-        let config = LynnServerConfigBuilder::new().with_addr(&addr)?.build();
-        LynnServer::new_with_config(config)
-            .await
-            .with_state(DemoPolicy {
-                marker: b"public-demo:",
-            })
-            .with_middleware(observe)
-            .with_middleware(map_errors)
-            .add_router_with_middleware(
-                1,
-                protected,
-                MiddlewareChain::new().with(deadline).with(authorize),
-            )
-            .start()
-            .await
-    });
-    let result = exchange(addr).await;
+    let config = LynnServerConfigBuilder::new()
+        .with_addr("127.0.0.1:0")?
+        .build();
+    let app = LynnServer::new_with_config(config)
+        .await
+        .with_state(DemoPolicy {
+            marker: b"public-demo:",
+        })
+        .with_middleware(observe)
+        .with_middleware(map_errors)
+        .add_router_with_middleware(
+            1,
+            protected,
+            MiddlewareChain::new().with(deadline).with(authorize),
+        );
+    let ready = app.startup_handle();
+    let server = tokio::spawn(app.start());
+    let result = match ready.wait().await {
+        Ok(addr) => exchange(addr).await,
+        Err(error) => Err(error.into()),
+    };
     server.abort();
     match server.await {
         Err(error) if error.is_cancelled() => {},

@@ -84,6 +84,25 @@ Lynn_tcp v2.0 遵循洋葱架构，分为三个清晰层次：
 
 ### 服务端生命周期
 
+在 `start()` 消费服务端之前调用 `startup_handle()`，可等待配置、绑定、TLS acceptor
+及 worker 初始化完成。`wait()` 返回实际 `SocketAddr`，绑定 `127.0.0.1:0` 时端口也会
+正确返回非零值；TCP、TLS、KCP 使用相同 API。初始化失败返回
+`ServerStartupError::Failed`，原始错误仍由 `start()` 返回；就绪前 owner 结束则返回
+`Cancelled`。可克隆的观察者保留结果供晚等待使用，不保活服务端。成功仅表示初始化已完成，
+不表示持续健康或已有客户端完成握手。可运行用法见 `middleware_example`。
+
+```rust,no_run
+# use lynn_tcp::lynn_server::LynnServer;
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+let server = LynnServer::new_with_addr("127.0.0.1:0").await;
+let ready = server.startup_handle();
+let task = tokio::spawn(server.start());
+let addr = ready.wait().await?; // 使用此地址启动依赖的客户端。
+task.await??;
+# Ok(())
+# }
+```
+
 释放服务端或取消 `LynnServer::start()` 会取消其 worker、handler、心跳、待决握手及活跃连接。取消为异步过程，不保证请求/响应队列排空或 TLS 优雅关闭；需要确认交付的交互应在取消前完成。
 
 TLS 连接初始化不占用业务 worker，同时进行的初始化最多为配置的 worker 数。超出握手并发限制时立即拒绝；每个握手仍持有全局/每 IP 连接许可，并保留原有 10 秒握手超时。明文 TCP 初始化路径不变。

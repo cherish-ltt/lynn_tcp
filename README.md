@@ -88,6 +88,26 @@ Lynn_tcp v2.0 is organized into three clean layers following the Onion Architect
 
 ### Server Lifecycle
 
+Use `startup_handle()` before consuming the server in `start()` to wait for configuration,
+binding, TLS acceptor and worker initialization. `wait()` returns the actual `SocketAddr`,
+including a nonzero port when binding `127.0.0.1:0`; TCP, TLS and KCP use the same API.
+`ServerStartupError::Failed` reports initialization failure (the original error remains in
+`start()`), while `Cancelled` means the owner ended before readiness. Cloned observers retain
+the result for late waits and do not keep the server alive. Success describes initialization,
+not ongoing health or a completed client handshake. See the runnable `middleware_example`.
+
+```rust,no_run
+# use lynn_tcp::lynn_server::LynnServer;
+# async fn example() -> Result<(), Box<dyn std::error::Error>> {
+let server = LynnServer::new_with_addr("127.0.0.1:0").await;
+let ready = server.startup_handle();
+let task = tokio::spawn(server.start());
+let addr = ready.wait().await?; // Start dependent clients with this address.
+task.await??;
+# Ok(())
+# }
+```
+
 Dropping a server or cancelling `LynnServer::start()` cancels its workers, handlers, heartbeat, pending handshakes and active connections. Cancellation is asynchronous and does not drain queued requests/responses or guarantee a graceful TLS shutdown; complete required exchanges before cancelling.
 
 TLS connection setup runs outside business workers, with at most the configured worker count in flight. Excess handshakes are rejected immediately; each retains its global/per-IP connection permits and the existing 10-second handshake timeout. Plain TCP setup is unchanged.
