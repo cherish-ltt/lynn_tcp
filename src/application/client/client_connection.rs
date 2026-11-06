@@ -156,8 +156,7 @@ pub(super) async fn connection_supervisor(
         // If the client itself is gone (its receive half dropped), stop.
         if tx_read.is_closed() {
             info!("Client - [connection supervisor] client dropped, exiting");
-            state_tx.send_replace(ConnectionState::Stopped { generation });
-            return;
+            break;
         }
         match try_connect(&params).await {
             Ok(stream) => {
@@ -205,9 +204,8 @@ pub(super) async fn connection_supervisor(
                     if let Some(init) = init_tx.take() {
                         let _ = init.send(Err(message.clone()));
                     }
-                    state_tx.send_replace(ConnectionState::Stopped { generation });
                     error!("Client - [connection supervisor] {}", message);
-                    return;
+                    break;
                 }
                 warn!(
                     "Client - [connection supervisor] connect attempt {}/{} failed: {}",
@@ -217,4 +215,7 @@ pub(super) async fn connection_supervisor(
         }
         time::sleep(Duration::from_secs(params.reconnect_interval_secs)).await;
     }
+    drop(rx_write);
+    drop(tx_read);
+    state_tx.send_replace(ConnectionState::Stopped { generation });
 }

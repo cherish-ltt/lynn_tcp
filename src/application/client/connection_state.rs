@@ -16,6 +16,7 @@ pub enum ConnectionState {
         generation: u64,
     },
     /// The supervisor ended normally, including exhausted connection attempts.
+    /// Sending is closed; already buffered incoming messages remain readable.
     Stopped {
         /// Last connected generation, or 0 if no connection succeeded.
         generation: u64,

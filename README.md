@@ -605,6 +605,8 @@ states but can detect a replaced connection from its generation. Drop, cancelled
 or a repeated `start()` closes the old subscription; channel closure is authoritative even
 if its cached value is `Connected`. Subscribe again after restarting; generations are only
 comparable within one supervisor lifecycle. Exhausted retries publish `Stopped` and close.
+Normal termination closes send admission and the receive producer before publishing `Stopped`;
+already buffered incoming messages can still be read.
 
 `Connected` means TCP/TLS/KCP initialization completed, not that business authentication or
 subscriptions were restored. State and received frames have no total ordering or per-frame

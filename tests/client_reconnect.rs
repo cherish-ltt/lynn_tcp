@@ -167,12 +167,24 @@ async fn reconnect_gives_up_after_max_attempts() {
         .expect("accept");
     assert!(client.is_connected());
     let mut state = client.subscribe_connection_state().unwrap();
+    let sender = client.get_sender().await.unwrap();
     state.borrow_and_update();
 
     drop(probe);
     conn1.shutdown().await.expect("shutdown");
     drop(conn1);
 
+    timeout(
+        Duration::from_secs(5),
+        state.wait_for(|value| *value == ConnectionState::Stopped { generation: 1 }),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(
+        sender.is_closed(),
+        "Stopped must reject further queue admission"
+    );
     timeout(Duration::from_secs(5), async {
         while state.changed().await.is_ok() {}
     })
@@ -192,6 +204,12 @@ async fn reconnect_gives_up_after_max_attempts() {
     assert!(
         err.is_err(),
         "send must fail after reconnect attempts are exhausted"
+    );
+    assert!(
+        timeout(Duration::from_secs(1), client.get_receive_data())
+            .await
+            .unwrap()
+            .is_none()
     );
 }
 
